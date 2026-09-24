@@ -11,6 +11,8 @@ The story is too big for one pass, so the work is split into milestones:
 - **Pass 1 (implementing this plan):** a complete, polished vertical slice covering the **Prologue (Rainy Train → Lantern Bay platform)** and **Chapter 1 (Mistbloom Academy hub)**. This pass also delivers the full engine, the asset pipeline, the loading and pause screens, and the performance harness.
 - **Later prompts:** Chapters 2–5, the Epilogue and the post-game. The architecture below is designed so that each of these is mostly new content (a zone GLB, a zone script and data) rather than new engine work.
 
+**It is a static, single-player web game.** `vite build` produces plain files (HTML, JS and GLBs) that any static host can serve. There is no backend, no accounts, no multiplayer and no network calls after assets load. Progress is saved only in the browser's `localStorage`.
+
 The load-time budget drives several decisions:
 
 - **No physics engine.** Rapier's wasm alone is about 0.5 MB gzipped, and a light action-adventure doesn't need rigid bodies. Character-vs-world collision uses **three-mesh-bvh** capsule collision instead.
