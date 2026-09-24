@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#f3e6d3" />
+  <meta name="description" content="Snuggle Sorcery: soothe fluffy curses with a lullaby in a cozy harbour town. A free, open-source three.js web game." />
+  <title>Snuggle Sorcery</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='8' y='16' width='48' height='40' rx='14' fill='%23f6efe4' stroke='%23c9b79c' stroke-width='3'/%3E%3Cpath d='M14 20 L18 8 L26 17 M50 20 L46 8 L38 17' fill='%23f6efe4' stroke='%23c9b79c' stroke-width='3'/%3E%3Cpath d='M22 36h6M36 36h6' stroke='%235a4032' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E" />
+  <script>
+    // Preload the models the first zone needs (from the save), in parallel with the JS.
+    (function () {
+      var z = 'train';
+      try { z = (JSON.parse(localStorage.getItem('snuggle-sorcery-save')) || {}).zone || z; } catch (e) {}
+      var q = new URLSearchParams(location.search).get('zone');
+      if (q) z = q;
+      var zones = {
+        train: ['train', 'folk_a', 'folk_b', 'folk_c'],
+        station: ['station', 'kit', 'tangtang', 'folk_a', 'folk_b', 'folk_c'],
+        academy: ['academy', 'kit', 'fang', 'tangtang', 'weibao', 'folk_a', 'folk_b', 'folk_c'],
+      };
+      ['xiaopei', 'anim_humanoid', 'creatures'].concat(zones[z] || []).forEach(function (n) {
+        var l = document.createElement('link');
+        l.rel = 'preload'; l.as = 'fetch'; l.crossOrigin = 'anonymous'; l.href = './assets/models/' + n + '.glb';
+        document.head.appendChild(l);
+      });
+    })();
+  </script>
+  <style>
+    :root { --cream: #f3e6d3; --ink: #4a3428; --mustard: #e2a13a; --orange: #e0662c; --teal: #2f6f73; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: #1d2a2c; color: var(--ink); overflow: hidden;
+      font-family: ui-rounded, "Nunito", "Segoe UI Rounded", "Hiragino Maru Gothic ProN", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; touch-action: none; }
+    #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+    #loading { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 14px; padding: 24px 16px; background: radial-gradient(ellipse at 50% 38%, #fff7ea 0%, var(--cream) 55%, #e6cfae 100%);
+      transition: opacity .6s ease, visibility .6s; text-align: center; }
+    #loading.gone { opacity: 0; visibility: hidden; pointer-events: none; }
+    #loading h1 { margin: 0; font-size: clamp(30px, 7vw, 56px); letter-spacing: .5px; color: var(--ink); font-weight: 800; }
+    #loading h1 span { color: var(--orange); }
+    #loading .sub { margin: -8px 0 4px; font-size: clamp(14px, 3.4vw, 18px); opacity: .75; font-style: italic; }
+    .doudou { width: min(46vw, 210px); height: auto; }
+    .doudou .z { animation: zz 2.4s ease-in-out infinite; opacity: 0; }
+    .doudou .z2 { animation-delay: 1.2s; }
+    .doudou .body { animation: breathe 3s ease-in-out infinite; transform-origin: 100px 150px; }
+    @keyframes zz { 0% { opacity: 0; transform: translate(0, 6px); } 30% { opacity: .9; } 100% { opacity: 0; transform: translate(10px, -18px); } }
+    @keyframes breathe { 50% { transform: scale(1.03, .97); } }
+    .thread { width: min(78vw, 360px); height: 10px; border-radius: 6px; background: #e9d6bb; overflow: hidden; box-shadow: inset 0 1px 2px #0002; }
+    .thread i { display: block; height: 100%; width: 3%; border-radius: 6px;
+      background: repeating-linear-gradient(115deg, var(--orange) 0 6px, #f08a4a 6px 12px); transition: width .25s ease; }
+    #status { min-height: 1.3em; font-size: 14px; opacity: .8; }
+    #begin { font: inherit; font-size: 20px; font-weight: 800; color: #fff; background: var(--teal); border: 0; border-radius: 999px;
+      padding: 12px 38px; box-shadow: 0 4px 0 #1f4b4e, 0 8px 18px #0003; cursor: pointer; transition: transform .1s, opacity .3s; }
+    #begin:disabled { opacity: .35; cursor: default; box-shadow: 0 4px 0 #1f4b4e; }
+    #begin:not(:disabled):active { transform: translateY(3px); box-shadow: 0 1px 0 #1f4b4e; }
+    #begin:not(:disabled) { animation: pulse 1.8s ease-in-out infinite; }
+    @keyframes pulse { 50% { transform: scale(1.05); } }
+    .tips { font-size: 13px; opacity: .7; max-width: 460px; line-height: 1.45; }
+    .rotate { display: none; font-size: 13px; color: var(--orange); }
+    @media (orientation: portrait) and (pointer: coarse) { .rotate { display: block; } }
+    /* Fork me on GitHub corner ribbon (shared with the pause screen) */
+    .fork { position: fixed; top: 0; right: 0; width: 150px; height: 150px; overflow: hidden; z-index: 60; pointer-events: none; }
+    .fork a { position: absolute; top: 34px; right: -46px; width: 210px; transform: rotate(45deg); pointer-events: auto;
+      background: var(--orange); color: #fff; text-align: center; font: 700 13px/1 system-ui, sans-serif; letter-spacing: .3px;
+      padding: 9px 0; text-decoration: none; box-shadow: 0 2px 6px #0004; border: 1px dashed #fff8; outline-offset: 2px; }
+    .fork a:hover, .fork a:focus-visible { background: #c4521f; }
+    noscript { position: fixed; bottom: 16px; left: 16px; right: 16px; text-align: center; }
+  </style>
+</head>
+<body>
+  <canvas id="game" aria-label="Snuggle Sorcery game view"></canvas>
+  <div id="loading" role="dialog" aria-label="Loading Snuggle Sorcery">
+    <div class="fork"><a href="https://github.com/doublependu/snuggle" target="_blank" rel="noopener">Fork me on GitHub</a></div>
+    <svg class="doudou" viewBox="0 0 200 190" aria-hidden="true">
+      <ellipse cx="100" cy="176" rx="70" ry="9" fill="#0001" />
+      <g>
+        <circle cx="100" cy="150" r="30" fill="#e0662c" />
+        <path d="M74 138 q26 14 52 0 M72 152 q28 14 56 0 M78 166 q22 10 44 0" stroke="#b8481a" stroke-width="3" fill="none" />
+      </g>
+      <g class="body">
+        <path d="M52 132 q-6 -52 20 -70 l6 -22 l16 18 q6 -2 12 0 l16 -18 l6 22 q26 18 20 70 q-48 16 -96 0z" fill="#f6efe4" stroke="#c9b79c" stroke-width="3" stroke-linejoin="round" />
+        <path d="M72 96 h14 M114 96 h14" stroke="#5a4032" stroke-width="4" stroke-linecap="round" />
+        <path d="M96 106 l4 5 l4 -5z" fill="#8a5a44" />
+        <ellipse cx="68" cy="108" rx="7" ry="4" fill="#f2b8a0" opacity=".7" />
+        <ellipse cx="132" cy="108" rx="7" ry="4" fill="#f2b8a0" opacity=".7" />
+      </g>
+      <text class="z" x="140" y="54" font-size="20" font-weight="800" fill="#2f6f73">z</text>
+      <text class="z z2" x="152" y="36" font-size="15" font-weight="800" fill="#2f6f73">z</text>
+    </svg>
+    <h1>Snuggle <span>Sorcery</span></h1>
+    <p class="sub">The Academy of Gentle Curses</p>
+    <div class="thread" aria-hidden="true"><i id="progress"></i></div>
+    <div id="status" aria-live="polite">Warming up the lanterns…</div>
+    <button id="begin" disabled>Begin</button>
+    <p class="tips" id="tips">Move with WASD, look with the mouse, hold <b>E</b> to hum a lullaby. On touch screens use the stick and the big <b>Hum</b> button.</p>
+    <p class="rotate">Tip: turn your phone sideways for the coziest view.</p>
+    <noscript>Snuggle Sorcery needs JavaScript and WebGL to run.</noscript>
+  </div>
+  <div id="ui"></div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
