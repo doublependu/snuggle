@@ -13,3 +13,9 @@
 # Features
 
 1. Keep working on next items in ai/next_0.md
+
+
+# Misc
+
+1. I updated the software license: make sure the correct license is referenced
+
