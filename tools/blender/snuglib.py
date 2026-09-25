@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 """Shared helpers for building Snuggle Sorcery assets in Blender.
 
 Run build scripts through the Blender MCP or headless:

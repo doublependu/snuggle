@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 // Chapter 1: Welcome to Mistbloom. Master Fang's welcome and first lesson, Captain Honk's interruption,
 // the lost-sock and homework missions, baking with Tangtang, the lonely pom-pom, and the chapter end.
 import { Vector3 } from 'three';
@@ -19,6 +20,8 @@ export function chapterObjective() {
   if (!f('cookDone')) return 'Bake custard tarts with Tangtang in the kitchen';
   if (!f('pompomDone')) return 'Someone is sitting all alone by the practice field…';
   if (!f('ch1Done')) return 'Meet everyone at the harbour overlook';
+  if (!f('ch2_start')) return 'Meet Wei Bao at the Academy gate: the night market awaits!';
+  if (!f('ch2Done')) return 'The night market is down the hill (Wei Bao is at the gate)';
   return 'Free roam: find every lemon candy and fill your Sprite Book';
 }
 
@@ -59,7 +62,21 @@ function placeCast(z) {
     n.facing = n.homeFacing = facing ?? m.facing;
     n.root.rotation.y = n.facing;
   };
-  if (flag('ch1Done') || (flag('sockDone') && flag('homeworkDone') && flag('cookDone') && flag('pompomDone'))) {
+  if (flag('ch1Done')) {
+    // evening: Fang at the pavilion, Tangtang baking, Wei Bao at the gate ready for the night market
+    at(fang, z.marker('POINT_fang_lesson'));
+    at(tt, z.marker('POINT_kitchen'));
+    tt.homeFacing = Math.PI / 2;
+    if (wb) {
+      wb.base = 'idle';
+      wb.h.play('idle', 0.2);
+      wb.lookAtPlayer = true;
+      const g = z.marker('SPAWN_gate').position;
+      at(wb, { position: g.clone().add(new Vector3(1.6, 0, -1.8)), facing: Math.PI });
+    }
+    return;
+  }
+  if (flag('sockDone') && flag('homeworkDone') && flag('cookDone') && flag('pompomDone')) {
     const o = z.marker('POINT_overlook').position;
     at(fang, { position: o.clone().add(new Vector3(-1.2, 0, -0.6)), facing: 0 });
     at(tt, { position: o.clone().add(new Vector3(1.4, 0, -0.4)), facing: -0.4 });
@@ -182,9 +199,11 @@ async function ending(z) {
   await talk([[null, 'Doudou is already asleep again. Across the water, the harbour lanterns begin to glow.']]);
   flag('ch1Done', true);
   writeSave(G.save);
+  placeCast(z);
+  G.frozen = true; // talk() unfroze her; stay put through the chapter cards
   G.cam.clearShot();
   await G.ui.card('Chapter 1 complete', 'Welcome to Mistbloom', 3);
-  await G.ui.card('Chapter 2: The Night Market Mix-Up', 'Coming soon — keep exploring, find every lemon candy!', 3.4);
+  await G.ui.card('Chapter 2: The Night Market Mix-Up', 'The next evening, down by the harbour… (Wei Bao is waiting at the gate)', 3.4);
   G.frozen = false;
   refreshObjective();
 }
@@ -195,8 +214,7 @@ export function wireAcademy(z) {
     fang = npc('fang'),
     wb = npc('weibao');
   // Grumbling missions
-  G.events.on('soothed', async (g) => {
-    if (G.zone !== z) return;
+  z.on('soothed', async (g) => {
     const lines = {
       sock: [['xiaopei', "You'll find your pair one day. Until then, you've got me.", { face: 'smile' }], ['sock', '…warm… toes…']],
       homework: [['xiaopei', 'One page is enough for today. You did your best.', { face: 'smile' }], ['homework', '…really…? …okay…']],
@@ -209,8 +227,8 @@ export function wireAcademy(z) {
     if (!G.frozen) await talk(lines);
     refreshObjective();
   });
-  G.events.on('noticed', async (g) => {
-    if (G.zone !== z || g.species !== 'pompom') return;
+  z.on('noticed', async (g) => {
+    if (g.species !== 'pompom') return;
     await talk([
       ['pompom', '…nobody picked me for their team…'],
       ['xiaopei', 'Then come with me! I know some friends who are playing tag right now.', { face: 'happy' }],
@@ -254,10 +272,18 @@ export function wireAcademy(z) {
         'The lemon candies around the grounds? I may have dropped a few. Or ten.',
       ])],
     ]);
-  wb.onTalk = () =>
-    flag('weibaoFriend')
+  wb.onTalk = async () => {
+    if (flag('ch1Done')) {
+      // Chapter 2: off to the night market (and back again any time)
+      const a = await ask('honk', flag('ch2_start') ? 'BACK TO THE NIGHT MARKET? HONK.' : 'THE NIGHT MARKET AWAITS. TANGTANG IS ALREADY THERE, GUARDING THE DUMPLINGS. HONK.', ['Let’s go!', 'Not yet']);
+      G.ui.closeDialogue();
+      if (a === 0) G.goto('market', 'SPAWN_start');
+      return;
+    }
+    return flag('weibaoFriend')
       ? talk([['honk', pickLine(['NEED ECHO FRIEND? PRESS THE ASSIST BUTTON NEAR A GRUMBLING. HONK.', 'WEI BAO LIKES YOU. HE WILL NOT SAY IT. I WILL. HONK.', 'THE LIBRARY STAIRS ARE MOSSY. MIND YOUR FEET.'])]])
       : talk([['weibao', '…(he hides behind his puppet)']]);
+  };
 }
 
 function pickLine(a) {

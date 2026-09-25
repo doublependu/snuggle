@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 // Third-person spring-arm camera: orbit with mouse / right stick / touch drag, BVH collision so it
 // never clips into walls, soft framing of the soothing target, and scripted shots for cutscenes.
 import { MathUtils, Vector3 } from 'three';

@@ -1,8 +1,9 @@
+# SPDX-License-Identifier: GPL-3.0-only
 """Xiao Pei (ref/xiaopei_1.png), built by chibi.py with the character kit (kit.py).
 
 Head, hair and braid are sculpted with signed distance fields: a round head with a painted face, blunt bangs,
 and a thick three-strand braid swinging off her right side. Her body starts from the base mesh
-(ref/hero_male.glb, hero_base.py), warped onto her A-pose skeleton and reshaped toward the ref photo: its
+(tools/blender/base/hero_male.glb, hero_base.py), warped onto her A-pose skeleton and reshaped toward the ref photo: its
 shirt becomes the oversized mustard jacket, its bracers the rolled cuffs, its rolled trousers her baggy
 gathered ones. The jacket's closed hem, the hood (Doudou sleeps in it), her shirt collar, the high-tops,
 the yarn skein on its strap and the laces are sculpted on top.

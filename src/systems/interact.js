@@ -1,5 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
 // Context interaction: the nearest enabled interactable within reach gets the prompt / touch button.
-// Interactable: { label, position (Vector3), radius, enabled(), action(), key? }
+// Interactable: { label, position (Vector3), radius, enabled(), action(), key?, priority? (metres of preference) }
 import { G } from '../game.js';
 
 const KEYS = { keyboard: 'F', gamepad: 'X', touch: '' };
@@ -22,7 +23,8 @@ export class Interact {
         const dx = it.position.x - p.position.x,
           dz = it.position.z - p.position.z;
         const front = (dx * Math.sin(p.facing) + dz * Math.cos(p.facing)) / Math.max(0.01, Math.hypot(dx, dz));
-        const score = d - front * 0.6;
+        // priority: seats and story spots win over a friend who happens to be standing close by
+        const score = d - front * 0.6 - (it.priority || 0);
         if (score < bd) {
           bd = score;
           best = it;

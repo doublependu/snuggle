@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 // Quality tiers + dynamic resolution. The tier is probed from the device, then refined from the
 // measured frame time during the first seconds of play; players can override it in Settings.
 export const TIERS = {

@@ -1,7 +1,9 @@
+// SPDX-License-Identifier: GPL-3.0-only
 // Cheap effects shared by every zone: the Lullaby Thread ribbon, sparkles, rain streaks and glow billboards.
 // All buffers are preallocated; nothing is allocated per frame.
 import {
-  AdditiveBlending, BufferAttribute, BufferGeometry, Color, DynamicDrawUsage, LineSegments, Mesh, Points, ShaderMaterial, Vector3,
+  AdditiveBlending, BufferAttribute, BufferGeometry, Color, DynamicDrawUsage, InstancedMesh, LineSegments, Matrix4, Mesh, PlaneGeometry,
+  Points, ShaderMaterial, Vector3,
 } from 'three';
 import { shared } from './materials.js';
 
@@ -48,9 +50,9 @@ export class Ribbon {
     this.mesh.renderOrder = 5;
     this.mesh.visible = false;
   }
-  // points: array of Vector3 (count <= max); camera for billboarding
-  set(points, camera, width = this.width) {
-    const n = Math.min(points.length, this.max);
+  // points: array of Vector3 (the first `count`, <= max, are used); camera for billboarding
+  set(points, camera, width = this.width, count = points.length) {
+    const n = Math.min(count, points.length, this.max);
     if (n < 2) {
       this.mesh.visible = false;
       return;
@@ -240,5 +242,50 @@ export class Rain {
     this.mesh = new LineSegments(g, this.mat);
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = 3;
+  }
+}
+
+// ---------------------------------------------------------------- blob shadows
+// Soft dark discs under characters when the tier (or a night zone) has no shadow map: one draw call.
+const _bm = new Matrix4();
+export class BlobShadows {
+  constructor(max = 32) {
+    const geo = new PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+    const mat = new ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      uniforms: { opacity: { value: 0.32 } },
+      vertexShader: `varying vec2 vUv; void main(){ vUv = uv;
+        gl_Position = projectionMatrix * viewMatrix * modelMatrix * instanceMatrix * vec4(position, 1.0); }`,
+      fragmentShader: `uniform float opacity; varying vec2 vUv;
+        void main(){ float r = length(vUv - 0.5) * 2.0; float a = 1.0 - smoothstep(0.35, 1.0, r); gl_FragColor = vec4(0.08, 0.06, 0.1, a * opacity); }`,
+    });
+    this.mesh = new InstancedMesh(geo, mat, max);
+    this.mesh.count = 0;
+    this.mesh.frustumCulled = false;
+    this.mesh.renderOrder = 1;
+    this.mesh.name = 'blob-shadows';
+    this.max = max;
+    this.cache = new WeakMap(); // actor -> { x, z, y }
+  }
+  // actors: [{ obj (Object3D whose position is the feet), radius }]; ground(x, z, fromY) -> y or null
+  update(actors, ground) {
+    let n = 0;
+    for (const a of actors) {
+      if (n >= this.max) break;
+      const p = a.obj.position;
+      let c = this.cache.get(a.obj);
+      if (!c || Math.abs(c.x - p.x) + Math.abs(c.z - p.z) > 0.05 || Math.abs(c.from - p.y) > 0.3) {
+        const y = ground(p.x, p.z, p.y + 0.6);
+        c = { x: p.x, z: p.z, from: p.y, y: y ?? p.y };
+        this.cache.set(a.obj, c);
+      }
+      const lift = Math.max(0, p.y - c.y);
+      const s = a.radius * 2 * Math.max(0.4, 1 - lift * 0.35);
+      _bm.makeScale(s, 1, s).setPosition(p.x, c.y + 0.02, p.z);
+      this.mesh.setMatrixAt(n++, _bm);
+    }
+    this.mesh.count = n;
+    this.mesh.instanceMatrix.needsUpdate = true;
   }
 }

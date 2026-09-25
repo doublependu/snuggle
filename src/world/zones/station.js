@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 // Prologue, part 2: Lantern Bay station platform, the harbour plaza and the hill path to the Academy.
 import { CanvasTexture, Mesh, MeshBasicMaterial, PlaneGeometry, SRGBColorSpace, Vector3 } from 'three';
 import { G } from '../../game.js';
@@ -18,7 +19,7 @@ export async function create() {
   z.addWater({ deep: '#2b5f66', shallow: '#4f8f8c' });
   z.collision.build();
   z.scatter(3, [{ x: 30, z: -60, r: 4 }]);
-  await z.populateNPCs();
+  await z.populateNPCs(undefined, { essential: ['tangtang'] });
   // lantern glows along the platform and the hill path
   for (const m of z.markersBy('PLACE_lamp_post')) {
     const off = new Vector3(0.45, 2.15, 0).applyQuaternion(m.quaternion);
@@ -33,9 +34,7 @@ export async function create() {
     fisher: ["Lanterns over the water are lovely tonight. Well… most of them.", "Grumblings? Harmless fluff. Mostly."],
     kid: ['Is that a real Charm Sprite? Can I pet it?', 'Mistbloom students are SO cool.'],
   };
-  for (const [id, l] of Object.entries(lines)) {
-    const n = G.npcs.get(id);
-    if (!n) continue;
+  for (const [id, l] of Object.entries(lines)) z.whenNPC(id, (n) => {
     let i = 0;
     n.onTalk = () => {
       talk([[id === 'kid' ? 'student' : 'passenger', l[i++ % l.length]]]);
@@ -44,7 +43,7 @@ export async function create() {
         G.collection.cozy(4, 'Friendly chat', n.position.clone().setY(n.position.y + 1.6));
       }
     };
-  }
+  });
   z.onTrigger('TRIGGER_academy', () => {
     if (!G.save.story.prologueDone) return G.ui.toast('Talk to the girl with the sign on the platform first.', 3);
     G.goto('academy', 'SPAWN_gate');

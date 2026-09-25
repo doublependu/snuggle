@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 """Modular Lantern Bay / Mistbloom architecture kit (env refs: Suzhou-style halls, pavilions,
 moon gates, arched bridges). Exports assets-src/export/kit.glb.
 

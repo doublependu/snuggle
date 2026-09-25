@@ -1,7 +1,8 @@
+// SPDX-License-Identifier: GPL-3.0-only
 // Boot: loading page → renderer + first zone → Begin (time to interaction) → game loop.
 import { PerspectiveCamera, Scene, WebGLRenderer } from 'three';
 import css from './ui/ui.css?inline';
-import { G } from './game.js';
+import { G, logError } from './game.js';
 import { loadSave, writeSave } from './core/save.js';
 import { Input } from './core/input.js';
 import { Audio } from './core/audio.js';
@@ -12,6 +13,7 @@ import { Glows, Sparkles } from './render/vfx.js';
 import { UI } from './ui/ui.js';
 import { Menus } from './ui/menus.js';
 import { createTouch } from './ui/touch.js';
+import { lockZoom } from './ui/zoomlock.js';
 import { Humanoid } from './actors/humanoid.js';
 import { Player } from './actors/player.js';
 import { FollowCamera } from './actors/camera.js';
@@ -28,11 +30,22 @@ const ZONES = {
   train: () => import('./world/zones/train.js'),
   station: () => import('./world/zones/station.js'),
   academy: () => import('./world/zones/academy.js'),
+  market: () => import('./world/zones/market.js'),
   test: () => import('./world/zones/test.js'),
 };
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
+if (import.meta.env.DEV) window.__G = G; // for tools/e2e and the console; not in production builds
+
+// keep the last errors for the in-game bug report
+addEventListener('error', (e) => logError(e.message + (e.filename ? ` (${e.filename.split('/').pop()}:${e.lineno})` : '')));
+addEventListener('unhandledrejection', (e) => logError('unhandled: ' + (e.reason?.stack || e.reason)));
+const consoleError = console.error.bind(console);
+console.error = (...a) => {
+  logError(a.map((x) => (x instanceof Error ? x.stack || x.message : String(x))).join(' '));
+  consoleError(...a);
+};
 
 async function boot() {
   const style = document.createElement('style');
@@ -60,6 +73,8 @@ async function boot() {
   G.ui = new UI(uiRoot);
   G.menus = new Menus(uiRoot);
   G.touch = createTouch(uiRoot, G.input);
+  lockZoom(document.body);
+  watchContext(canvas);
   const setDevice = (d) => document.body.classList.toggle('touch', d === 'touch');
   setDevice(G.input.device);
   G.input.onDevice(setDevice);
@@ -122,6 +137,7 @@ async function enterZone(id, spawn) {
   G.fx.glows.clear();
   G.interactables.clear();
   G.updaters.clear();
+  G.collection.candyTotal = 0; // zones with lemon candies set their own total
   const mod = await ZONES[id]();
   const zone = await mod.create();
   G.zone = zone;
@@ -206,9 +222,38 @@ function frame(now) {
   }
 }
 
+// Phones (iOS Safari especially) may discard a background tab and reload it later: save on the way out.
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden && !G.paused && !G.menus.open) G.menus.togglePause();
+  if (!document.hidden || !G.save) return;
+  writeSave(G.save);
+  if (!G.paused && !G.menus?.open) G.menus?.togglePause();
 });
+addEventListener('pagehide', () => G.save && writeSave(G.save));
+
+// WebGL context loss (low memory, long in the background): pause, wait for the browser to restore it,
+// and if it doesn't come back, save and reload (the save resumes at the last checkpoint).
+function watchContext(canvas) {
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.hidden = true;
+  overlay.textContent = 'Waking the lanterns back up…';
+  $('ui').append(overlay);
+  let timer = 0;
+  canvas.addEventListener('webglcontextlost', (e) => {
+    e.preventDefault();
+    logError('webgl context lost');
+    writeSave(G.save);
+    overlay.hidden = false;
+    if (!G.paused && !G.menus.open) G.menus.togglePause();
+    clearTimeout(timer);
+    timer = setTimeout(() => location.reload(), 5000);
+  });
+  canvas.addEventListener('webglcontextrestored', () => {
+    clearTimeout(timer);
+    overlay.hidden = true;
+    G.renderer.compileAsync(G.scene, G.camera).catch(() => {});
+  });
+}
 
 if (params.has('viewer')) import('./dev/viewer.js').then((m) => m.runViewer()).catch((e) => console.error(e));
 else boot().catch((e) => {

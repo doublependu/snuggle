@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 """Zone scenes: the Rainy Train (prologue), Lantern Bay station and Mistbloom Academy.
 
 Blender is the level editor: visual meshes, COL_* colliders, GROUND_* meshes (visual + collision) and
@@ -6,6 +7,8 @@ marker empties that the runtime (src/world/zone.js) reads:
   GRUMB_<id>   Grumbling (props: species)            POINT_<id>   script / interactable spot (props vary)
   PLACE_<piece>.nnn  kit instance from kit.glb       SCATTER_<kind>  procedural foliage area (scale = extents)
   WATER_<id>   water surface (scale = extents)       TRIGGER_<id> box volume (scale = half extents)
+  AREA_<id>    box a Grumbling <id> stays inside     seat markers (NPC_ with anim=sit, POINT_*seat): centre of
+               (scale = half extents)                the seat's FRONT edge, prop seat = seat-top height
 Run a single zone with ONLY=['train'] in the exec globals."""
 import os, sys, importlib, math, random
 
@@ -125,19 +128,23 @@ def train():
         K.append(col('wall%d' % sy, (0, sy * (W / 2 + 0.1), H / 2), (L, 0.3, H)))
         K.append(col('end%d' % sy, (sy * (L / 2 + 0.1), 0, H / 2), (0.3, W, H)))
     K.append(col('ceiling', (0, 0, H + 0.1), (L, W, 0.2)))
+    # chibi-sized benches: shallow and low, so seated knees reach the front edge and feet hang near the floor.
+    # seats[] holds the centre of each seat's front edge (the runtime seats a character from there).
+    D, SEAT_H = 0.30, 0.40
     seats = []
     for i in range(nwin):
         cx = -L / 2 + (i + 0.5) * bay
         for sy in (-1, 1):
             yc = sy * 0.95
             for face in (-1, 1):  # bench at the bay end, facing the bay centre
-                bx = cx + face * (bay / 2 - 0.35)
-                V.append(box('cush%d%d%d' % (i, sy, face), (bx, yc, 0.44), (0.5, 1.05, 0.12), 'cloth', seat))
-                V.append(box('base%d%d%d' % (i, sy, face), (bx, yc, 0.2), (0.48, 1.0, 0.38), 'wood', wood_d))
-                V.append(box('back%d%d%d' % (i, sy, face), (bx + face * 0.27, yc, 0.88), (0.1, 1.05, 0.85), 'cloth', seat_d))
-                V.append(box('backtop%d%d%d' % (i, sy, face), (bx + face * 0.27, yc, 1.32), (0.14, 1.07, 0.06), 'wood', wood))
-                K.append(col('bench%d%d%d' % (i, sy, face), (bx + face * 0.05, yc, 0.55), (0.62, 1.05, 1.1)))
-                seats.append((bx + face * 0.1, yc, face))
+                bb = cx + face * (bay / 2 - 0.1)       # backrest
+                bx = bb - face * (D / 2 + 0.05)        # cushion centre
+                V.append(box('cush%d%d%d' % (i, sy, face), (bx, yc, SEAT_H - 0.05), (D, 1.05, 0.1), 'cloth', seat))
+                V.append(box('base%d%d%d' % (i, sy, face), (bx, yc, (SEAT_H - 0.1) / 2), (D - 0.03, 1.0, SEAT_H - 0.1), 'wood', wood_d))
+                V.append(box('back%d%d%d' % (i, sy, face), (bb, yc, SEAT_H + 0.42), (0.1, 1.05, 0.84), 'cloth', seat_d))
+                V.append(box('backtop%d%d%d' % (i, sy, face), (bb, yc, SEAT_H + 0.86), (0.14, 1.07, 0.06), 'wood', wood))
+                K.append(col('bench%d%d%d' % (i, sy, face), (bx + face * 0.05, yc, 0.55), (D + 0.1, 1.05, 1.1)))
+                seats.append((bx - face * D / 2, yc, face))
         # luggage racks
         for sy in (-1, 1):
             V.append(box('rack%d%d' % (i, sy), (cx, sy * 1.15, 2.02), (bay - 0.6, 0.55, 0.03), 'wood', brass))
@@ -153,8 +160,9 @@ def train():
 
     # markers
     marker('SPAWN_start', (-5.9, -0.05, 0.02), rot=90)       # facing +x down the aisle
-    marker('POINT_seat', (seats[2][0], seats[2][1], 0.0), rot=-90 * seats[2][2], seat=0.5)
+    marker('POINT_seat', (seats[2][0], seats[2][1], 0.0), rot=-90 * seats[2][2], seat=SEAT_H)
     marker('GRUMB_cloud', (2.0, 0.0, 0.0), species='cloud')
+    area('AREA_cloud', (0, 0, 1.2), (7.4, 0.95, 1.2))   # the cloud drifts inside the carriage only
     marker('CAM_intro', (-7.4, 0.2, 1.7))
     marker('CAM_lap', (-4.2, -0.4, 1.3))
     marker('CAM_window', (-2.0, -0.2, 1.5))
@@ -164,7 +172,7 @@ def train():
             ('NPC_p4', 18, 'folk_a'), ('NPC_p5', 22, 'folk_c'), ('NPC_p6', 25, 'folk_b')]
     for name, si, model in folk:
         x, y, face = seats[si]
-        marker(name, (x, y, 0.0), rot=-90 * face, model=model, anim='sit', seat=0.5)
+        marker(name, (x, y, 0.0), rot=-90 * face, model=model, anim='sit', seat=SEAT_H)
     return export_zone('train', None)
 
 
@@ -452,8 +460,9 @@ def academy():
     marker('SPAWN_start', (0, -31.5, 0), rot=180)
     marker('NPC_fang', (0, -21, 0), rot=0, model='fang', anim='idle')
     marker('NPC_tangtang', (2.2, -28.8, 0), rot=180, model='tangtang', anim='idle')
-    marker('NPC_weibao', (-1.55, 14, 0.0), rot=90, model='weibao', anim='sit', seat=0.89)
-    marker('NPC_classmate', (1.55, 14.4, 0.0), rot=-90, model='folk_b', anim='sit', seat=0.89)
+    # seat markers sit on the front edge of the pavilion's side benches (0.4 deep, top at 0.89)
+    marker('NPC_weibao', (-1.35, 14, 0.0), rot=90, model='weibao', anim='sit', seat=0.89)
+    marker('NPC_classmate', (1.35, 14.4, 0.0), rot=-90, model='folk_b', anim='sit', seat=0.89)
     marker('NPC_s1', (-6.5, 2.5, 0), rot=150, model='folk_a', anim='idle')
     marker('NPC_s2', (9, -15, 0), rot=-40, model='folk_c', anim='idle')
     marker('NPC_player1', (-16, 42, 0), rot=30, model='folk_b', anim='celebrate')
@@ -462,7 +471,7 @@ def academy():
     marker('NPC_bookworm', (27.5, 20.5, 0), rot=160, model='folk_b', anim='shy')
     marker('POINT_kitchen', (-26.6, -12, 0.6), rot=90)
     marker('POINT_fang_lesson', (0, 11.4, 0), rot=180)
-    marker('POINT_lessonseat', (0, 15.6, 0), rot=0, seat=0.89)
+    marker('POINT_lessonseat', (0, 15.35, 0), rot=0, seat=0.89)
     marker('POINT_fang_court', (-2, -6, 0), rot=0)
     marker('POINT_tag', (5, -6, 0))
     marker('POINT_bigtree', (-7.5, -2.5, 0))

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 // Character viewer (?viewer): every character in a row under the game's lighting, with orbit
 // controls, clip / expression pickers, wireframe and silhouette views and a triangle readout.
 // Used to review character art (ai/plan_1.md §3.5); lazy-loaded, never on the critical path.
@@ -13,7 +14,7 @@ import { seatDoudou } from '../actors/player.js';
 import { materialFor, shared } from '../render/materials.js';
 import { TIERS } from '../core/quality.js';
 
-const CAST = ['xiaopei', 'tangtang', 'weibao', 'fang', 'folk_a', 'folk_b', 'folk_c'];
+const CAST = ['xiaopei', 'tangtang', 'weibao', 'fang', 'folk_a', 'folk_b', 'folk_c', 'folk_kid'];
 const CLIPS = ['bind', 'idle', 'walk', 'run', 'air', 'land', 'hum', 'throw', 'talk', 'wave', 'sit', 'overwhelmed', 'celebrate', 'shy', 'puppet', 'stir', 'pat'];
 const FACES = ['neutral', 'happy', 'sad', 'surprised', 'sleepy', 'blink', 'talk'];
 const SPACING = 1.1;

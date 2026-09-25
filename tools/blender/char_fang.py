@@ -1,7 +1,8 @@
+# SPDX-License-Identifier: GPL-3.0-only
 """Master Fang Qiuyue (ref/fangqiuye.png), built by chibi.py with the character kit.
 
 Tiny and round: a tan tweed flat cap with an orange knit band over white curly hair, round wire glasses, small
-dark dot eyes, rosy cheeks and smile lines. Her body starts from the base mesh (ref/hero_male.glb): its
+dark dot eyes, rosy cheeks and smile lines. Her body starts from the base mesh (tools/blender/base/hero_male.glb): its
 shirt becomes her chunky orange knit cardigan (over a cream undershirt, rolled cuffs at the wrists, a long
 sculpted hem), its trousers her grey checked ones; the boots become sculpted felt slippers. Wooden buttons,
 patch pockets with sweets, the knotted checked scarf and the tote bag in her right hand are sculpted.

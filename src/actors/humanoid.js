@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 // Skinned chibi characters driven by the shared animation library (anim_humanoid.glb).
 // Clips are retargeted once per character: missing bones get rest tracks, and the hips translation
 // track is rescaled to the character's hip height. Upper-body overlay clips (hum/talk/wave/...)
@@ -17,9 +18,11 @@ const _fwd = new Vector3();
 const _q = new Quaternion();
 const _q2 = new Quaternion();
 const _pq = new Quaternion();
+const _up = new Vector3(0, 1, 0);
 
 const UPPER = new Set(['spine', 'chest', 'neck', 'head', 'hood', 'shoulder_L', 'upperarm_L', 'forearm_L', 'hand_L', 'shoulder_R', 'upperarm_R', 'forearm_R', 'hand_R']);
 const ONCE = new Set(['land', 'throw']);
+const sitCache = new Map();
 let library = null;
 
 async function animLibrary() {
@@ -40,6 +43,10 @@ function retarget(lib, charRest) {
   const hipsChar = charRest.hips?.p || hipsLib;
   const k = hipsChar.y / hipsLib.y;
   const out = {};
+  // bones that no clip ever animates (neck, hood) keep the character's own rest pose: the library's rest
+  // for them assumes the library's bone axes, which rolled Wei Bao's neck sideways
+  const animated = new Set();
+  for (const clip of lib.clips) for (const t of clip.tracks) animated.add(t.name.split('.')[0]);
   for (const clip of lib.clips) {
     const tracks = [];
     const have = new Set();
@@ -61,7 +68,8 @@ function retarget(lib, charRest) {
     for (const bone of Object.keys(lib.rest)) {
       if (!charRest[bone] || bone === 'root' || lib.rest[bone] === undefined) continue;
       const qn = bone + '.quaternion';
-      if (!have.has(qn) && lib.rest[bone].q) tracks.push(new QuaternionKeyframeTrack(qn, [0], lib.rest[bone].q.toArray()));
+      const rest = animated.has(bone) ? lib.rest[bone].q : charRest[bone].q;
+      if (!have.has(qn) && rest) tracks.push(new QuaternionKeyframeTrack(qn, [0], rest.toArray()));
     }
     if (!have.has('hips.position') && charRest.hips) tracks.push(new VectorKeyframeTrack('hips.position', [0], hipsChar.toArray()));
     out[clip.name] = new AnimationClip(clip.name, clip.duration, tracks);
@@ -167,6 +175,50 @@ export class Humanoid {
     return t ? t.values[1] : this.bones.hips?.position.y || 0.4;
   }
 
+  // The seated pose measured once per character: hips height and how far the knees reach in front of
+  // the root, so the knees rest just past a seat's front edge whatever the leg length.
+  sitPose() {
+    const cached = sitCache.get(this.name);
+    if (cached) return cached;
+    const clip = this.clips.sit;
+    const saved = [];
+    this.root.traverse((o) => o.isBone && saved.push([o, o.position.clone(), o.quaternion.clone()]));
+    const pos = this.root.position.clone(),
+      rot = this.root.rotation.clone();
+    this.root.position.set(0, 0, 0);
+    this.root.rotation.set(0, 0, 0);
+    let knee = 0.2;
+    if (clip) {
+      const m = new AnimationMixer(this.root);
+      m.clipAction(clip).play();
+      m.update(0);
+      this.root.updateMatrixWorld(true);
+      const k = ['shin_L', 'shin_R'].map((b) => this.bones[b]?.getWorldPosition(new Vector3()).z).filter((z) => z !== undefined);
+      if (k.length) knee = Math.max(...k);
+      m.stopAllAction();
+      m.uncacheRoot(this.root);
+    }
+    for (const [o, p, q] of saved) {
+      o.position.copy(p);
+      o.quaternion.copy(q);
+    }
+    this.root.position.copy(pos);
+    this.root.rotation.copy(rot);
+    this.root.updateMatrixWorld(true);
+    const out = { hipsY: this.clipHipsY('sit'), knee };
+    sitCache.set(this.name, out);
+    return out;
+  }
+
+  // Root transform for sitting on a seat: front = centre of the seat's front edge (on the floor), seat =
+  // seat-top height above it, facing = away from the seat back.
+  seatRoot(front, facing, seat, out = new Vector3()) {
+    const { hipsY, knee } = this.sitPose();
+    const back = knee - 0.03; // knees 3 cm past the edge
+    out.set(front.x - Math.sin(facing) * back, front.y + seat - (hipsY - 0.11), front.z - Math.cos(facing) * back);
+    return out;
+  }
+
   // Distant / hidden characters update at a lower rate to save CPU on phones.
   update(dt, distance = 0) {
     const every = distance > 25 ? 4 : distance > 12 ? 2 : 1;
@@ -175,8 +227,44 @@ export class Humanoid {
     this.face?.update(dt);
     if (this.lodFrame % every) return;
     this.mixer.update(this.lodTimer);
+    this.updateLook(this.lodTimer);
     if (this.springs.length) this.updateSprings(this.lodTimer);
     this.lodTimer = 0;
+  }
+
+  // Head look-at: set lookTarget (a world Vector3, or null). Applied on top of whatever clip is playing,
+  // split between neck and head, limited to what a neck can do, and faded in and out.
+  updateLook(dt) {
+    const want = this.lookTarget ? 1 : 0;
+    this.lookW = (this.lookW || 0) + (want - (this.lookW || 0)) * Math.min(1, dt * 4);
+    if (this.lookW < 0.01 || !this.bones.head) return;
+    if (this.lookTarget) this.lookPos = (this.lookPos || new Vector3()).copy(this.lookTarget);
+    const head = this.bones.head.getWorldPosition(_p);
+    const dx = this.lookPos.x - head.x,
+      dy = this.lookPos.y - head.y,
+      dz = this.lookPos.z - head.z;
+    _fwd.set(0, 0, 1).applyQuaternion(this.root.getWorldQuaternion(_q));
+    const facing = Math.atan2(_fwd.x, _fwd.z);
+    let yaw = Math.atan2(dx, dz) - facing;
+    yaw = Math.atan2(Math.sin(yaw), Math.cos(yaw));
+    // don't wrench the head round to something behind her
+    const behind = MathUtils.smoothstep(Math.abs(yaw), 1.7, 2.3);
+    const w = this.lookW * (1 - behind);
+    if (w < 0.01) return;
+    yaw = MathUtils.clamp(yaw, -1.05, 1.05) * w;
+    // chibi heads are big: a gentle nod reads better than a full one
+    const pitch = MathUtils.clamp(Math.atan2(dy, Math.hypot(dx, dz)) * 0.6, -0.28, 0.22) * w;
+    for (const [name, k] of [['neck', 0.35], ['head', 0.65]]) {
+      const b = this.bones[name];
+      if (!b) continue;
+      const turned = facing + yaw * (name === 'neck' ? k : 1);
+      _right.set(Math.cos(turned), 0, -Math.sin(turned));
+      _q.setFromAxisAngle(_up, yaw * k);
+      _q2.setFromAxisAngle(_right, -pitch * k);
+      _q2.multiply(_q);
+      b.parent.getWorldQuaternion(_pq);
+      b.quaternion.premultiply(_pq).premultiply(_q2).premultiply(_pq.invert());
+    }
   }
 
   // Chains of spring_<chain>_<n> bones (legacy: braid_<n>), ordered root to tip.

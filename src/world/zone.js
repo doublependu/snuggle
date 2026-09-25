@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 // Zone base: loads Blender-authored GLBs (visuals + COL_* colliders + marker empties), instances
 // PLACE_<piece> kit pieces, sets up lights / fog / sky, and cleans everything up on exit.
 import {
@@ -10,6 +11,8 @@ import { G } from '../game.js';
 import { loadGLB } from '../core/assets.js';
 import { stylize } from '../render/materials.js';
 import { createSky } from '../render/sky.js';
+import { BlobShadows } from '../render/vfx.js';
+import { bakeLampMap, clearLamps } from '../render/lamps.js';
 import { Collision } from './collision.js';
 import { NPC } from '../actors/npc.js';
 import { Grumbling } from '../actors/grumbling.js';
@@ -25,6 +28,8 @@ export class Zone {
     this.collision = new Collision();
     this.killY = -20;
     this.updaters = [];
+    this.offs = []; // event subscriptions owned by this zone (removed on dispose)
+    this.npcWaiters = new Map();
     this.npcs = [];
     this.grumblings = [];
     this.interactables = [];
@@ -41,7 +46,7 @@ export class Zone {
     root.traverse((o) => {
       if (o.name.startsWith('GROUND_') && o.isMesh) this.collision.addMesh(o);
       if (o.name.startsWith('COL_')) cols.push(o);
-      else if (/^(SPAWN|NPC|GRUMB|TRIGGER|POINT|CAM|PLACE|SCATTER|WATER|LIGHT)_/.test(o.name)) this.addMarker(o);
+      else if (/^(SPAWN|NPC|GRUMB|TRIGGER|POINT|CAM|PLACE|SCATTER|WATER|LIGHT|AREA|SEAT|GOOD)_/.test(o.name)) this.addMarker(o);
     });
     for (const c of cols) {
       c.traverse((m) => m.isMesh && this.collision.addMesh(m));
@@ -69,8 +74,19 @@ export class Zone {
   marker(name) {
     return this.markers.get(name);
   }
+  // Box from an AREA_* / TRIGGER_* marker (scale = half extents).
+  box(name) {
+    const m = this.marker(name);
+    return m ? new Box3(m.position.clone().sub(m.scale), m.position.clone().add(m.scale)) : null;
+  }
+  // G.events.on() that lasts only while this zone is loaded.
+  on(type, fn) {
+    const off = G.events.on(type, fn);
+    this.offs.push(off);
+    return off;
+  }
   markersBy(prefix) {
-    return [...this.markers.values()].filter((m) => m.name.startsWith(prefix));
+    return [...this.markers].filter(([k]) => k.startsWith(prefix)).map(([, m]) => m);
   }
 
   // Instance kit pieces for every PLACE_<piece>[.nnn] marker. Kit GLB roots are named <piece>.
@@ -126,7 +142,13 @@ export class Zone {
     scene.fog = new Fog(env.fog, env.fogNear, Math.min(env.fogFar, G.quality.tier.drawDistance * 1.3));
     scene.background = new Color(env.fog);
     if (env.sky !== false) {
-      this.sky = createSky({ top: env.skyTop, horizon: env.horizon, ground: env.ground, sun: this.sun, clouds: env.clouds, peaks: env.peaks, skyline: env.skyline, peakColor: env.peakColor || '#7f9bb0' });
+      const sky = {
+        top: env.skyTop, horizon: env.horizon, ground: env.ground, sun: this.sun, sunColor: env.skySun, clouds: env.clouds,
+        cloudColor: env.cloudColor, cloudShade: env.cloudShade, peaks: env.peaks, skyline: env.skyline, peakColor: env.peakColor || '#7f9bb0',
+        stars: env.stars || 0, moon: !!env.moon,
+      };
+      for (const k of Object.keys(sky)) if (sky[k] === undefined) delete sky[k];
+      this.sky = createSky(sky);
       this.group.add(this.sky);
     }
     this.hemi = new HemisphereLight(env.hemiSky, env.hemiGround, env.hemi);
@@ -142,6 +164,25 @@ export class Zone {
       d.shadow.normalBias = 0.03;
     }
     this.group.add(d, d.target);
+    // no shadow map (low tier, or a night zone lit by lanterns): soft blob shadows keep everyone grounded
+    if (!d.castShadow) {
+      this.blobs = new BlobShadows();
+      this.group.add(this.blobs.mesh);
+    }
+  }
+
+  // Lantern light for night zones: LIGHT_* markers (props: color, radius, intensity) plus extra lamps,
+  // baked into the lamp map over rect (render/lamps.js).
+  lamps(rect, extra = [], opts = {}) {
+    const list = this.markersBy('LIGHT_').map((m) => ({ position: m.position, color: m.data.color, radius: m.data.radius, intensity: m.data.intensity }));
+    this.lampList = list.concat(extra);
+    bakeLampMap(this.lampList, rect, opts);
+    this.lampRect = rect;
+    this.lampOpts = opts;
+    return this.lampList;
+  }
+  relight() {
+    if (this.lampList) bakeLampMap(this.lampList, this.lampRect, this.lampOpts);
   }
 
   update(dt) {
@@ -158,6 +199,14 @@ export class Zone {
     this.sky?.userData.update(dt, G.camera.position);
     for (const n of this.npcs) n.update(dt);
     for (const u of this.updaters) u(dt);
+    if (this.blobs && p) {
+      const list = this.blobList || (this.blobList = []);
+      list.length = 0;
+      if (p.root.visible) list.push({ obj: p.root, radius: 0.3 });
+      for (const n of this.npcs) if (!n.hidden && n.root.visible) list.push({ obj: n.root, radius: n.blobRadius || 0.3 });
+      for (const g of this.grumblings) if (g.state !== 'gone' && g.obj.parent) list.push({ obj: g.obj, radius: 0.22 * g.size });
+      this.blobs.update(list, (x, z, y) => this.collision.groundY(x, z, y));
+    }
   }
 
   // Water planes for WATER_* markers (scale = half extents).
@@ -202,9 +251,8 @@ export class Zone {
 
   // Box trigger from a TRIGGER_* marker (scale = half extents); fn runs when the player enters.
   onTrigger(name, fn) {
-    const m = this.marker(name);
-    if (!m) return;
-    const box = new Box3(m.position.clone().sub(m.scale), m.position.clone().add(m.scale));
+    const box = this.box(name);
+    if (!box) return;
     let inside = false;
     this.updaters.push(() => {
       const now = box.containsPoint(G.player.position);
@@ -214,22 +262,48 @@ export class Zone {
   }
 
   // Create NPCs for NPC_* markers that carry a model prop (seated ones sit on their seat height).
-  async populateNPCs(filter = () => true) {
+  // essential: ids the zone can't start without (the story cast); everyone else streams in after Begin
+  // (their models are not in index.html's preload list). Use whenNPC() to set up a streamed NPC.
+  async populateNPCs(filter = () => true, { essential = null } = {}) {
     const ms = this.markersBy('NPC_').filter((m) => m.data.model && filter(m));
-    const npcs = await Promise.all(
-      ms.map((m) => NPC.create(m.name.slice(4), m.data.model, m.position, m.facing, { anim: m.data.anim || 'idle', look: m.data.anim !== 'sit' })),
-    );
-    npcs.forEach((n, i) => {
-      if (ms[i].data.anim === 'sit') n.sitOn(ms[i].data.seat ?? 0.5);
-      this.addNPC(n);
-    });
+    const make = (m) =>
+      NPC.create(m.name.slice(4), m.data.model, m.position, m.facing, { anim: m.data.anim || 'idle', look: m.data.anim !== 'sit' }).then((n) => {
+        if (this.disposed) {
+          n.dispose();
+          return null;
+        }
+        // seat markers mark the centre of the seat's front edge (see NPC.sitOn)
+        if (m.data.anim === 'sit') n.sitOn(m.data.seat ?? 0.45, m.position, m.facing);
+        this.addNPC(n);
+        for (const fn of this.npcWaiters.get(n.id) || []) fn(n);
+        this.npcWaiters.delete(n.id);
+        return n;
+      });
+    const now = ms.filter((m) => !essential || essential.includes(m.name.slice(4)));
+    const npcs = await Promise.all(now.map(make));
+    const later = ms.filter((m) => !now.includes(m));
+    this.streamed = Promise.all(later.map((m) => make(m).catch((e) => console.error(e))));
     return npcs;
   }
 
+  // Run fn(npc) once this zone's NPC <id> exists (at once if it already does).
+  whenNPC(id, fn) {
+    const n = this.npcs.find((x) => x.id === id);
+    if (n) return fn(n);
+    if (!this.npcWaiters.has(id)) this.npcWaiters.set(id, []);
+    this.npcWaiters.get(id).push(fn);
+  }
+
+  // A story Grumbling from a GRUMB_<id> marker. It is a one-off encounter ('<zone>:<id>'): once soothed
+  // it never spawns again. An AREA_<id> marker, if present, keeps it inside that box.
   grumblingAt(name, opts = {}) {
     const m = this.marker(name);
     if (!m) return null;
-    return this.addGrumbling(new Grumbling(m.data.species || name.slice(6).replace(/_\d+$/, ''), m.position, opts));
+    const id = name.slice(6);
+    const key = this.id + ':' + id;
+    if (G.save.soothed[key]) return null;
+    const bounds = this.box('AREA_' + id);
+    return this.addGrumbling(new Grumbling(m.data.species || id.replace(/_\d+$/, ''), m.position, { id, key, bounds, ...opts }));
   }
 
   addNPC(npc) {
@@ -249,7 +323,10 @@ export class Zone {
   }
 
   dispose() {
+    this.disposed = true;
     this.onExit?.();
+    for (const off of this.offs) off();
+    if (this.lampList) clearLamps();
     for (const n of this.npcs) n.dispose();
     for (const g of [...G.grumblings]) g.dispose();
     for (const it of this.interactables) G.interactables.delete(it);

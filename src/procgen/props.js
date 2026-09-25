@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 // Small procedural props: lily pads and lotus flowers, thirsty lotus buds (Umbrella puzzle),
 // lemon candies (collectibles), wooden note signs and cozy bits. All vertex-coloured, no textures.
 import {

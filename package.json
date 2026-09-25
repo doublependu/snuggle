@@ -4,14 +4,15 @@
   "version": "0.1.0",
   "type": "module",
   "description": "Snuggle Sorcery: a cozy third-person creature-soothing web game (three.js)",
-  "license": "MIT",
+  "license": "GPL-3.0-only",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "assets": "node tools/optimize.mjs",
     "budget": "node tools/budget.mjs",
-    "perf": "node tools/perf/load-test.mjs"
+    "perf": "node tools/perf/load-test.mjs",
+    "e2e": "node tools/e2e/run.mjs"
   },
   "dependencies": {
     "three": "^0.186.0",

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 // Global game context. Systems register themselves here so story scripts can reach everything.
 import { Events } from './core/events.js';
 
@@ -23,7 +24,13 @@ export const G = {
   zone: null,
   ui: null,
   fx: null,
+  errors: [], // recent errors, for the bug report (ui/menus.js)
 };
+
+export function logError(msg) {
+  G.errors.push(new Date().toISOString().slice(11, 19) + ' ' + String(msg).slice(0, 400));
+  if (G.errors.length > 20) G.errors.shift();
+}
 
 export function flag(name, value) {
   if (value === undefined) return !!G.save.story[name];

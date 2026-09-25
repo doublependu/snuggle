@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 """Review renders for character art (ai/plan_1.md §3.5), written to assets-src/review/ (gitignored).
 
 sheet(): front / three-quarter / side / back views next to the ref image, plus a face close-up and a

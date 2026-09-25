@@ -1,9 +1,11 @@
+// SPDX-License-Identifier: GPL-3.0-only
 // Gradient sky dome, drifting cloud cards and layered karst-peak silhouettes (env_2 / env_8 refs).
 // Everything is generated here: no textures are downloaded.
 import {
-  BackSide, BufferGeometry, CanvasTexture, Color, Float32BufferAttribute, Group, Mesh, MeshBasicMaterial,
+  BackSide, BufferGeometry, CanvasTexture, Color, Float32BufferAttribute, Group, Mesh, MeshBasicMaterial, Points,
   ShaderMaterial, SphereGeometry, Sprite, SpriteMaterial, SRGBColorSpace, Vector3,
 } from 'three';
+import { shared } from './materials.js';
 
 export function createSky(opts = {}) {
   const o = {
@@ -23,13 +25,14 @@ export function createSky(opts = {}) {
       ground: { value: new Color(o.ground) },
       sunDir: { value: o.sun.clone().normalize() },
       sunColor: { value: new Color(o.sunColor) },
+      moon: { value: o.moon ? 1 : 0 }, // night: a crisp moon disc instead of the sun's glare
     },
     vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); vec4 p = projectionMatrix * modelViewMatrix * vec4(position,1.0); gl_Position = p.xyww; }`,
-    fragmentShader: `uniform vec3 top, horizon, ground, sunDir, sunColor; varying vec3 vDir;
+    fragmentShader: `uniform vec3 top, horizon, ground, sunDir, sunColor; uniform float moon; varying vec3 vDir;
       void main(){ vec3 d = normalize(vDir); float h = d.y;
         vec3 c = h > 0.0 ? mix(horizon, top, pow(smoothstep(0.0, 0.65, h), 0.8)) : mix(horizon, ground, smoothstep(0.0, 0.25, -h));
         float s = max(dot(d, normalize(sunDir)), 0.0);
-        c += sunColor * (pow(s, 600.0) * 1.2 + pow(s, 12.0) * 0.18);
+        c += sunColor * (moon * smoothstep(0.9993, 0.9996, s) + pow(s, 600.0) * (1.2 - moon * 0.8) + pow(s, 12.0) * 0.18);
         gl_FragColor = vec4(c, 1.0);
         #include <colorspace_fragment>
       }`,
@@ -45,6 +48,7 @@ export function createSky(opts = {}) {
     g.add(peakRing(o.radius * 0.72, 1.25, o.peakColor, o.horizon, 23, 0.3));
   }
   if (o.skyline) g.add(skyline(o.radius * 0.7, o.skyline, o.peakColor, o.horizon));
+  if (o.stars) g.add(stars(o.radius * 0.94, o.stars));
 
   if (o.clouds) {
     const tex = cloudTexture(o.cloudColor, o.cloudShade);
@@ -77,6 +81,39 @@ export function createSky(opts = {}) {
       }
   };
   return g;
+}
+
+// Night sky: twinkling points on the upper hemisphere (one draw call).
+function stars(radius, count) {
+  const rnd = mulberry(17);
+  const pos = [];
+  const size = [];
+  for (let i = 0; i < count; i++) {
+    const a = rnd() * Math.PI * 2;
+    const y = 0.08 + Math.pow(rnd(), 0.7) * 0.92;
+    const r = Math.sqrt(1 - y * y);
+    pos.push(Math.cos(a) * r * radius, y * radius, Math.sin(a) * r * radius);
+    size.push(1 + rnd() * rnd() * 3.5);
+  }
+  const geo = new BufferGeometry();
+  geo.setAttribute('position', new Float32BufferAttribute(pos, 3));
+  geo.setAttribute('size', new Float32BufferAttribute(size, 1));
+  const mat = new ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    fog: false,
+    uniforms: { uTime: shared.uTime },
+    vertexShader: `attribute float size; uniform float uTime; varying float vA;
+      void main(){ vec4 p = projectionMatrix * modelViewMatrix * vec4(position, 1.0); gl_Position = p.xyww;
+        float tw = 0.65 + 0.35 * sin(uTime * (1.3 + size) + position.x * 0.37);
+        vA = tw * smoothstep(0.0, 0.25, position.y / ${radius.toFixed(1)}); gl_PointSize = size * 1.6; }`,
+    fragmentShader: `varying float vA; void main(){ vec2 d = gl_PointCoord - 0.5; float a = max(0.0, 1.0 - length(d) * 2.0);
+      gl_FragColor = vec4(vec3(1.0, 0.97, 0.9), a * a * vA); }`,
+  });
+  const p = new Points(geo, mat);
+  p.renderOrder = -9;
+  p.frustumCulled = false;
+  return p;
 }
 
 // A closed ring of limestone towers: steep rounded pillars with green caps, hazed toward the horizon.

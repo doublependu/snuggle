@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 // All sound is synthesized with WebAudio: zero download. The lullaby also drives the soothing
 // beat clock (see systems/soothe.js), so humming, the HUD ring and the melody stay in sync.
 const BPM = 84;
@@ -10,6 +11,8 @@ const PAD_CHORDS = [
   [43, 50, 55, 59],
   [45, 52, 57, 61],
 ];
+// The night-market musician's tune (Chapter 2): a bowed-string variation on the lullaby, 32 beats.
+const MUSICIAN = [62, 0, 66, 69, 71, 69, 66, 0, 64, 66, 69, 0, 66, 64, 62, 0, 69, 71, 74, 0, 71, 69, 66, 64, 66, 0, 64, 62, 64, 66, 62, 0];
 const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12);
 
 export class Audio {
@@ -208,6 +211,38 @@ export class Audio {
       case 'yawn':
         this.tone(420, 0.9, { type: 'triangle', gain: 0.06, slide: 0.55, attack: 0.2, verb: 0.3 });
         break;
+      // ---- Chapter 2: the night market
+      case 'flutter':
+        for (let i = 0; i < 4; i++) this.burst(0.05, { freq: 1600 + Math.random() * 600, q: 1.5, gain: 0.07, at: t + i * 0.045 });
+        break;
+      case 'chirp':
+        this.tone(2400 + Math.random() * 300, 0.08, { gain: 0.05, slide: 1.4, verb: 0.3 });
+        this.tone(3000 + Math.random() * 300, 0.1, { gain: 0.05, slide: 1.25, at: t + 0.1, verb: 0.3 });
+        break;
+      case 'sadchirp':
+        this.tone(2600, 0.22, { gain: 0.04, slide: 0.7, verb: 0.3 });
+        break;
+      case 'crash':
+        this.burst(0.25, { freq: 900, q: 0.8, gain: 0.16, sweep: 0.5 });
+        [0, 0.07, 0.15].forEach((d) => this.tone(700 + Math.random() * 500, 0.06, { type: 'triangle', gain: 0.06, at: t + d, verb: 0.1 }));
+        break;
+      case 'sizzle':
+        this.burst(0.4, { freq: 3200, q: 0.6, gain: 0.08, type: 'highpass' });
+        break;
+      case 'launch':
+        this.burst(0.5, { freq: 500, q: 0.7, gain: 0.08, sweep: 3 });
+        this.tone(1175, 0.8, { gain: 0.05, at: t + 0.2, verb: 0.7 });
+        break;
+      case 'combo':
+        [587, 740, 880, 1175, 1480].forEach((f, i) => this.tone(f, 0.7, { type: 'triangle', gain: 0.06, at: t + i * 0.06, verb: 0.6 }));
+        break;
+      case 'lightsout':
+        this.tone(220, 2.4, { type: 'triangle', gain: 0.08, slide: 0.6, attack: 0.3, verb: 0.8 });
+        this.tone(233, 2.4, { type: 'sine', gain: 0.05, slide: 0.55, attack: 0.4, verb: 0.8 });
+        break;
+      case 'thanks':
+        [880, 1109, 1319].forEach((f, i) => this.tone(f, 0.5, { gain: 0.05, at: t + i * 0.09, verb: 0.5 }));
+        break;
       default:
         break;
     }
@@ -250,6 +285,27 @@ export class Audio {
       const n = 2 + ((Math.random() * 3) | 0);
       for (let i = 0; i < n; i++) this.tone(f * (1 + i * 0.06), 0.09, { gain: 0.025, slide: 1.3, at: ctx.currentTime + i * 0.11, verb: 0.4 });
     }
+    // night insects: soft high chirps in little bursts
+    if (this.loops.insects && Math.random() < 0.02 * this.loops.insects) {
+      const f = 4200 + Math.random() * 900;
+      for (let i = 0; i < 3; i++) this.tone(f, 0.03, { gain: 0.012, at: ctx.currentTime + i * 0.07, verb: 0.2 });
+    }
+    // crowd chatter: murmur (a noise bed) plus the odd laugh-like blip
+    if (this.loops.crowd && Math.random() < 0.012 * this.loops.crowd) {
+      const f = 260 + Math.random() * 220;
+      this.tone(f, 0.12 + Math.random() * 0.1, { type: 'triangle', gain: 0.012 * this.loops.crowd, slide: 1 + (Math.random() - 0.5) * 0.4, verb: 0.3 });
+    }
+    // the street musician (loudness = distance to the stage, set every frame by the market zone)
+    const mus = this.loops.musician || 0;
+    if (mus > 0.01) {
+      if (!this.musNext || this.musNext < ctx.currentTime) this.musNext = this.beat().time;
+      while (this.musNext < ctx.currentTime + 0.15) {
+        const i = Math.round((this.musNext - this.t0) / BEAT) % MUSICIAN.length;
+        const m = MUSICIAN[i];
+        if (m) this.bowed(mtof(m), BEAT * (MUSICIAN[(i + 1) % MUSICIAN.length] ? 0.95 : 1.8), mus, this.musNext);
+        this.musNext += BEAT;
+      }
+    } else this.musNext = 0;
     if (this.loops.clack && ctx.currentTime > (this.clackNext || 0)) {
       this.clackNext = ctx.currentTime + 1.9;
       this.burst(0.07, { freq: 900, q: 3, gain: 0.07 });
@@ -257,19 +313,52 @@ export class Audio {
     }
   }
 
-  // Continuous beds: rain / rumble / wind are filtered noise loops with smooth gain.
+  // An erhu-ish bowed voice: a sawtooth through a vibrato'd lowpass, swelling in and out.
+  bowed(freq, dur, level, at) {
+    const ctx = this.ctx;
+    const o = ctx.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(freq * 0.985, at);
+    o.frequency.linearRampToValueAtTime(freq, at + 0.08);
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = 5.5;
+    const lg = ctx.createGain();
+    lg.gain.setValueAtTime(0, at);
+    lg.gain.linearRampToValueAtTime(freq * 0.012, at + dur * 0.5);
+    lfo.connect(lg).connect(o.frequency);
+    const f = ctx.createBiquadFilter();
+    f.type = 'lowpass';
+    f.frequency.value = 1900;
+    f.Q.value = 2;
+    const g = ctx.createGain();
+    const peak = 0.05 * Math.min(1, level);
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(peak, at + 0.12);
+    g.gain.setValueAtTime(peak, at + dur * 0.7);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+    o.connect(f).connect(g).connect(this.music);
+    const s = ctx.createGain();
+    s.gain.value = 0.5;
+    g.connect(s).connect(this.verb);
+    o.start(at);
+    lfo.start(at);
+    o.stop(at + dur + 0.05);
+    lfo.stop(at + dur + 0.05);
+  }
+
+  // Continuous beds: rain / rumble / wind / water / crowd / sizzle are filtered noise loops with smooth gain.
   bed(name, level) {
     this.loops[name] = level;
     if (!this.ctx) return;
     const ctx = this.ctx;
     let b = this.beds?.[name];
-    if (!b && level > 0 && ['rain', 'rumble', 'wind', 'water'].includes(name)) {
+    if (!b && level > 0 && ['rain', 'rumble', 'wind', 'water', 'crowd', 'sizzle'].includes(name)) {
       this.beds = this.beds || {};
       const src = ctx.createBufferSource();
       src.buffer = this.noise;
       src.loop = true;
       const f = ctx.createBiquadFilter();
-      const cfg = { rain: ['highpass', 1200, 0.3], rumble: ['lowpass', 140, 1.2], wind: ['bandpass', 500, 0.5], water: ['bandpass', 700, 0.7] }[name];
+      const cfg = { rain: ['highpass', 1200, 0.3], rumble: ['lowpass', 140, 1.2], wind: ['bandpass', 500, 0.5], water: ['bandpass', 700, 0.7], crowd: ['bandpass', 420, 1.1], sizzle: ['highpass', 3800, 0.5] }[name];
       f.type = cfg[0];
       f.frequency.value = cfg[1];
       f.Q.value = cfg[2];
@@ -279,7 +368,7 @@ export class Audio {
       src.start();
       b = this.beds[name] = { src, g };
     }
-    if (b) b.g.gain.setTargetAtTime(level * ({ rain: 0.18, rumble: 0.5, wind: 0.08, water: 0.06 }[name] || 0.1), ctx.currentTime, 0.4);
+    if (b) b.g.gain.setTargetAtTime(level * ({ rain: 0.18, rumble: 0.5, wind: 0.08, water: 0.06, crowd: 0.09, sizzle: 0.05 }[name] || 0.1), ctx.currentTime, 0.4);
   }
   applyLoops() {
     for (const [k, v] of Object.entries(this.loops)) this.bed(k, v);

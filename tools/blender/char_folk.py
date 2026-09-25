@@ -1,6 +1,7 @@
+# SPDX-License-Identifier: GPL-3.0-only
 """Townsfolk (train passengers, students, market folk), built by chibi.py with the character kit.
 
-Three variants share this recipe (char_folk_a/b/c.py): the base mesh (ref/hero_male.glb) warped onto
+Four variants share this recipe (char_folk_a/b/c.py, and char_folk_kid.py for the market children): the base mesh (tools/blender/base/hero_male.glb) warped onto
 proportions scaled from the height, its tunic top closed with a sculpted hem, its bracers kept as leather
 cuffs and its boots kept; a painted face on a round head, simple hair, and one accessory each (a shawl and a
 bun, a sash, a straw hat). Half-size atlas and a lighter triangle budget: they are background characters.
@@ -20,6 +21,9 @@ VARIANTS = {
                    extra_col='#e9c46a', bun=False, iris='#2a1a12', seed=2),
     'folk_c': dict(height=1.3, skin='#d9a888', hair='#2a211d', top='#6e8b5a', bottom='#6b5a48', extra='hat',
                    extra_col='#c9b28a', bun=False, iris='#221610', seed=3),
+    # a little one for the night market's lost children (Chapter 2)
+    'folk_kid': dict(height=0.92, skin='#f5d2b8', hair='#2a1d17', top='#e8a13a', bottom='#5f86b0', extra='shawl',
+                     extra_col='#e2352d', bun=True, iris='#2a1a12', seed=4),
 }
 
 

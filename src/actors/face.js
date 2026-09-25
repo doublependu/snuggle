@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 // Painted faces: the eye and mouth regions of a character's head show one cell each of the atlas
 // (tools/blender/face.py paints the cells; the layout comes from the mesh's glTF extras). The face
 // blinks on its own, flaps its mouth while talking and holds an expression per dialogue line.

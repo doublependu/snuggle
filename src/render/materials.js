@@ -1,12 +1,45 @@
+// SPDX-License-Identifier: GPL-3.0-only
 // One small family of stylized Lambert materials, picked by the glTF material *name* that the
 // Blender scripts assign (see tools/blender/snuglib.py). Colours come from vertex colours, so no
 // textures are downloaded. Variants are cached so the whole game compiles only a handful of programs.
-import { MeshLambertMaterial, MeshBasicMaterial, Color, DoubleSide, Vector2 } from 'three';
+import { MeshLambertMaterial, MeshBasicMaterial, Color, DataTexture, DoubleSide, Vector2, Vector4 } from 'three';
+
+const black = new DataTexture(new Uint8Array(4), 1, 1);
+black.needsUpdate = true;
 
 export const shared = {
   uTime: { value: 0 },
   uWind: { value: 1 },
   uFade: { value: 0 }, // Quiet-District grey-out, later chapters
+  // Night lighting (render/lamps.js): lantern light painted into a small top-down texture over the zone.
+  // Every lit material adds it per pixel, so static scenery, kit instances, characters and creatures all
+  // glow the same way for one texture fetch. uLampOn = 0 in daytime zones.
+  uLampMap: { value: black },
+  uLampRect: { value: new Vector4(0, 0, 1, 1) }, // minX, minZ, 1 / sizeX, 1 / sizeZ
+  uLampOn: { value: 0 },
+  uLampTop: { value: 4 }, // surfaces this high above the lanterns' floor fade out of their light
+};
+
+// Vertex: world position (after skinning / instancing) for the lamp map. Fragment: add the lantern light.
+const LAMP_VERT_HEAD = 'varying vec3 vLampWorld;\n';
+const LAMP_VERT = `{ vec4 lw = vec4(transformed, 1.0);
+  #ifdef USE_INSTANCING
+    lw = instanceMatrix * lw;
+  #endif
+  vLampWorld = (modelMatrix * lw).xyz; }\n`;
+const LAMP_FRAG_HEAD = 'varying vec3 vLampWorld; uniform sampler2D uLampMap; uniform vec4 uLampRect; uniform float uLampOn, uLampTop;\n';
+const LAMP_FRAG = `if (uLampOn > 0.5) {
+    vec2 luv = (vLampWorld.xz - uLampRect.xy) * uLampRect.zw;
+    vec3 lamp = texture2D(uLampMap, luv).rgb * 2.0;
+    float lh = 1.0 - smoothstep(uLampTop - 1.5, uLampTop + 1.0, vLampWorld.y);
+    float face = 0.55 + 0.45 * saturate(normal.y * 0.5 + 0.7);
+    outgoingLight += diffuseColor.rgb * lamp * lh * face * uLampOn;
+  }\n`;
+const lampUniforms = (sh) => {
+  sh.uniforms.uLampMap = shared.uLampMap;
+  sh.uniforms.uLampRect = shared.uLampRect;
+  sh.uniforms.uLampOn = shared.uLampOn;
+  sh.uniforms.uLampTop = shared.uLampTop;
 };
 
 const KINDS = {
@@ -61,14 +94,14 @@ const SHADER_FLAGS = ['grid', 'gridStrength', 'fiber', 'fiberScale', 'tiles', 'r
 
 function patch(m, o) {
   const needObj = o.grid || o.fiber || o.tiles;
-  if (!(needObj || o.rim || o.sway || o.warm || o.sheen)) return;
   // program key from shader-affecting flags only, so colour / emissive variants share one program
   const progKey = SHADER_FLAGS.map((k) => o[k] ?? '').join('|');
   m.customProgramCacheKey = () => progKey;
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uTime = shared.uTime;
     sh.uniforms.uWind = shared.uWind;
-    let vHead = '';
+    lampUniforms(sh);
+    let vHead = LAMP_VERT_HEAD;
     let vBody = '';
     if (needObj) {
       vHead += 'varying vec3 vObjPos; varying vec3 vObjN;\n';
@@ -79,9 +112,10 @@ function patch(m, o) {
     }
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\n' + vHead)
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\n' + vBody + (o.sway ? swayGLSL(o.sway) : ''));
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\n' + vBody + (o.sway ? swayGLSL(o.sway) : ''))
+      .replace('#include <project_vertex>', LAMP_VERT + '#include <project_vertex>');
 
-    let fHead = '';
+    let fHead = LAMP_FRAG_HEAD;
     let fColor = '';
     let fOut = '';
     if (needObj) fHead += 'varying vec3 vObjPos; varying vec3 vObjN;\n' + NOISE;
@@ -105,7 +139,7 @@ function patch(m, o) {
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', '#include <common>\n' + fHead)
       .replace('#include <color_fragment>', '#include <color_fragment>\n' + fColor)
-      .replace('#include <opaque_fragment>', fOut + '#include <opaque_fragment>');
+      .replace('#include <opaque_fragment>', fOut + LAMP_FRAG + '#include <opaque_fragment>');
   };
 }
 
@@ -130,11 +164,13 @@ function patchMixed(m, face = null) {
   m.customProgramCacheKey = () => (face ? 'mixedAtlas' : 'mixed');
   m.onBeforeCompile = (sh) => {
     if (face) Object.assign(sh.uniforms, face);
+    lampUniforms(sh);
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vObjPos; varying vec3 vObjN;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvObjPos = position; vObjN = objectNormal;');
+      .replace('#include <common>', '#include <common>\nvarying vec3 vObjPos; varying vec3 vObjN;\n' + LAMP_VERT_HEAD)
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvObjPos = position; vObjN = objectNormal;')
+      .replace('#include <project_vertex>', LAMP_VERT + '#include <project_vertex>');
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vObjPos; varying vec3 vObjN;\n' + (face ? 'uniform vec2 uEye; uniform vec2 uMouth;\n' : '') + NOISE + GRID)
+      .replace('#include <common>', '#include <common>\nvarying vec3 vObjPos; varying vec3 vObjN;\n' + LAMP_FRAG_HEAD + (face ? 'uniform vec2 uEye; uniform vec2 uMouth;\n' : '') + NOISE + GRID)
       .replace('#include <map_fragment>', '')
       .replace(
         '#include <color_fragment>',
@@ -175,6 +211,7 @@ function patchMixed(m, face = null) {
           if (sCode == 3) outgoingLight += 0.06 * diffuseColor.rgb * vec3(1.0, 0.55, 0.4);
           if (sCode == 4) outgoingLight += 0.08 * pow(saturate(normal.y * 0.5 + 0.5), 6.0) * vec3(1.0);
           if (sCode == 5) outgoingLight = diffuseColor.rgb + totalEmissiveRadiance; }
+        if (sCode != 5) ${LAMP_FRAG}
         #include <opaque_fragment>`,
       );
   };

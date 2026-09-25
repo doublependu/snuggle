@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 // Scenery seen from the train windows: the world slides past at train speed. Poles, bushes and trees
 // are instanced and wrap around a fixed span; the paddy ground is a scrolling canvas texture.
 import {

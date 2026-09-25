@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 // Charm Sprites collected, the equipped helper, Cozy Energy, tarts and lemon candies (all saved).
 import { G } from '../game.js';
 import { SPECIES } from '../content/species.js';
@@ -15,14 +16,19 @@ export class Collection {
   refreshHud() {
     const s = this.save;
     G.ui.setCozy(s.cozy);
-    G.ui.setChips(s.tarts, Object.keys(s.candies).length, this.candyTotal);
+    G.ui.setChips(s.tarts, Object.keys(s.candies).length, this.candyTotal, s.chestnuts || 0);
     const h = s.helper && SPECIES[s.helper];
     G.ui.setHelper(h ? h.name : '', h ? G.menus.thumb(s.helper) : '', h ? h.abilityName : '');
     G.touch?.setAssist(this.assistLabel());
   }
 
-  add(id, from) {
+  // key: '<zone>:<grumbling id>' for a one-off encounter; it counts once, however often it is replayed.
+  add(id, from, key = null) {
     const s = this.save;
+    if (key) {
+      if (s.soothed[key]) return false;
+      s.soothed[key] = true;
+    }
     s.sprites[id] = (s.sprites[id] || 0) + 1;
     s.seen[id] = true;
     const first = s.sprites[id] === 1;
@@ -32,6 +38,7 @@ export class Collection {
     G.events.emit('sprite', { id, first });
     writeSave(s);
     this.refreshHud();
+    return true;
   }
 
   equip(id, quiet = false) {
@@ -72,6 +79,11 @@ export class Collection {
     this.refreshHud();
   }
 
+  addChestnuts(n) {
+    this.save.chestnuts = (this.save.chestnuts || 0) + n;
+    this.refreshHud();
+  }
+
   candy(id, pos) {
     if (this.save.candies[id]) return;
     this.save.candies[id] = true;
@@ -88,6 +100,7 @@ export class Collection {
     const s = this.save;
     const opts = [];
     if (s.tarts > 0) opts.push('Tart');
+    else if (s.chestnuts > 0) opts.push('Nuts');
     if (G.save.story.weibaoFriend) opts.push('Echo');
     return opts.join('/');
   }

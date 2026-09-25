@@ -1,8 +1,10 @@
+// SPDX-License-Identifier: GPL-3.0-only
 // Named characters and townsfolk: a Humanoid that idles, turns toward Xiao Pei when she is close,
 // gestures while speaking, and offers a "Talk" interaction that runs a script.
 import { Quaternion, Vector3 } from 'three';
 import { G } from '../game.js';
 import { Humanoid } from './humanoid.js';
+import { Follower } from './follower.js';
 
 const _v = new Vector3();
 const _q = new Quaternion();
@@ -70,6 +72,15 @@ export class NPC {
     this.h.play(name, fade);
   }
 
+  // Walk along with Xiao Pei (actors/follower.js); slot in her frame (x right, z behind). null stops.
+  follow(slot = { x: 1.3, z: 0.5 }) {
+    this.follower = slot ? new Follower(this, slot) : null;
+    this.interactable.priority = slot ? -1 : 0; // a friend at her elbow shouldn't steal every prompt
+    this.lookAtPlayer = true;
+    if (!slot) this.h.play(this.base, 0.3);
+    return this.follower;
+  }
+
   // Walk (script-driven) to a point; resolves on arrival.
   walkTo(p, speed = 1.6) {
     this.walkTarget = { p: p.clone(), speed };
@@ -77,11 +88,13 @@ export class NPC {
     return new Promise((res) => (this.walkTarget.res = res));
   }
 
-  // Sit on a seat of the given height (the root is raised so the hips rest on it).
-  sitOn(seat) {
+  // Sit on a seat: front = centre of the seat's front edge, seat = seat-top height (Humanoid.seatRoot).
+  sitOn(seat, front = this.root.position.clone(), facing = this.facing) {
     this.base = 'sit';
     this.h.play('sit', 0);
-    this.root.position.y += seat - (this.h.clipHipsY('sit') - 0.11);
+    this.h.seatRoot(front, facing, seat, this.root.position);
+    this.facing = this.homeFacing = facing;
+    this.root.rotation.y = facing;
     this.lookAtPlayer = false;
   }
 
@@ -110,11 +123,16 @@ export class NPC {
         }
         this.turnTo(Math.atan2(_v.x, _v.z), dt, 8);
       }
+    } else if (this.follower) {
+      this.follower.update(dt);
     } else if (p && this.lookAtPlayer && this.base !== 'sit') {
       const d = this.root.position.distanceTo(p.position);
       const want = d < 4.5 || this.talking ? Math.atan2(p.position.x - this.root.position.x, p.position.z - this.root.position.z) : this.homeFacing;
       this.turnTo(want, dt, 3);
     }
+    // look at Xiao Pei when she is close or while talking to her
+    const near = p && (this.talking || this.root.position.distanceTo(p.position) < 4.5);
+    this.h.lookTarget = near && !this.noLook ? p.h.worldBone('head', this.lookPoint || (this.lookPoint = new Vector3())) : null;
     const camD = G.camera.position.distanceTo(this.root.position);
     this.h.update(dt, camD);
     // Captain Honk's beak flaps while he talks

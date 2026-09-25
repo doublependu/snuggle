@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 // Chapter 1 hub: Mistbloom Academy on the hill above the harbour.
 import { InstancedMesh, Matrix4, Mesh, Vector3 } from 'three';
 import { G, flag } from '../../game.js';
@@ -11,6 +12,13 @@ import { chapter1, wireAcademy, refreshObjective } from '../../story/chapter1.js
 import { talk, ask } from '../../story/helpers.js';
 import { writeSave } from '../../core/save.js';
 
+// Golden-pink evening before the night market: low sun over the harbour, long shadows.
+const DUSK = {
+  skyTop: '#5a6fb0', horizon: '#f6b58a', ground: '#8f9a86', fog: '#e9b99a', fogNear: 45, fogFar: 200,
+  hemiSky: '#ffc9a8', hemiGround: '#6f6a70', hemi: 1.6, sunColor: '#ffb27a', sunI: 2.2, sun: new Vector3(-0.3, 0.18, 0.93),
+  skySun: '#ffcf9a', clouds: 12, cloudColor: '#ffd6c0', cloudShade: '#b68aa0', skyline: { from: 1.2, to: 1.9 }, peakColor: '#7a7aa0',
+};
+
 const NOTES = {
   gate: 'Mistbloom Academy of Gentle Sorcery. Founded in the year of the Great Warm Winter, when the curses of Lantern Bay first came out fluffy.',
   pagoda: 'Fifty years ago, a grey fog covered half the city. We calmed it together, in Grandmother’s Kitchen. I never did find out where the last little piece went. — F.Q.',
@@ -19,10 +27,12 @@ const NOTES = {
 
 export async function create() {
   const z = new Zone('academy');
-  z.next = [];
+  // after Chapter 1 it is evening, and the night market (Chapter 2) is next
+  const evening = flag('ch1Done');
+  z.next = evening ? ['market', 'market_kit', 'folk_kid'] : [];
   await z.addGLB('academy');
   await z.placeKit('kit');
-  z.setupEnvironment({
+  z.setupEnvironment(evening ? DUSK : {
     skyTop: '#6f9fcc', horizon: '#f3e2c6', ground: '#9fb59a', fog: '#eadfcb', fogNear: 50, fogFar: 210,
     hemiSky: '#ffeccc', hemiGround: '#8f9a6a', hemi: 2.0, sunColor: '#ffdcaa', sunI: 2.7, sun: new Vector3(-0.55, 0.5, 0.45),
     clouds: 12, cloudColor: '#fff6ea', cloudShade: '#e2c9b8', skyline: { from: 1.2, to: 1.9 }, peakColor: '#8aa0b3',
@@ -38,7 +48,7 @@ export async function create() {
   z.collision.addCylinder(bt.position.clone().setY(-0.5), 0.6, 5, 8);
   z.collision.build();
   z.scatter(9, [{ x: 0, z: 0, r: 6 }]);
-  await z.populateNPCs();
+  await z.populateNPCs(undefined, { essential: ['fang', 'tangtang', 'weibao'] });
   z.safeMinY = -0.25; // never "save" a spot at the bottom of the pond
 
   // ---- Charm Sprites playing tag in the courtyard
@@ -186,8 +196,7 @@ export async function create() {
       },
     });
   }
-  const bw = G.npcs.get('bookworm');
-  if (bw) {
+  z.whenNPC('bookworm', (bw) => {
     bw.onTalk = async () => {
       if (G.save.story.kind_books) return talk([['student', 'Thanks again for helping with my books! The library has a balcony, did you know?']]);
       const a = await ask('student', "Oh no, oh no… I dropped all my books on the steps and my arms are full…", ['Help pick them up', "Sorry, I'm busy"]);
@@ -200,7 +209,7 @@ export async function create() {
         G.collection.cozy(6, 'Helped a classmate', bw.position.clone().setY(1.6));
       } else await talk([['student', 'That’s okay… I’ll manage…']]);
     };
-  }
+  });
   const chat = {
     s1: ['Welcome to Mistbloom! The courtyard sprites never stop playing tag.', 'Master Fang hides lemon candies everywhere. Everywhere!'],
     s2: ['The pagoda on the hill has the best view. There might be a candy up there too.', 'Have you been to the overlook? You can see the Quiet District across the bay.'],
@@ -209,9 +218,7 @@ export async function create() {
     player2: ['Go team! Um, which team am I on again?'],
     player3: ['That little pom-pom looks so sad. Maybe it just wants someone to ask it to play.'],
   };
-  for (const [id, lines] of Object.entries(chat)) {
-    const n = G.npcs.get(id);
-    if (!n) continue;
+  for (const [id, lines] of Object.entries(chat)) z.whenNPC(id, (n) => {
     let i = 0;
     n.onTalk = async () => {
       if (id === 's1' && G.save.tarts > 0 && !G.save.story.kind_share) {
@@ -226,7 +233,7 @@ export async function create() {
       }
       await talk([['student', lines[i++ % lines.length]]]);
     };
-  }
+  });
 
   // ---- Grumblings
   const sockSpots = z.markersBy('POINT_sockspot_').map((m) => m.position);

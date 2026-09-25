@@ -1,12 +1,15 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
 /* Snuggle Sorcery UI: DOM overlay (crisp text, zero GPU cost). Injected by main.js (non-blocking). */
-#ui { position: fixed; inset: 0; pointer-events: none; z-index: 20; color: #4a3428;
+/* Layers (low to high): world bubbles 0, touch controls 1, prompt + soothing ring 2, HUD 3, dialogue +
+   mini-games 4, menus 6, chapter card 7, fade 8. Every layer is positioned, so z-index decides who gets a tap. */
+#ui { position: fixed; inset: 0; pointer-events: none; z-index: 20; color: #4a3428; touch-action: none;
   font-family: ui-rounded, "Nunito", "Segoe UI Rounded", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
 #ui * { box-sizing: border-box; }
 #ui button { font: inherit; }
 .panel { background: #fbf4e8f2; border: 2px solid #e2cfb2; border-radius: 18px; box-shadow: 0 6px 22px #0003; }
 
 /* HUD */
-.hud-tl { position: absolute; top: max(12px, env(safe-area-inset-top)); left: max(12px, env(safe-area-inset-left)); display: flex; flex-direction: column; gap: 6px; }
+.hud-tl { z-index: 3; position: absolute; top: max(12px, env(safe-area-inset-top)); left: max(12px, env(safe-area-inset-left)); display: flex; flex-direction: column; gap: 6px; }
 .cozy { display: flex; align-items: center; gap: 8px; padding: 6px 12px 6px 8px; border-radius: 999px; background: #fbf4e8d9; border: 2px solid #e8c79a; box-shadow: 0 2px 10px #0002; }
 .cozy .ico { width: 22px; height: 22px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #fff3c2, #f2a23c 60%, #d9701f); box-shadow: 0 0 10px #f7b24f; }
 .cozy .bar { width: 110px; height: 10px; border-radius: 6px; background: #ecdcc3; overflow: hidden; }
@@ -15,29 +18,29 @@
 .chips { display: flex; gap: 6px; }
 .chip { font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #fbf4e8d9; border: 2px solid #e2cfb2; }
 .chip:empty { display: none; }
-.objective { position: absolute; top: max(12px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); max-width: min(560px, 70vw);
+.objective { z-index: 3; position: absolute; top: max(12px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); max-width: min(560px, 70vw);
   padding: 7px 16px; border-radius: 999px; background: #2f6f73e6; color: #fff; font-weight: 700; font-size: 14px; text-align: center;
   box-shadow: 0 3px 12px #0003; transition: opacity .4s, transform .4s; }
 .objective:empty { opacity: 0; }
 .objective.new { animation: pop .5s ease; }
 @keyframes pop { 30% { transform: translateX(-50%) scale(1.08); } }
-.hud-tr { position: absolute; top: max(12px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); display: flex; gap: 8px; pointer-events: auto; }
+.hud-tr { z-index: 3; position: absolute; top: max(12px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); display: flex; gap: 8px; pointer-events: auto; }
 .round { width: 44px; height: 44px; border-radius: 50%; border: 2px solid #e2cfb2; background: #fbf4e8e6; color: #4a3428; font-weight: 800; font-size: 18px;
   display: grid; place-items: center; cursor: pointer; box-shadow: 0 2px 8px #0002; padding: 0; }
 .round:active { transform: scale(.94); }
-.helper { position: absolute; left: max(12px, env(safe-area-inset-left)); bottom: max(12px, env(safe-area-inset-bottom)); display: flex; align-items: center; gap: 8px;
+.helper { z-index: 3; position: absolute; left: max(12px, env(safe-area-inset-left)); bottom: max(12px, env(safe-area-inset-bottom)); display: flex; align-items: center; gap: 8px;
   padding: 5px 12px 5px 5px; border-radius: 999px; background: #fbf4e8d9; border: 2px solid #e2cfb2; font-size: 12px; font-weight: 700; }
 .helper img { width: 34px; height: 34px; border-radius: 50%; background: #f1e3cc; }
 .helper:empty { display: none; }
 body.touch .helper { bottom: auto; top: 84px; }
 
-.prompt { position: absolute; left: 50%; bottom: 22%; transform: translateX(-50%); padding: 8px 16px; border-radius: 999px; background: #fbf4e8ee;
+.prompt { z-index: 2; position: absolute; left: 50%; bottom: 22%; transform: translateX(-50%); padding: 8px 16px; border-radius: 999px; background: #fbf4e8ee;
   border: 2px solid #e8c79a; font-weight: 800; font-size: 15px; box-shadow: 0 3px 12px #0003; white-space: nowrap; transition: opacity .2s; }
 .prompt:empty, body.touch .prompt { opacity: 0; }
 .key { display: inline-block; min-width: 24px; padding: 1px 7px; margin-right: 6px; border-radius: 6px; background: #4a3428; color: #fff; font-size: 13px; text-align: center; }
 
 /* soothing ring: wrap progress + beat pulse + calm */
-.soothe { position: absolute; left: 50%; bottom: 9%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 6px; transition: opacity .3s; }
+.soothe { z-index: 2; position: absolute; left: 50%; bottom: 9%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 6px; transition: opacity .3s; }
 .soothe.off { opacity: 0; }
 .ring { position: relative; width: 78px; height: 78px; }
 .ring svg { position: absolute; inset: 0; transform: rotate(-90deg); }
@@ -51,17 +54,17 @@ body.touch .helper { bottom: auto; top: 84px; }
 .feel { font-size: 13px; font-weight: 700; color: #fff; text-shadow: 0 1px 4px #000a; max-width: 70vw; text-align: center; }
 
 /* toasts, chapter cards, fade */
-.toasts { position: absolute; top: 64px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.toasts { z-index: 3; position: absolute; top: 64px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .toast { padding: 8px 16px; border-radius: 14px; background: #fbf4e8f2; border: 2px solid #e8c79a; font-weight: 700; font-size: 14px; box-shadow: 0 3px 12px #0003;
   animation: toastIn .35s ease, toastOut .5s ease forwards; animation-delay: 0s, var(--life, 2.6s); }
 @keyframes toastIn { from { opacity: 0; transform: translateY(-8px); } }
 @keyframes toastOut { to { opacity: 0; transform: translateY(-8px); } }
-.card { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; background: radial-gradient(ellipse, #1d2a2cd0, #1d2a2cf0);
+.card { z-index: 7; position: absolute; inset: 0; display: grid; place-items: center; text-align: center; background: radial-gradient(ellipse, #1d2a2cd0, #1d2a2cf0);
   color: #fbf4e8; opacity: 0; transition: opacity 1s; }
 .card.show { opacity: 1; }
 .card h2 { margin: 0; font-size: clamp(28px, 6vw, 52px); }
 .card p { margin: 8px 0 0; font-size: clamp(14px, 3vw, 20px); opacity: .85; font-style: italic; }
-.fade { position: absolute; inset: 0; background: #1d2a2c; opacity: 0; transition: opacity .45s; }
+.fade { z-index: 8; position: absolute; inset: 0; background: #1d2a2c; opacity: 0; transition: opacity .45s; }
 .fade.on { opacity: 1; }
 .floaty { position: absolute; transform: translate(-50%, -100%); font-weight: 800; font-size: 14px; color: #fff; text-shadow: 0 1px 4px #000c; white-space: nowrap;
   animation: floatUp 1.4s ease-out forwards; }
@@ -71,7 +74,7 @@ body.touch .helper { bottom: auto; top: 84px; }
 .bubble::after { content: ''; position: absolute; left: 50%; bottom: -8px; margin-left: -8px; border: 8px solid transparent; border-top-color: #fff; border-bottom: 0; }
 
 /* dialogue */
-.dialogue { position: absolute; left: 50%; bottom: max(16px, env(safe-area-inset-bottom)); transform: translateX(-50%); width: min(720px, calc(100vw - 24px));
+.dialogue { z-index: 4; position: absolute; left: 50%; bottom: max(16px, env(safe-area-inset-bottom)); transform: translateX(-50%); width: min(720px, calc(100vw - 24px));
   padding: 16px 20px 14px; pointer-events: auto; cursor: pointer; display: none; }
 .dialogue.show { display: block; animation: toastIn .25s ease; }
 .dialogue .who { position: absolute; top: -14px; left: 18px; padding: 3px 14px; border-radius: 999px; color: #fff; font-weight: 800; font-size: 14px; background: #2f6f73; }
@@ -84,10 +87,11 @@ body.touch .helper { bottom: auto; top: 84px; }
 body.touch .dialogue { bottom: 150px; }
 
 /* touch controls */
-.touchui { position: absolute; inset: 0; display: none; }
+.touchui { z-index: 1; position: absolute; inset: 0; display: none; touch-action: none; }
+.touchui * { touch-action: none; }
 body.touch .touchui { display: block; }
 .stick-zone { position: absolute; left: 0; bottom: 0; width: 45%; height: 60%; pointer-events: auto; }
-.look-zone { position: absolute; right: 0; top: 0; width: 55%; height: 100%; pointer-events: auto; }
+.look-zone { position: absolute; right: 0; top: calc(max(12px, env(safe-area-inset-top)) + 52px); bottom: 0; width: 55%; pointer-events: auto; }
 .stick { position: absolute; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; background: #fbf4e833; border: 2px solid #fbf4e899; display: none; }
 .stick i { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px; border-radius: 50%; background: #fbf4e8cc; box-shadow: 0 2px 8px #0003; }
 .stick.on { display: block; }
@@ -103,9 +107,9 @@ body.touch .touchui { display: block; }
 .tbtn.assist:empty { display: none; }
 
 /* menus */
-.menu { position: absolute; inset: 0; display: none; place-items: center; background: #1d2a2cb8; pointer-events: auto; padding: 16px; }
+.menu { z-index: 6; position: absolute; inset: 0; display: none; touch-action: none; place-items: center; background: #1d2a2cb8; pointer-events: auto; padding: 16px; }
 .menu.show { display: grid; }
-.menu .panel { width: min(520px, 100%); max-height: calc(100vh - 32px); overflow: auto; padding: 22px 22px 18px; text-align: center; }
+.menu .panel { touch-action: pan-y; overscroll-behavior: contain; width: min(520px, 100%); max-height: calc(100vh - 32px); overflow: auto; padding: 22px 22px 18px; text-align: center; }
 .menu h2 { margin: 0 0 14px; font-size: 28px; }
 .menu .col { display: flex; flex-direction: column; gap: 10px; }
 .btn { padding: 11px 18px; border-radius: 999px; border: 0; background: #2f6f73; color: #fff; font-weight: 800; font-size: 16px; cursor: pointer; box-shadow: 0 3px 0 #1f4b4e; }
@@ -133,7 +137,7 @@ body.touch .touchui { display: block; }
 .entry button[disabled] { background: #e0662c; cursor: default; }
 
 /* cooking mini-game */
-.cook { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); width: min(460px, calc(100vw - 24px)); padding: 16px 18px; text-align: center; pointer-events: auto; display: none; }
+.cook { z-index: 4; position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); width: min(460px, calc(100vw - 24px)); padding: 16px 18px; text-align: center; pointer-events: auto; display: none; }
 .cook.show { display: block; }
 .cook h3 { margin: 0 0 8px; }
 .meter { position: relative; height: 26px; border-radius: 13px; background: #ecdcc3; overflow: hidden; margin: 10px 0; }
@@ -141,7 +145,60 @@ body.touch .touchui { display: block; }
 .meter .zone.perfect { background: #5fb36b; }
 .meter .mark { position: absolute; top: -2px; bottom: -2px; width: 6px; margin-left: -3px; border-radius: 3px; background: #4a3428; }
 
-.debug { position: absolute; left: 8px; bottom: 8px; font: 11px/1.35 ui-monospace, monospace; background: #000a; color: #cfe; padding: 6px 8px; border-radius: 6px; white-space: pre; }
+.debug { z-index: 9; position: absolute; left: 8px; bottom: 8px; font: 11px/1.35 ui-monospace, monospace; background: #000a; color: #cfe; padding: 6px 8px; border-radius: 6px; white-space: pre; }
 body.touch .debug { bottom: auto; top: 120px; }
 @media (max-width: 640px) { .cozy .bar { width: 72px; } .objective { font-size: 12px; top: 58px; } }
 @media (prefers-reduced-motion: reduce) { #ui * { animation-duration: .01s !important; } }
+
+/* phone zoom recovery (ui/zoomlock.js) and small overlays */
+.zoomchip { position: fixed; z-index: 10; pointer-events: auto; padding: 10px 18px; border-radius: 999px; border: 2px solid #e8c79a;
+  background: #fbf4e8; color: #4a3428; font-weight: 800; font-size: 16px; box-shadow: 0 3px 12px #0004; }
+.zoomchip[hidden] { display: none; }
+.overlay { position: absolute; inset: 0; z-index: 9; display: grid; place-items: center; background: #1d2a2ce0; color: #fbf4e8; text-align: center;
+  font-weight: 800; font-size: 18px; pointer-events: auto; padding: 24px; }
+.overlay[hidden] { display: none; }
+.report { width: 100%; height: 160px; font: 11px/1.3 ui-monospace, monospace; margin-top: 10px; border-radius: 8px; border: 2px solid #e2cfb2; padding: 6px; }
+/* short screens (phones held sideways): two-column menus so nothing hides below the fold */
+@media (max-height: 520px) {
+  .menu .panel { padding: 14px 16px 12px; }
+  .menu h2 { font-size: 22px; margin-bottom: 8px; }
+  .menu .col { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .menu .btn { padding: 8px 12px; font-size: 14px; }
+  .menu .small { margin-top: 8px; }
+}
+
+/* Chapter 2: free good things to point out (systems/perch.js) and team-up combo banners */
+.goodchips { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+.goodchip { position: absolute; transform: translate(-50%, -50%); pointer-events: auto; padding: 7px 13px 7px 8px; border-radius: 999px;
+  border: 2px solid #ffd9a8; background: #2a2440d9; color: #fff4e0; font-weight: 800; font-size: 14px; white-space: nowrap;
+  box-shadow: 0 0 14px #ffb45c66; cursor: pointer; touch-action: none; transition: background .2s, transform .2s; }
+.goodchip .k { display: inline-grid; place-items: center; width: 20px; height: 20px; margin-right: 6px; border-radius: 50%; background: #ffd9a8; color: #2a2440; font-size: 12px; }
+body.touch .goodchip .k { display: none; }
+.goodchip.sel { background: #e0662c; border-color: #fff; transform: translate(-50%, -50%) scale(1.08); box-shadow: 0 0 20px #ffb45c; }
+.goodchip.edge { opacity: .8; font-size: 12px; }
+.combo { position: absolute; left: 50%; top: 30%; z-index: 5; transform: translate(-50%, -50%); font-size: clamp(26px, 6vw, 44px); font-weight: 900;
+  color: #fff4e0; text-shadow: 0 2px 0 #e0662c, 0 0 24px #ffb45c; white-space: nowrap; animation: comboIn 1.9s ease forwards; pointer-events: none; }
+@keyframes comboIn { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.6); } 15% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+  25% { transform: translate(-50%, -50%) scale(1); } 80% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -80%) scale(1); } }
+/* chestnut roasting and floating lanterns (systems/chestnuts.js, systems/lanterns.js) */
+.nutrow { display: flex; justify-content: center; gap: 10px; margin: 6px 0 4px; }
+.nut { position: relative; width: 52px; height: 58px; border-radius: 14px; border: 2px solid #e2cfb2; background: #3a2a22; cursor: pointer; padding: 0; touch-action: none; }
+.nut i { position: absolute; left: 50%; top: 45%; width: 34px; height: 30px; margin: -15px 0 0 -17px; border-radius: 50% 50% 45% 45%; background: #ecd6aa; box-shadow: inset -4px -5px 0 #0003; }
+.nut span { position: absolute; bottom: 2px; left: 0; right: 0; font-size: 11px; color: #fbf4e8aa; font-weight: 800; }
+body.touch .nut span { display: none; }
+.nut.gold { border-color: #ffd166; box-shadow: 0 0 12px #ffd166; }
+.nut.hot:not(.out) { animation: hot .4s ease-in-out infinite alternate; }
+@keyframes hot { to { box-shadow: 0 0 14px #ff6a2a; } }
+.nut.out { opacity: .35; }
+.nut.focus { outline: 3px solid #e0662c; }
+.lrow { display: flex; justify-content: center; gap: 8px; margin: 6px 0 10px; }
+.lrow i { width: 18px; height: 24px; border-radius: 40%; background: #6a5a4a; }
+.lrow i.done { background: #ffb45c; box-shadow: 0 0 8px #ffb45c; }
+.lrow i.perfect { background: #ffd166; box-shadow: 0 0 14px #ffd166; }
+.beatring { position: relative; width: 56px; height: 56px; margin: 0 auto 10px; border-radius: 50%; border: 3px solid #e2cfb2; }
+.beatring .pulse { position: absolute; inset: 6px; border-radius: 50%; border: 3px solid #ffb45c; opacity: 0; }
+.beatring .pulse.beat { animation: beat .45s ease-out; }
+.cook .release { pointer-events: auto; }
+#ui.soothing .prompt { bottom: calc(9% + 150px); }
+.cook.nuts, .cook.lanterns { top: auto; bottom: max(14px, env(safe-area-inset-bottom)); transform: translateX(-50%); }
+body.touch .cook.nuts, body.touch .cook.lanterns { bottom: 118px; }

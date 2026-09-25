@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 """Shared humanoid animation library -> assets-src/export/anim_humanoid.glb.
 
 Every clip is generated from simple periodic functions on the axis-aligned chibi T-pose skeleton.

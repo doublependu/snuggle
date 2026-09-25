@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 // The Lullaby Thread: hold Hum near a Grumbling to wrap it in glowing yarn. Re-pressing Hum on the
 // lullaby's beat gives a bonus; tantrum hits snap the thread and cost Calm. Calm at zero means a short
 // sit-down (Doudou: "five more minutes") — never a game over.

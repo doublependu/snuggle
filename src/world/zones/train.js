@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 // Prologue zone: the Rainy Train carriage. The world slides past the windows; rain falls outside.
 import { Vector3 } from 'three';
 import { G } from '../../game.js';
@@ -24,7 +25,8 @@ export async function create() {
   }
   // warm ceiling lamps
   for (let i = 0; i < 7; i++) G.fx.glows.add(new Vector3(-8 + (i + 0.5) * (16 / 7), 2.4, 0), '#ffcf86', 0.9);
-  z.cloud = z.grumblingAt('GRUMB_cloud');
+  // dormant until the story points it out (story/prologue.js); stays inside the carriage (AREA_cloud)
+  z.cloud = z.grumblingAt('GRUMB_cloud', { enabled: false });
   z.collision.build();
   z.killY = -4;
   G.audio.bed('rumble', 1);

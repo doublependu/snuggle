@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 // Unified input: keyboard + mouse, gamepad and touch all feed the same actions.
 //   move (x right, y forward), look (dx, dy per frame), held: hum/sprint/jump,
 //   edges: jump, interact, assist, book, pause, hum, confirm, back
@@ -152,6 +153,8 @@ export class Input {
     edge(5, 'hum');
     edge(12, 'up_edge');
     edge(13, 'down_edge');
+    edge(14, 'left_edge');
+    edge(15, 'right_edge');
     pd.hum = !!(b[7] || b[5]);
     pd.sprint = !!(b[4] || b[10]);
     if (pd.move.lengthSq() > 0 || pd.look.lengthSq() > 0) this.setDevice('gamepad');

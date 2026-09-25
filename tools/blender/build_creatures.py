@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 """Doudou and the Grumblings: faceted paper-craft creatures (ref/doudou_1.png), unrigged.
 Each creature is an empty named after its species with two children: <id>_body and <id>_eyes
 (eyes separate so the runtime can blink / squint them). Exports assets-src/export/creatures.glb.
@@ -31,7 +32,9 @@ def round_eyes(prefix, y, z, dx, r=0.04, color='#2a1d17', glint=True, normal_til
     return out
 
 
-def creature(cid, body_parts, eye_parts, x):
+def creature(cid, body_parts, eye_parts, x, extra=None):
+    """extra: {'wingL': (parts, pivot), ...} -> more children named <id>_<key>, each pivoting at its own
+    origin (the runtime flaps the sparrow's wings by rotating them)."""
     root = link(bpy.data.objects.new(cid, None))
     root.empty_display_size = 0.2
     body = link(bpy.data.objects.new(cid + '_body', None))
@@ -44,6 +47,13 @@ def creature(cid, body_parts, eye_parts, x):
         m.parent = eyes
     body.parent = root
     eyes.parent = root
+    for key, (parts, pivot) in (extra or {}).items():
+        e = link(bpy.data.objects.new(cid + '_' + key, None))
+        for m in join_mixed(parts, cid + '_' + key[:1] + key[-1]):
+            m.data.transform(Matrix.Translation(-Vector(pivot)))
+            m.parent = e
+        e.location = pivot
+        e.parent = root
     root.location.x = x
     return root
 
@@ -142,16 +152,29 @@ def pompom(x):
 
 
 def sparrow(x):
-    brown, cream = C('#a8795a'), C('#f1e2c8')
-    B = [ico('sp_body', (0, 0, 0.13), (0.12, 0.12, 0.12), 'paper', brown, subdiv=1, jitter=0.12, seed=41,
-             grad=(cream, brown)),
-         cone('sp_beak', (0, -0.11, 0.14), (0, -0.16, 0.13), 0.02, 0.002, 'paper', C('#e8a43c'), segs=4),
-         cone('sp_tail', (0, 0.1, 0.14), (0, 0.18, 0.2), 0.04, 0.01, 'paper', C('#7d5a44'), segs=3)]
+    """Wistful Sparrow ("I want that, but I can't afford it"): a plump round bird with enormous, shiny,
+    longing eyes, a cream belly and stubby wings (separate, so they flap)."""
+    brown, cream, dark = C('#a8795a'), C('#f3e3c6'), C('#7a5238')
+    B = [ico('sp_body', (0, 0, 0.13), (0.125, 0.12, 0.12), 'paper', brown, subdiv=2, jitter=0.1, seed=41, grad=(dark, brown)),
+         ico('sp_belly', (0, -0.045, 0.105), (0.095, 0.08, 0.085), 'paper', cream, subdiv=1, jitter=0.08, seed=42),
+         ico('sp_cap', (0, 0.01, 0.2), (0.085, 0.08, 0.05), 'paper', dark, subdiv=1, jitter=0.1, seed=43),
+         cone('sp_beak', (0, -0.112, 0.125), (0, -0.15, 0.118), 0.022, 0.003, 'paper', C('#e8a43c'), segs=4),
+         cone('sp_tail', (0, 0.1, 0.13), (0, 0.19, 0.19), 0.045, 0.012, 'paper', dark, segs=3)]
     for s, g in (('L', 1), ('R', -1)):
-        B.append(superquad('sp_wing' + s, (0.11 * g, 0.01, 0.13), (0.02, 0.07, 0.05), 'paper', C('#8b6448'), n=2.2,
-                           res=2, jitter=0.1))
-    E = round_eyes('sp_eye', -0.1, 0.17, 0.05, r=0.035, normal_tilt=0.35)
-    return creature('sparrow', B, E, x)
+        B.append(cone('sp_foot' + s, (0.035 * g, -0.01, 0.025), (0.04 * g, -0.045, 0.0), 0.012, 0.004, 'paper', C('#e8a43c'), segs=3))
+    E = []
+    for s, g in (('L', 1), ('R', -1)):  # big, glossy, looking up and a little wistful
+        n = (0.3 * g, -1, 0.15)
+        E.append(disc('sp_eye' + s, (0.048 * g, -0.1, 0.155), 0.036, 'eye', C('#241a14'), n, 12, (0.95, 1.05), None, 0.004))
+        E.append(disc('sp_glint' + s, (0.052 * g, -0.104, 0.172), 0.012, 'eye', C('#ffffff'), n, 6, (1, 1), None, 0.004))
+        E.append(disc('sp_glint2' + s, (0.041 * g, -0.104, 0.141), 0.006, 'eye', C('#cfe7ff'), n, 6, (1, 1), None, 0.004))
+        E.append(disc('sp_brow' + s, (0.046 * g, -0.098, 0.2), 0.02, 'eye', C('#5a3a28'), n, 6, (1, 0.25), None, 0.004))
+    extra = {}
+    for s, g in (('L', 1), ('R', -1)):
+        pivot = (0.1 * g, 0.0, 0.16)
+        extra['wing' + s] = ([superquad('sp_wing' + s, (0.13 * g, 0.03, 0.13), (0.022, 0.07, 0.055), 'paper', dark, n=2.2, res=2,
+                                         jitter=0.1, seed=44 if g > 0 else 45, rot=(20, 0, -15 * g))], pivot)
+    return creature('sparrow', B, E, x, extra)
 
 
 def grey(x):

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 """Sculpting in code with signed distance fields (ai/plan_1.md §3.1).
 
 A Field is a dense numpy grid of signed distances (negative inside) over a box. Primitives are evaluated

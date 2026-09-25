@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 // GLB loading with meshopt decoding, caching, progress aggregation and idle-time prefetch.
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';

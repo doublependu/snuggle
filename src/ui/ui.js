@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 // HUD, dialogue, prompts, toasts, chapter cards, fades and world-anchored bubbles.
 import { Vector3 } from 'three';
 import { G } from '../game.js';
@@ -25,6 +26,14 @@ export const SPEAKERS = {
   homework: ['Unfinished Homework', '#8a8f5a'],
   pompom: ['Picked-Last Pom-pom', '#9a78b8'],
   conductor: ['Conductor', '#4a6a5e'],
+  // Chapter 2: the night market
+  sparrow: ['Wistful Sparrow', '#b8875a'],
+  musician: ['Street musician', '#8a5a8a'],
+  lanternseller: ['Lantern seller', '#b5483a'],
+  toyseller: ['Toy seller', '#2f6f73'],
+  chestnut: ['Chestnut seller', '#8a5530'],
+  kid: ['Little one', '#d98a2a'],
+  parent: ['Worried parent', '#6a7fa0'],
 };
 
 const _v = new Vector3();
@@ -38,8 +47,9 @@ export class UI {
     this.cozy.title = 'Cozy Energy';
     this.chips = el('div', 'chips');
     this.tartChip = el('span', 'chip');
+    this.nutChip = el('span', 'chip');
     this.candyChip = el('span', 'chip');
-    this.chips.append(this.tartChip, this.candyChip);
+    this.chips.append(this.tartChip, this.nutChip, this.candyChip);
     tl.append(this.cozy, this.chips);
     this.objective = el('div', 'objective');
     const tr = el('div', 'hud-tr');
@@ -94,8 +104,9 @@ export class UI {
     this.cozy.querySelector('i').style.width = Math.min(100, v) + '%';
     this.cozy.querySelector('b').textContent = Math.floor(v);
   }
-  setChips(tarts, candies, candyTotal) {
+  setChips(tarts, candies, candyTotal, chestnuts = 0) {
     this.tartChip.textContent = tarts ? `🥧 ${tarts}` : '';
+    this.nutChip.textContent = chestnuts ? `🌰 ${chestnuts}` : '';
     this.candyChip.textContent = candyTotal ? `🍬 ${candies}/${candyTotal}` : '';
   }
   setObjective(text) {
@@ -116,6 +127,7 @@ export class UI {
   // soothing ring: progress 0..1, calm 0..4, beat pulse from the lullaby clock
   soothe(active, progress = 0, calm = 4, feeling = '', label = 'Hum') {
     this.sootheEl.classList.toggle('off', !active);
+    this.root.classList.toggle('soothing', active); // lifts the context prompt above the ring
     if (!active) return;
     this.progEl.style.strokeDashoffset = String(207.3 * (1 - progress));
     this.calmEl.querySelectorAll('i').forEach((c, i) => c.classList.toggle('gone', i >= calm));
@@ -128,6 +140,13 @@ export class UI {
       void this.pulseEl.offsetWidth;
       this.pulseEl.classList.add('beat');
     }
+  }
+
+  // Big celebratory banner (team-up combos).
+  combo(text) {
+    const c = el('div', 'combo', text);
+    this.root.append(c);
+    setTimeout(() => c.remove(), 1900);
   }
 
   toast(text, life = 2.6) {

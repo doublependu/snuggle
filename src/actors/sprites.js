@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 // Charm Sprite followers: small glowing versions of soothed Grumblings that trail Xiao Pei.
 // At most MAX are visible (the rest are "in her pockets") to keep phones happy.
 import { Group, Vector3 } from 'three';
@@ -18,7 +19,7 @@ export class SpriteFollowers {
   rebuild() {
     for (const s of this.list) s.obj.removeFromParent();
     this.list = [];
-    const ids = Object.keys(G.save.sprites).filter((id) => id !== 'doudou' && SPECIES[id]);
+    const ids = Object.keys(G.save.sprites).filter((id) => id !== 'doudou' && SPECIES[id] && G.save.sprites[id] > 0);
     for (const id of ids.slice(0, MAX)) this.spawn(id, G.player.position);
   }
 
@@ -33,8 +34,9 @@ export class SpriteFollowers {
     return s;
   }
 
+  // One follower per species (the Sprite Book keeps the count), like rebuild().
   add(id, from) {
-    if (id === 'doudou' || this.list.length >= MAX) return;
+    if (id === 'doudou' || this.list.length >= MAX || this.list.some((s) => s.id === id)) return;
     this.spawn(id, from || G.player.position);
   }
 

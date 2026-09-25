@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-only
 // Small helpers shared by the story scripts.
 import { Vector3 } from 'three';
-import { G } from '../game.js';
+import { G, until } from '../game.js';
 
 export async function talk(lines) {
   for (const [who, text, opts] of lines) await G.ui.say(who, text, opts);
@@ -51,3 +52,8 @@ export function shot(camMarker, target = G.player.position, height = 0.9, blend 
 export function near(pos, r) {
   return G.player.position.distanceTo(pos) < r;
 }
+
+// Story waits on *state*, never on a one-shot event: the player may get there first (notice or soothe
+// a Grumbling before the script asks), and a missed event would wait forever.
+export const noticed = (g) => until(() => !g || g.noticed);
+export const soothed = (g) => until(() => !g || g.soothed);

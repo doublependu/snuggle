@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 """Townsperson A (see char_folk.py for the shared recipe)."""
 import char_folk
 

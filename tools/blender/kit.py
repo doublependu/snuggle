@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 """Character kit (ai/plan_1.md): the shared pieces of the chibi characters built by chibi.py.
 
 A character module (char_<name>.py) describes one character with a Body (proportions) and uses the kit

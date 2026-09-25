@@ -1,7 +1,10 @@
+// SPDX-License-Identifier: GPL-3.0-only
 // Time-to-interaction test: serves dist/ (gzip for text, .glb uncompressed like GitHub Pages),
 // opens it in Chrome with CDP network + CPU throttling and a cold cache, and reports how long until
-// the Begin button is enabled (window.__snuggle.readyAt). Usage: npm run build && npm run perf
-//   CHROME=/path/to/chrome  RUNS=5  node tools/perf/load-test.mjs
+// the Begin button is enabled (window.__snuggle.readyAt). A first visit starts on the train; returning
+// players start wherever their save is, so every zone is measured with a save placed there.
+// Usage: npm run build && npm run perf
+//   CHROME=/path/to/chrome  RUNS=5  ZONES=train,academy  node tools/perf/load-test.mjs
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { gzipSync } from 'node:zlib';
@@ -46,19 +49,30 @@ if (!existsSync(join(DIST, 'index.html'))) {
   process.exit(1);
 }
 await new Promise((r) => server.listen(0, r));
-const url = `http://localhost:${server.address().port}/?zone=train`;
+const base = `http://localhost:${server.address().port}/`;
+const ZONES = (process.env.ZONES || 'train,station,academy,market').split(',');
+// a save in each zone, as a returning player would have (story flags only matter after Begin)
+const SAVES = {
+  station: { prologueTrain: true },
+  academy: { prologueTrain: true, prologueDone: true },
+  market: { prologueTrain: true, prologueDone: true, ch1Done: true, ch2_start: true },
+};
 const browser = await chromium.launch({
   executablePath,
   headless: true,
   args: ['--enable-gpu', '--ignore-gpu-blocklist', '--use-angle=default', '--enable-unsafe-swiftshader'],
 });
 let failed = false;
-for (const prof of PROFILES) {
+for (const zone of ZONES) for (const prof of PROFILES) {
   const times = [];
   let gpu = '';
   for (let i = 0; i < RUNS; i++) {
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
     const page = await ctx.newPage();
+    if (zone !== 'train') {
+      const save = { v: 2, zone, spawn: null, story: SAVES[zone] || {}, sprites: {}, soothed: {}, seen: {}, candies: {}, settings: {} };
+      await page.addInitScript((s) => localStorage.setItem('snuggle-sorcery-save', s), JSON.stringify(save));
+    }
     const cdp = await ctx.newCDPSession(page);
     await cdp.send('Network.enable');
     await cdp.send('Network.setCacheDisabled', { cacheDisabled: true });
@@ -66,7 +80,7 @@ for (const prof of PROFILES) {
       offline: false, latency: prof.rtt, downloadThroughput: prof.down / 8, uploadThroughput: prof.up / 8,
     });
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: prof.cpu });
-    await page.goto(url, { waitUntil: 'commit' });
+    await page.goto(base + (zone === 'train' ? '?zone=train' : ''), { waitUntil: 'commit' });
     const ready = await page.waitForFunction(() => window.__snuggle?.readyAt, null, { timeout: 60000, polling: 50 }).then((h) => h.jsonValue());
     if (!gpu) gpu = await page.evaluate(() => {
       const gl = document.createElement('canvas').getContext('webgl2');
@@ -80,7 +94,7 @@ for (const prof of PROFILES) {
   const med = times[Math.floor(times.length / 2)];
   const ok = med <= prof.goal;
   if (!ok && prof.goal >= 3000) failed = true;
-  console.log(`${ok ? '✓' : '✗'} ${prof.name}: median TTI ${(med / 1000).toFixed(2)} s (runs: ${times.map((t) => (t / 1000).toFixed(2)).join(', ')}) target ${(prof.goal / 1000).toFixed(1)} s`);
+  console.log(`${ok ? '✓' : '✗'} ${zone.padEnd(8)} ${prof.name}: median TTI ${(med / 1000).toFixed(2)} s (runs: ${times.map((t) => (t / 1000).toFixed(2)).join(', ')}) target ${(prof.goal / 1000).toFixed(1)} s`);
   console.log(`    GPU: ${gpu}`);
 }
 await browser.close();

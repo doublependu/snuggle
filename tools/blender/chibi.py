@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 """Shared pipeline for sculpted characters (ai/plan_1.md §3): SDF groups -> game mesh -> painted atlas ->
 A-pose rig -> GLB. A character module (char_<name>.py) provides the sculpt and the art direction:
 

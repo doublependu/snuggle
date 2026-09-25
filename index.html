@@ -1,8 +1,9 @@
 <!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#f3e6d3" />
   <meta name="description" content="Snuggle Sorcery: soothe fluffy curses with a lullaby in a cozy harbour town. A free, open-source three.js web game." />
   <title>Snuggle Sorcery</title>
@@ -18,8 +19,10 @@
       if (q) z = q;
       var zones = {
         train: ['train', 'folk_a', 'folk_b', 'folk_c'],
-        station: ['station', 'kit', 'tangtang', 'folk_a', 'folk_b', 'folk_c'],
-        academy: ['academy', 'kit', 'fang', 'tangtang', 'weibao', 'folk_a', 'folk_b', 'folk_c'],
+        // townsfolk in the station, academy and market stream in after Begin (world/zone.js populateNPCs)
+        station: ['station', 'kit', 'tangtang'],
+        academy: ['academy', 'kit', 'fang', 'tangtang', 'weibao'],
+        market: ['market', 'market_kit', 'tangtang', 'weibao'],
       };
       ['xiaopei', 'anim_humanoid', 'creatures'].concat(zones[z] || []).forEach(function (n) {
         var l = document.createElement('link');
@@ -34,7 +37,7 @@
     html, body { margin: 0; height: 100%; background: #1d2a2c; color: var(--ink); overflow: hidden;
       font-family: ui-rounded, "Nunito", "Segoe UI Rounded", "Hiragino Maru Gothic ProN", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
       -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; touch-action: none; }
-    #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+    #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
     #loading { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center;
       gap: 14px; padding: 24px 16px; background: radial-gradient(ellipse at 50% 38%, #fff7ea 0%, var(--cream) 55%, #e6cfae 100%);
       transition: opacity .6s ease, visibility .6s; text-align: center; }

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 // Grumblings: fluffy curses born from small worries. They grow when ignored, shrink when noticed,
 // act out in a species-specific pattern (the "light action" part), and once fully wrapped by the
 // Lullaby Thread they cocoon, fall asleep and pop into a Charm Sprite.
@@ -29,6 +30,7 @@ export class Grumbling {
     this.blink = 2;
     this.hitCooldown = 0;
     this.enabled = opts.enabled !== false;
+    this.key = opts.key || null; // '<zone>:<id>' for one-off story encounters (see Collection.add)
     this.behaviour = BEHAVIOURS[this.def.tantrum]?.(this) || {};
     this.interactable = {
       label: 'Notice',
@@ -43,6 +45,14 @@ export class Grumbling {
 
   get position() {
     return this.obj.position;
+  }
+  get soothed() {
+    return this.state === 'gone';
+  }
+
+  // Story scripts keep a Grumbling dormant (no Notice, no wrapping, no tantrums) until they need it.
+  enable(on = true) {
+    this.enabled = on;
   }
   get active() {
     return this.enabled && this.state !== 'cocoon' && this.state !== 'sleep' && this.state !== 'gone';
@@ -108,8 +118,14 @@ export class Grumbling {
 
     // ignored Grumblings slowly grow; being near and noticed keeps them small
     if (!this.noticed && dist > 6) this.size = Math.min(1.35, this.size + dt * 0.004);
-    if (this.enabled && this.noticed) this.behaviour.update?.(dt, dist);
+    // no tantrums while the player reads dialogue or watches a cutscene
+    if (this.enabled && (this.noticed || this.behaviour.always) && !G.frozen) this.behaviour.update?.(dt, dist);
     else this.behaviour.idle?.(dt, dist);
+    const b = this.opts.bounds;
+    if (b) {
+      o.position.x = Math.min(b.max.x, Math.max(b.min.x, o.position.x));
+      o.position.z = Math.min(b.max.z, Math.max(b.min.z, o.position.z));
+    }
 
     // squash & stretch idle, grumpy shiver when upset, face the player when close
     const calm = this.calmedT > 0;
@@ -163,7 +179,7 @@ export class Grumbling {
     _v.copy(o.position).setY(o.position.y + 0.4);
     G.fx.sparkles.emit(_v, 40, this.def.glow, { speed: 2.2, up: 1.5, size: 0.14, life: 1.4, spread: 0.3 });
     G.audio.play('pop');
-    G.collection.add(this.species, _v.clone());
+    G.collection.add(this.species, _v.clone(), this.key);
     G.events.emit('soothed', this);
     this.dispose();
   }
@@ -178,6 +194,37 @@ export class Grumbling {
 }
 
 // ---------------------------------------------------------------- species behaviours
+
+// A little trinket (paper lantern, toy ball) tumbles off a stall and rolls away, then fades.
+const TRINKET = new SphereGeometry(0.08, 6, 4);
+function knockOver(from, color) {
+  const cols = [0xff6a3d, 0xffb45c, 0x6fb3d9, 0xef8fb4, 0xffd166];
+  const m = new Mesh(TRINKET, materialFor('paper', { color: cols[(Math.random() * cols.length) | 0], vertexColors: false }));
+  m.position.copy(from);
+  G.zone.group.add(m);
+  const v = new Vector3((Math.random() - 0.5) * 1.6, 1.4, (Math.random() - 0.5) * 1.6);
+  let t = 0;
+  const ground = G.collision?.groundY(from.x, from.z, from.y + 0.5) ?? from.y - 1;
+  G.audio.play('crash');
+  const fn = (dt) => {
+    t += dt;
+    v.y -= 9 * dt;
+    m.position.addScaledVector(v, dt);
+    if (m.position.y < ground + 0.08) {
+      m.position.y = ground + 0.08;
+      v.y = Math.abs(v.y) * 0.35;
+      v.x *= 0.7;
+      v.z *= 0.7;
+    }
+    m.rotation.x += dt * 6;
+    if (t > 2.5) m.scale.setScalar(Math.max(0.01, 1 - (t - 2.5) * 2));
+    if (t > 3) {
+      G.updaters.delete(fn);
+      m.removeFromParent();
+    }
+  };
+  G.updaters.add(fn);
+}
 
 const BEHAVIOURS = {
   // Soggy Cloud: drifts overhead and rains in a circle; step out of the rain.
@@ -355,6 +402,114 @@ const BEHAVIOURS = {
         balls.length = 0;
       },
     };
+  },
+
+  // Wistful Sparrow (Chapter 2): pecks at its stall and knocks the goods over, scatters to the rooftops if
+  // you run at it, and barely calms from humming alone. When Xiao Pei sits with the flock
+  // (systems/perch.js sets g.perch to a spot beside her) it hops over, perches and listens.
+  flock(g) {
+    const home = g.home.clone();
+    const up = new Vector3();
+    let mode = 'peck',
+      timer = 1 + Math.random() * 2,
+      knockT = 3 + Math.random() * 4,
+      flap = 0;
+    const hopTo = new Vector3().copy(home);
+    const wings = g.obj.userData.wings || [];
+    const flapWings = (dt, speed) => {
+      flap += dt * speed;
+      const a = speed > 0 ? Math.sin(flap) * 0.9 : 0;
+      wings.forEach((w, i) => (w.rotation.z = (i ? -1 : 1) * a)); // left wing (+x) up = +z
+    };
+    const b = {
+      ownsFacing: true,
+      always: true, // pecks and knocks things over whether or not anyone has noticed it yet
+      hover: 0,
+      get mode() {
+        return mode;
+      },
+      // humming alone calms them a little, never all the way: they need someone to sit with them
+      rate: () => (g.perched ? 1 : g.progress < 0.4 ? 0.12 : 0),
+      idle(dt) {
+        g.obj.position.y = g.ground + Math.abs(Math.sin(g.t * 4)) * 0.03;
+        flapWings(dt, 0);
+      },
+      update(dt, dist) {
+        const o = g.obj.position;
+        const p = G.player;
+        timer -= dt;
+        // perching beside Xiao Pei (set by the perch system while she sits with the flock)
+        if (g.perch) {
+          mode = 'perch';
+          _w.subVectors(g.perch, o);
+          const dh = Math.hypot(_w.x, _w.z);
+          if (dh > 0.04 || Math.abs(_w.y) > 0.04) {
+            // fly over in a little arc, then drop onto the spot
+            const step = Math.min(dh, dt * 3.2);
+            if (dh > 1e-4) {
+              o.x += (_w.x / dh) * step;
+              o.z += (_w.z / dh) * step;
+              g.obj.rotation.y = Math.atan2(_w.x, _w.z);
+            }
+            const left = dh - step;
+            o.y += (g.perch.y + Math.min(0.6, left * 0.4) - o.y) * Math.min(1, dt * 7);
+            flapWings(dt, 30);
+          } else {
+            o.copy(g.perch);
+            g.perched = true;
+            flapWings(dt, Math.random() < 0.01 ? 25 : 0);
+            // look up at her, wide-eyed
+            g.obj.rotation.y += (Math.atan2(p.position.x - o.x, p.position.z - o.z) - g.obj.rotation.y) * Math.min(1, dt * 4);
+          }
+          return;
+        }
+        g.perched = false;
+        // running at them scatters the flock to the rooftops
+        if (mode !== 'scatter' && p.speed > 2.6 && dist < 4) {
+          mode = 'scatter';
+          timer = 3.5 + Math.random() * 1.5;
+          up.set(home.x + (Math.random() - 0.5) * 3, home.y + 3.2 + Math.random(), home.z + (Math.random() - 0.5) * 3);
+          G.audio.play('flutter');
+          G.events.emit('scatter', g);
+        }
+        if (mode === 'scatter') {
+          o.lerp(up, Math.min(1, dt * 2.2));
+          flapWings(dt, 32);
+          if (timer < 0) mode = 'return';
+          return;
+        }
+        if (mode === 'return') {
+          _w.subVectors(home, o);
+          o.addScaledVector(_w, Math.min(1, dt * 1.8));
+          flapWings(dt, 28);
+          if (_w.length() < 0.08) mode = 'peck';
+          return;
+        }
+        // peck: little hops around the stall; now and then knock something off the counter
+        flapWings(dt, 0);
+        if (timer < 0) {
+          timer = 0.8 + Math.random() * 1.6;
+          hopTo.set(home.x + (Math.random() - 0.5) * 0.9, home.y, home.z + (Math.random() - 0.5) * 0.6);
+          g.obj.rotation.y = Math.atan2(hopTo.x - o.x, hopTo.z - o.z);
+          if (Math.random() < 0.3) G.audio.play('sadchirp');
+        }
+        _w.subVectors(hopTo, o).setY(0);
+        const d = _w.length();
+        if (d > 0.02) o.addScaledVector(_w, Math.min(1, dt * 5));
+        o.y = home.y + Math.abs(Math.sin(g.t * 9)) * 0.05 * Math.min(1, d * 10);
+        knockT -= dt;
+        if (knockT < 0 && g.opts.knock !== false) {
+          knockT = 5 + Math.random() * 5;
+          knockOver(home, g.def.glow);
+          G.events.emit('tantrum', g);
+        }
+      },
+      stop() {
+        wings.forEach((w) => (w.rotation.z = 0));
+        g.ground = g.obj.position.y; // cocoon where it perched
+      },
+    };
+    return b;
   },
 
   // Picked-Last Pom-pom: follows you sighing (slows you). It calms only with company nearby.

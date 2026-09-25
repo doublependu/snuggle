@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 // Xiao Pei: capsule character controller against the zone BVH, animation state and Doudou riding in
 // her hood (her braid swings on the Humanoid's spring chains).
 import { Line3, MathUtils, Vector3 } from 'three';
@@ -8,6 +9,7 @@ const _r = new Vector3();
 const _m = new Vector3();
 const _seg = new Line3();
 const _p = new Vector3();
+const _look = new Vector3();
 
 // Put Doudou in Xiao Pei's hood. Newer models carry a seat_doudou bone (where his base sits);
 // older ones fall back to a fixed offset. Call while the skeleton is still in its bind pose.
@@ -55,6 +57,7 @@ export class Player {
     G.events.on('say', ({ who, face }) => {
       if (who === 'xiaopei') humanoid.face?.set(face || 'neutral');
       humanoid.face?.talk(who === 'xiaopei');
+      if (who !== 'xiaopei') this.speaker = G.npcs.get(who === 'honk' ? 'weibao' : who) || this.speaker;
     });
     G.events.on('typed', () => humanoid.face?.talk(false));
     G.events.on('said', () => humanoid.face?.set('neutral'));
@@ -73,15 +76,22 @@ export class Player {
     this.stateTime = 0;
   }
 
-  // Sit on a seat marker (height in metres); stand() puts her back on her feet.
-  sitOn(pos, facing, seat = 0.5) {
-    this.teleport(pos, facing);
-    this.position.y += seat - (this.h.clipHipsY('sit') - 0.11);
+  // Sit on a seat: front = centre of the seat's front edge, seat = seat-top height. stand() puts her back
+  // on her feet (by default a step in front of the seat, clear of the bench's collider).
+  sitOn(front, facing, seat = 0.45) {
+    this.teleport(this.h.seatRoot(front, facing, seat, _p), facing);
+    this.seatFront = front.clone();
     this.setState('sit');
     this.h.overlayPlay(null);
   }
   stand(pos) {
+    if (!pos && this.state === 'sit' && this.seatFront) {
+      pos = this.seatFront.clone();
+      pos.x += Math.sin(this.facing) * 0.35;
+      pos.z += Math.cos(this.facing) * 0.35;
+    }
     if (pos) this.teleport(pos, this.facing);
+    this.seatFront = null;
     this.setState('move');
   }
 
@@ -194,6 +204,11 @@ export class Player {
   animate(dt) {
     const h = this.h;
     this.landTimer -= dt;
+    // look at the Grumbling she is soothing, or at whoever is talking to her
+    const t = G.soothe?.target;
+    if (!G.ui.dialogueOpen) this.speaker = null;
+    const look = t ? _look.copy(t.position).setY(t.position.y + 0.3 * t.size) : this.speaker && !this.speaker.hidden ? this.speaker.h.worldBone('head', _look) : null;
+    h.lookTarget = look;
     if (this.state === 'overwhelmed') {
       h.play('overwhelmed', 0.3);
     } else if (this.state === 'sit') {

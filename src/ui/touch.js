@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 // On-screen touch controls: floating move stick (left), drag-to-look (right), Hum / Jump / Act / Assist buttons.
 export function createTouch(root, input) {
   const wrap = document.createElement('div');

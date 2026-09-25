@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 // Stylized water: two scrolling noise normals, fresnel to a reflected sky gradient and a sun glint.
 // No render-to-texture, so it is cheap on every tier (the tier only toggles one noise octave).
 // Optional vertex colour red channel = "shallowness" painted near shores in Blender.
@@ -36,6 +37,7 @@ export function makeWater(opts = {}) {
       #include <common>
       #include <fog_pars_fragment>
       uniform float uTime; uniform vec3 deep, shallow, skyTop, skyHorizon, sunDir; uniform float grey;
+      uniform sampler2D uLampMap; uniform vec4 uLampRect; uniform float uLampOn;
       varying vec3 vWorld; varying float vShore;
       float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float n2(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
@@ -59,6 +61,13 @@ export function makeWater(opts = {}) {
         vec3 c = mix(base, sky, 0.14 + fr * 0.6);
         float s = pow(max(dot(r, normalize(sunDir)), 0.0), 120.0);
         c += vec3(1.0, 0.95, 0.85) * s * 1.4;
+        if (uLampOn > 0.5) {
+          // lantern light on the water: wobbling warm reflections under nearby lanterns
+          vec2 luv = (vWorld.xz + (n.xz * 1.8) - uLampRect.xy) * uLampRect.zw;
+          vec3 lamp = texture2D(uLampMap, luv).rgb * 2.0;
+          float streak = 0.35 + 0.65 * smoothstep(0.35, 0.75, h0);
+          c += lamp * (0.35 + fr * 0.5) * streak;
+        }
         c = mix(c, vec3(dot(c, vec3(0.3, 0.59, 0.11))), grey);
         gl_FragColor = vec4(c, 1.0);
         #include <colorspace_fragment>
@@ -66,5 +75,8 @@ export function makeWater(opts = {}) {
       }`,
   });
   m.uniforms.uTime = shared.uTime;
+  m.uniforms.uLampMap = shared.uLampMap;
+  m.uniforms.uLampRect = shared.uLampRect;
+  m.uniforms.uLampOn = shared.uLampOn;
   return m;
 }

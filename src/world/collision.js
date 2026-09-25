@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 // Static world collision: every COL_* mesh (and procedural boxes) merged into one BVH.
 // Capsule-vs-triangle push-out follows the three-mesh-bvh character controller example.
 import { Box3, BufferAttribute, BufferGeometry, Line3, Matrix4, Ray, Vector3 } from 'three';

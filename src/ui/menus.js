@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 // Pause screen (with the fork-me link), settings, controls help and the Sprite Book.
 import {
   AmbientLight, Color, DirectionalLight, PerspectiveCamera, Scene, SRGBColorSpace, WebGLRenderTarget,
@@ -18,9 +19,14 @@ export class Menus {
         <button class="btn alt" data-a="book">Sprite Book</button>
         <button class="btn alt" data-a="settings">Settings</button>
         <button class="btn alt" data-a="controls">Controls</button>
+        <button class="btn alt" data-a="checkpoint">Stuck? Back to last checkpoint</button>
+        <button class="btn alt" data-a="report">Copy bug report</button>
         <button class="btn alt" data-a="restart">Start over</button>
       </div>
-      <p class="small">Snuggle Sorcery is open source (MIT). <a href="${REPO}" target="_blank" rel="noopener">Fork it on GitHub</a> and make your own cozy game!</p></div>`);
+      <p class="small">Snuggle Sorcery is free software under the <a href="${REPO}/blob/main/LICENSE" target="_blank" rel="noopener">GNU GPL v3</a>. <a href="${REPO}" target="_blank" rel="noopener">Fork it on GitHub</a> and make your own cozy game!</p></div>`);
+    this.report = this.menu('report', `<div class="panel"><h2>Bug report</h2><p class="small" style="margin:-6px 0 0">Paste this into your bug report or chat. It has your device, the game state and any errors.</p>
+      <textarea class="report" readonly></textarea><p class="small copied" style="min-height:1.2em"></p>
+      <div class="col"><button class="btn" data-a="copy">Copy again</button><button class="btn alt" data-a="back">Back</button></div></div>`);
     this.settings = this.menu('settings', `<div class="panel"><h2>Settings</h2><div class="settings">
         <label for="s-q">Graphics</label><select id="s-q"><option value="auto">Auto</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select>
         <label for="s-v">Volume</label><input id="s-v" type="range" min="0" max="1" step="0.05">
@@ -130,6 +136,18 @@ export class Menus {
       case 'back':
         this.back();
         break;
+      case 'checkpoint':
+        // the save always holds the last checkpoint (zone, spawn and story flags); reloading replays from there
+        writeSave(G.save);
+        location.reload();
+        break;
+      case 'report':
+        this.show(this.report);
+        this.copyReport();
+        break;
+      case 'copy':
+        this.copyReport();
+        break;
       case 'restart':
         if (confirm('Start the story over from the train? Your Sprite Book will be cleared.')) {
           clearSave();
@@ -150,6 +168,25 @@ export class Menus {
     if (input.consume('down_edge')) focusables[(i + 1) % focusables.length]?.focus();
     if (input.consume('up_edge')) focusables[(i - 1 + focusables.length) % focusables.length]?.focus();
     if (input.consume('jump') && document.activeElement?.tagName === 'BUTTON' && input.device === 'gamepad') document.activeElement.click();
+  }
+
+  // ---------------------------------------------------------------- bug report (device, state, errors, save)
+  copyReport() {
+    const text = bugReport();
+    const ta = this.report.querySelector('textarea');
+    const msg = this.report.querySelector('.copied');
+    ta.value = text;
+    const done = () => (msg.textContent = '✔ Copied to the clipboard.');
+    const manual = () => {
+      ta.focus();
+      ta.select();
+      msg.textContent = 'Select the text above and copy it.';
+    };
+    try {
+      navigator.clipboard?.writeText(text).then(done, manual) ?? manual();
+    } catch {
+      manual();
+    }
   }
 
   // ---------------------------------------------------------------- settings
@@ -274,4 +311,33 @@ export class Menus {
     }
     return this.thumbs[id];
   }
+}
+
+export function bugReport() {
+  const r = G.renderer;
+  let gpu = '';
+  try {
+    const gl = r.getContext();
+    const ext = gl.getExtension('WEBGL_debug_renderer_info');
+    gpu = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+  } catch {
+    /* no GPU string */
+  }
+  const p = G.player;
+  const vv = window.visualViewport;
+  const f = (n) => (n ?? 0).toFixed(2);
+  return [
+    'Snuggle Sorcery bug report',
+    'time: ' + new Date().toISOString(),
+    'url: ' + location.href,
+    'ua: ' + navigator.userAgent,
+    `screen: ${innerWidth}x${innerHeight} dpr ${devicePixelRatio} zoom ${f(vv?.scale ?? 1)} input ${G.input?.device}`,
+    'gpu: ' + gpu,
+    `quality: ${G.quality?.name} x${f(G.quality?.scale)} ${(1000 / (G.quality?.ema || 16.7)).toFixed(0)} fps dpr ${f(r?.getPixelRatio())}`,
+    `zone: ${G.zone?.id} at ${p ? [p.position.x, p.position.y, p.position.z].map(f).join(',') : '-'} state ${p?.state} frozen ${G.frozen} paused ${G.paused}`,
+    'objective: ' + (G.ui?.objective.textContent || ''),
+    'errors:',
+    ...(G.errors.length ? G.errors.map((e) => '  ' + e) : ['  (none)']),
+    'save: ' + JSON.stringify(G.save),
+  ].join('\n');
 }

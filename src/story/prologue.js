@@ -1,16 +1,28 @@
+// SPDX-License-Identifier: GPL-3.0-only
 // Prologue: The Rainy Train (tutorial) and arrival at Lantern Bay station.
 import { Vector3 } from 'three';
 import { G, flag, wait, until } from '../game.js';
-import { talk, objective, hint, shot, near, ask } from './helpers.js';
+import { talk, objective, hint, shot, near, ask, noticed, soothed } from './helpers.js';
 import { writeSave } from '../core/save.js';
 
 // ---------------------------------------------------------------- on the train
+// Checkpointed: a reload resumes at the right step (intro -> wander and soothe -> lap scene -> arrival),
+// and every wait is on state, so playing ahead of the script (humming at the cloud straight away,
+// noticing it early) can never leave it waiting.
 export async function prologueTrain(z) {
   const p = G.player;
   if (flag('prologueTrain')) {
-    // already soothed the cloud (e.g. reloaded mid-arrival): straight to the platform
+    // already arrived (e.g. reloaded mid-transition): straight to the platform
     return G.goto('station', 'SPAWN_start');
   }
+  const cloud = z.cloud; // null when it was soothed before a reload
+  if (cloud && !flag('train_intro')) await trainIntro(z);
+  if (cloud && !cloud.soothed) await trainCloud(z, cloud);
+  await trainLap(z, !!cloud);
+}
+
+async function trainIntro(z) {
+  const p = G.player;
   G.frozen = true;
   shot('CAM_intro', p.position, 1.0, 0.01);
   G.ui.card('Prologue', 'The Rainy Train', 2.6);
@@ -22,6 +34,12 @@ export async function prologueTrain(z) {
   G.cam.clearShot();
   G.cam.snapBehind(p);
   G.frozen = false;
+  flag('train_intro', true);
+  writeSave(G.save);
+}
+
+async function trainCloud(z, cloud) {
+  const p = G.player;
   objective('Stretch your legs in the carriage');
   hint('move', 6);
   const start = p.position.clone();
@@ -33,45 +51,53 @@ export async function prologueTrain(z) {
   await wait(1.6);
   G.ui.bubble(npc('auntie') || p.root, 'Where is that drip coming from?', 3, 1.3);
   await wait(1.2);
+  cloud.enable();
   objective("Find out why everyone's shoes are wet");
-  await until(() => near(z.cloud.position, 5.5));
-  G.ui.bubble(npc('student') || p.root, "Ugh, a Grumbling. Just ignore it, it'll go away.", 3.5, 1.3);
-  objective('Notice the little rain cloud');
-  hint('notice');
-  await G.events.once('noticed', (g) => g === z.cloud);
+  await until(() => near(cloud.position, 5.5) || cloud.noticed);
+  if (!cloud.noticed) {
+    G.ui.bubble(npc('student') || p.root, "Ugh, a Grumbling. Just ignore it, it'll go away.", 3.5, 1.3);
+    objective('Notice the little rain cloud');
+    hint('notice');
+    await noticed(cloud);
+  }
   await talk([
     ['xiaopei', "Oh… you're just a little rain cloud. You look so soggy.", { face: 'worried' }],
     ['cloud', '…forgot… my… umbrella…'],
     ['auntie', "Don't look at it, dear! Grumblings only get bigger if you pay them attention."],
     ['xiaopei', 'When I felt soggy inside, Mama used to hum me a lullaby. Maybe…', { face: 'smile' }],
   ]);
+  if (cloud.soothed) return;
   objective('Hum the lullaby to the cloud');
   hint('hum', 6);
   let tipped = false;
   const offT = G.events.on('tantrum', (g) => {
-    if (g === z.cloud && !tipped) {
+    if (g === cloud && !tipped) {
       tipped = true;
       G.ui.toast("💡 It's about to rain! Step out from under the cloud, then keep humming.", 4.5);
     }
   });
   let beatTip = false;
   const beatWatch = () => {
-    if (!beatTip && G.soothe.target === z.cloud && z.cloud.progress > 0.2) {
+    if (!beatTip && G.soothe.target === cloud && cloud.progress > 0.2) {
       beatTip = true;
       G.ui.toast('💡 Press Hum again right as the ring pulses for a ♪ Perfect note.', 5);
     }
   };
   G.updaters.add(beatWatch);
-  await G.events.once('soothed', (g) => g === z.cloud);
+  await soothed(cloud);
   offT();
   G.updaters.delete(beatWatch);
+}
 
-  // the cloud falls asleep in her lap
+// The cloud falls asleep in her lap, Doudou wakes up in her hood, and the train pulls in.
+async function trainLap(z, justSoothed) {
+  const p = G.player;
   G.frozen = true;
-  await wait(1.4);
+  objective('');
+  if (justSoothed) await wait(1.4);
   const seat = z.marker('POINT_seat');
-  p.sitOn(seat.position, seat.facing, seat.data.seat ?? 0.5);
-  shot('CAM_lap', p.position, 0.75, 1.4);
+  p.sitOn(seat.position, seat.facing, seat.data.seat ?? 0.44);
+  shot('CAM_lap', p.position, 0.75, justSoothed ? 1.4 : 0.01);
   await wait(1.2);
   await talk([
     [null, 'The cloud stops raining. It curls up in her lap and snores.'],
@@ -88,7 +114,7 @@ export async function prologueTrain(z) {
     ['xiaopei', 'Wh— who are YOU?! How long have you been in there?', { face: 'surprised' }],
   ]);
   p.doudou.userData.awake = false;
-  G.collection.add('doudou');
+  G.collection.add('doudou', null, 'train:doudou');
   await talk([
     [null, "The little bun-shaped Grumbling is already snoring again. He doesn't seem to be going anywhere."],
     ['conductor', 'Next stop: Lantern Bay! Lantern Bay, everybody!'],

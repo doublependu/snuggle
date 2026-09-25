@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 // Tiny event bus used by story scripts, systems and UI.
 export class Events {
   constructor() {

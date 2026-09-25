@@ -1,8 +1,9 @@
+# SPDX-License-Identifier: GPL-3.0-only
 """Wei Bao and Captain Honk (ref/weibao.png), built by chibi.py with the character kit.
 
 A shy boy with a big round head, very big dark eyes and big ears, in a mustard gingham bandana knotted at
 his left (its tails swing on springs) and a mustard neckerchief. His body starts from the base mesh
-(ref/hero_male.glb): its shirt becomes his cream checked shirt with the sleeves rolled to the forearm, its
+(tools/blender/base/hero_male.glb): its shirt becomes his cream checked shirt with the sleeves rolled to the forearm, its
 bare forearms and bracers his forearms, its trousers his mustard ones gathered at the ankle over sculpted
 sneakers. A rope belt, the satchel on its strap and Captain Honk are sculpted: a white felt goose puppet on
 his left hand whose lower beak sits on the puppet_jaw bone (it flaps while Honk talks, src/actors/npc.js).

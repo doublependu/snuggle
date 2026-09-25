@@ -1,4 +1,5 @@
-"""Start a character's body from a reference base mesh (experiment, ai/plan_1.md): ref/hero_male.glb.
+# SPDX-License-Identifier: GPL-3.0-only
+"""Start a character's body from a base mesh (ai/plan_1.md): tools/blender/base/hero_male.glb (CC0, see base/README.md).
 
 The base is a clean low-poly game character (skinned, A-pose, hand-painted palette texture). We keep its
 topology and its skin weights and:
@@ -9,8 +10,8 @@ topology and its skin weights and:
    each vertex blends the transforms of its bones (linear blend skinning, done once on the rest pose);
 3. hand back a smooth dense mesh (Catmull-Clark) whose vertex groups use our bone names and whose faces
    carry a 'region' attribute, ready for chibi.py (reduce, bake, rig).
-Note: ref/ is not in git; the base mesh's licence has to allow redistribution before a body built from
-it ships in public/assets.
+The base mesh is CC0 1.0 (public domain dedication), so bodies built from it ship in public/assets and forks
+can rebuild them.
 """
 import colorsys
 import math
@@ -20,7 +21,7 @@ import bpy
 import bmesh
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-BASE_GLB = os.path.join(REPO, 'ref', 'hero_male.glb')
+BASE_GLB = os.path.join(REPO, 'tools', 'blender', 'base', 'hero_male.glb')
 
 # the base mesh's parts, as read by classify()
 BASE = {'shirt': 1, 'bracer': 2, 'hand': 3, 'trousers': 4, 'boot': 5, 'belt': 6, 'arm_skin': 7, 'neck': 8}
@@ -32,7 +33,7 @@ LEG_LOW_BONES = {'shin', 'foot'}
 def import_base(path=BASE_GLB):
     """Import the base GLB into the current scene; returns (body mesh object, armature, joint heads)."""
     if not os.path.exists(path):
-        raise FileNotFoundError('base mesh not found: %s (it lives in ref/, which is not in git)' % path)
+        raise FileNotFoundError('base mesh not found: %s' % path)
     before = set(bpy.data.objects)
     bpy.ops.import_scene.gltf(filepath=path)
     new = [o for o in bpy.data.objects if o not in before]

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 // Optimizes raw Blender exports (assets-src/export/*.glb) into public/assets/models/*.glb.
 // meshopt compression + quantization keeps every model small; the runtime decodes with MeshoptDecoder.
 // Usage: npm run assets [-- name1 name2]

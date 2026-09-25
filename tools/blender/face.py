@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 """Painted faces (ai/plan_1.md §3.2): eye and mouth expression cells drawn with anti-aliased 2D shapes.
 
 The head's eye and mouth regions are planar-projected from the front onto one cell each of the

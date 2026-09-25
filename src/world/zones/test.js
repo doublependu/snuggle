@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 // Greybox test zone (?zone=test): ramps, steps and boxes for tuning movement, plus one of each Grumbling.
 import { BoxGeometry, Mesh, PlaneGeometry, Vector3 } from 'three';
 import { G } from '../../game.js';
@@ -8,7 +9,8 @@ import { NPC } from '../../actors/npc.js';
 
 export async function create() {
   const z = new Zone('test');
-  z.setupEnvironment({});
+  const night = new URLSearchParams(location.search).has('night');
+  z.setupEnvironment(night ? NIGHT : {});
   const ground = new Mesh(new PlaneGeometry(80, 80).rotateX(-Math.PI / 2), materialFor('cloth', { color: 0x9dbb7a, vertexColors: false }));
   ground.receiveShadow = true;
   z.group.add(ground);
@@ -43,7 +45,25 @@ export async function create() {
   const cast = ['tangtang', 'weibao', 'fang', 'folk_a', 'folk_b', 'folk_c'];
   const npcs = await Promise.all(cast.map((m, i) => NPC.create(m, m, new Vector3(-3.75 + i * 1.5, 0, -3), 0, { look: false })));
   npcs.forEach((n) => z.addNPC(n));
-  z.start = () => G.ui.setObjective('Greybox test zone');
+  if (night) {
+    // a ring of lanterns to tune the night lighting (?zone=test&night)
+    const lamps = [];
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2;
+      lamps.push({ position: new Vector3(Math.cos(a) * 9, 2.4, Math.sin(a) * 9 + 4), color: i % 3 ? '#ffb45c' : '#ff7a4a', radius: 6, intensity: 1.2 });
+    }
+    lamps.push({ position: new Vector3(0, 2.4, -2), color: '#ffc46b', radius: 5, intensity: 1.4 });
+    z.lamps({ minX: -40, minZ: -40, maxX: 40, maxZ: 40 }, lamps);
+    for (const l of lamps) G.fx.glows.add(l.position, l.color, 1.2);
+  }
+  z.start = () => G.ui.setObjective(night ? 'Greybox test zone (night)' : 'Greybox test zone');
   G.save.tarts = Math.max(G.save.tarts, 3); // dev zone: tarts to test assists
   return z;
 }
+
+// Night palette shared with the market (world/zones/market.js keeps its own copy tuned to the harbour).
+export const NIGHT = {
+  skyTop: '#0c1430', horizon: '#2b2d58', ground: '#15192a', fog: '#1b2142', fogNear: 18, fogFar: 110,
+  hemiSky: '#5a6aa8', hemiGround: '#2c2436', hemi: 1.0, sunColor: '#aebcff', sunI: 0.45, sun: new Vector3(-0.3, 0.55, -0.6),
+  skySun: '#dfe6ff', clouds: 0, peaks: false, stars: 500, moon: true, shadows: false,
+};

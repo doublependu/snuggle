@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 // Procedural foliage (the "less substantial assets" generated in JS): low-poly trees built from a few
 // primitives with vertex colours, drawn as one InstancedMesh per species with the swaying 'leaf' material.
 import {

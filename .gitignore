@@ -149,3 +149,12 @@ __pycache__/
 
 # Playwright MCP session artifacts
 .playwright-mcp/
+
+# e2e screenshots
+tools/e2e/out/
+
+
+# python and modelling
+__pycache__
+*.pyc
+hero_male.glb

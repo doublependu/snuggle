@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 // Tangtang's kitchen mini-game: three timing steps (knead, fill, bake). Press Hum / Interact / tap
 // when the marker is in the green zone. Returns the score (0-6: 1 per good step, 2 per perfect).
 import { G } from '../game.js';

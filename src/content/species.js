@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 // Grumbling species: story text for the Sprite Book, soothing tuning, and the Charm Sprite helper ability.
 // Chapter 2+ species are defined so the book can show silhouettes; their behaviours arrive with those chapters.
 export const SPECIES = {
@@ -59,8 +60,13 @@ export const SPECIES = {
   sparrow: {
     name: 'Wistful Sparrow',
     feeling: "I want that, but I can't afford it.",
-    about: 'Flocks around the night market. Chapter 2.',
+    about: 'Flocks around the night market with enormous wistful eyes. Buying them things never helps: sit with them and point out the free good things.',
+    ability: 'guide',
+    abilityName: 'Guide',
+    abilityDesc: 'Leads lost children (and you) back to where they belong.',
     glow: '#ffd9a8',
+    wrap: 3.2, // per sparrow, while perched and shown a free good thing (systems/perch.js)
+    tantrum: 'flock',
     chapter: 2,
   },
   grey: {
