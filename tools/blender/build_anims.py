@@ -136,11 +136,12 @@ def talk(t):
 
 
 def wave(t):
+    """Right hand raised beside the head, waving side to side (for the right arm +y raises)."""
     a = TAU * t
     p = base()
-    p['upperarm_R'] = arot(('y', -8), ('x', -15))
-    p['forearm_R'] = arot(('y', -40 + 18 * S(2 * a)), ('z', 0))
-    p['hand_R'] = arot(('y', 15 * S(2 * a)))
+    p['upperarm_R'] = arot(('y', 18), ('x', -12))
+    p['forearm_R'] = arot(('y', 78 + 16 * S(2 * a)))
+    p['hand_R'] = arot(('y', 12 * S(2 * a + 0.6)))
     p['head'] = arot(('y', 6), ('x', -4))
     p['spine'] = arot(('y', 3))
     return p, (0, 0, 0.004 * S(2 * a))

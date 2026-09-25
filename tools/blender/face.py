@@ -122,13 +122,44 @@ class EyeStyle:
         self.blush_z = -0.036
         self.freckles = '#c98870'
         self.skin = '#f6d5c3'
+        self.dot = False  # small dark dot eyes (Master Fang) instead of the big anime eye
+        self.wrinkles = None  # colour of smile lines and crow's feet, if any
         self.__dict__.update(kw)
+
+
+def _dot_eye(cv, st, g, state):
+    cx, cz = st.cx * g, st.cz
+    k = {'surprised': 1.25, 'sleepy': 0.55, 'sad': 0.9}.get(state, 1.0)
+    shape = ellipse(cv, (cx, cz), (st.w, st.h * k))
+    if state == 'sleepy':
+        shape = np.maximum(shape, cv.Z - cz)
+    cv.fill(shape, st.pupil)
+    cv.fill(ellipse(cv, (cx - st.w * 0.35, cz + st.h * 0.35 * k), (st.w * 0.3, st.w * 0.3)), '#ffffff', 0.9)
+    if state == 'sad':
+        pts = arc((cx, cz + st.h * 1.3), st.w * 1.4, st.h * 0.5, 160, 20, 10)
+        cv.fill(stroke(cv, pts, taper(len(pts), 0.0005, 0.0012)), st.line, 0.7)
+
+
+def _wrinkles(cv, st):
+    for g in (1, -1):
+        cx, cz = st.cx * g, st.cz
+        # crow's feet at the outer corners and a soft line under each eye
+        for a in (-25, 0, 25):
+            r = math.radians(a)
+            p0 = (cx + (st.w + 0.006) * g, cz)
+            p1 = (p0[0] + 0.009 * g * math.cos(r), p0[1] + 0.009 * math.sin(r))
+            cv.fill(stroke(cv, [p0, p1], [0.0007, 0.0002]), st.wrinkles, 0.5)
+        pts = arc((cx, cz - st.h * 0.4), st.w * 1.2, st.h * 0.9, 215, 325, 12)
+        cv.fill(stroke(cv, pts, taper(len(pts), 0.0002, 0.0008)), st.wrinkles, 0.45)
 
 
 def _eye(cv, st, g, state):
     """One eye; g = +1 her left (viewer's right), -1 her right."""
     cx, cz = st.cx * g, st.cz
     w, h = st.w, st.h
+    if st.dot and state not in ('blink', 'happy'):
+        _dot_eye(cv, st, g, state)
+        return
     if state in ('blink', 'happy'):
         if state == 'blink':  # closed: a soft downward curve with a lash flick
             pts = arc((cx, cz + h * 0.1), w * 0.95, h * 0.35, 190, 350)
@@ -225,6 +256,8 @@ EYE_STATES = ['open', 'blink', 'happy', 'sleepy', 'surprised', 'sad']
 def eye_cell(rect, size, st, state, ao=None):
     cv = Canvas(rect, size, st.skin)
     _cheeks(cv, st)
+    if st.wrinkles:
+        _wrinkles(cv, st)
     for g in (1, -1):
         _brow(cv, st, g, state)
         _eye(cv, st, g, state)

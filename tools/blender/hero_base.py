@@ -2,8 +2,8 @@
 
 The base is a clean low-poly game character (skinned, A-pose, hand-painted palette texture). We keep its
 topology and its skin weights and:
-1. read which part of the outfit each face is (shirt, trousers, skin, leather...) from its texture colour
-   and its dominant bone, and rename those parts to the new character's (jacket, cuff, trousers, shoe...);
+1. read which part of the outfit each face is (BASE: shirt, bracer, trousers, boot, belt, bare skin...) from
+   its texture colour and its dominant bone; each character maps those to its own parts (kit.base_to);
 2. warp it onto the new character's skeleton with its own skin weights: every base bone gets a transform
    that moves, stretches (along the bone) and thickens (across it) its segment onto the target bone, and
    each vertex blends the transforms of its bones (linear blend skinning, done once on the rest pose);
@@ -20,15 +20,16 @@ import bpy
 import bmesh
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-BASE = os.path.join(REPO, 'ref', 'hero_male.glb')
+BASE_GLB = os.path.join(REPO, 'ref', 'hero_male.glb')
 
-REGIONS = {'jacket': 1, 'cuff': 2, 'skin': 3, 'trousers': 4, 'shoe': 5}
+# the base mesh's parts, as read by classify()
+BASE = {'shirt': 1, 'bracer': 2, 'hand': 3, 'trousers': 4, 'boot': 5, 'belt': 6, 'arm_skin': 7, 'neck': 8}
 HAND_BONES = {'hand', 'thumb', 'fingers_base', 'fingers_mid', 'fingers_tip'}
 FOREARM_BONES = {'forearm', 'wrist'}
 LEG_LOW_BONES = {'shin', 'foot'}
 
 
-def import_base(path=BASE):
+def import_base(path=BASE_GLB):
     """Import the base GLB into the current scene; returns (body mesh object, armature, joint heads)."""
     if not os.path.exists(path):
         raise FileNotFoundError('base mesh not found: %s (it lives in ref/, which is not in git)' % path)
@@ -76,7 +77,7 @@ def dominant_bone(ob):
 
 
 def classify(ob, texture_name='hero2'):
-    """Region per face from the base texture's colour at the face and the face's dominant bone."""
+    """BASE part per face, from the base texture's colour at the face and the face's dominant bone."""
     img = bpy.data.images.get(texture_name)
     w, h = img.size
     px = np.empty(w * h * 4, np.float32)
@@ -94,18 +95,19 @@ def classify(ob, texture_name='hero2'):
         bone = max(set(bones), key=bones.count)
         if 0.2 < hh < 0.45 and s > 0.2:
             reg = 'trousers'
-        elif val < 0.55:  # leather: bracers become cuffs, boots become shoes, the belt disappears into the jacket
-            reg = 'cuff' if bone in FOREARM_BONES | HAND_BONES else 'shoe' if bone in LEG_LOW_BONES else \
-                'trousers' if bone == 'thigh' else 'jacket'
+        elif val < 0.55:  # leather
+            reg = 'bracer' if bone in FOREARM_BONES | HAND_BONES else 'boot' if bone in LEG_LOW_BONES | {'thigh'} else 'belt'
         elif bone in HAND_BONES:
-            reg = 'skin'
+            reg = 'hand'
         elif bone in LEG_LOW_BONES:
-            reg = 'shoe'
+            reg = 'boot'
         elif bone == 'head' and p.center.z > 1.7:
-            reg = 'skin'  # the base's neck (hidden under the new head's neck)
+            reg = 'neck'
+        elif bone in FOREARM_BONES:
+            reg = 'arm_skin'
         else:
-            reg = 'jacket'  # shirt, short sleeves and bare forearms all become the jacket
-        region[p.index] = REGIONS[reg]
+            reg = 'shirt'  # the shirt, its short sleeves and the skin in its V-neck
+        region[p.index] = BASE[reg]
     return region
 
 

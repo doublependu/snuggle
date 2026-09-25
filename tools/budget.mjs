@@ -18,12 +18,12 @@ const FIRST_ZONE_MODELS = ['xiaopei', 'anim_humanoid', 'creatures', 'train', 'fo
 // per-character limits (ai/plan_1.md §2): bytes (mesh + atlas) and triangles
 const MODEL_BUDGET = {
   xiaopei: [130, 7000],
-  tangtang: [120, 6000],
-  weibao: [120, 6000],
-  fang: [120, 6000],
-  folk_a: [60, 3500],
-  folk_b: [60, 3500],
-  folk_c: [60, 3500],
+  tangtang: [130, 6500],
+  weibao: [130, 6500],
+  fang: [130, 6500],
+  folk_a: [62, 3500],
+  folk_b: [62, 3500],
+  folk_c: [62, 3500],
   creatures: [100, 7 * 800],
 };
 

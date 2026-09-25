@@ -36,6 +36,14 @@ import face as F
 
 AW, AH = 1024, 512
 EYE_CELL, MOUTH_CELL = (256, 128), (128, 64)
+
+
+def set_atlas(scale=1.0):
+    """Atlas size for one character (townsfolk use half): the layout keeps its proportions."""
+    global AW, AH, EYE_CELL, MOUTH_CELL, CELL_PAD
+    AW, AH = int(1024 * scale), int(512 * scale)
+    EYE_CELL, MOUTH_CELL = (int(256 * scale), int(128 * scale)), (int(128 * scale), int(64 * scale))
+    CELL_PAD = max(2, int(4 * scale))
 EYE_RECT_REL = (-0.13, 0.13, -0.045, 0.085)  # x0, x1, z0, z1 around (0, EYE_Z)
 MOUTH_RECT_REL = (-0.036, 0.036, -0.018, 0.018)  # around (0, MOUTH_Z)
 CELL_PAD = 4  # px: the region maps inside its cell with a painted margin, so filtering never reads the next cell
@@ -66,20 +74,28 @@ def hexlin(h):
 # ---------------------------------------------------------------- rig
 
 
-def build_rig(name, J, arm_down, arm_bones=None):
-    """Axis-aligned T-pose skeleton (same bone frames as the animation library), then the arm chains
-    are turned down by arm_down degrees about the shoulder joint: the bone frames rotate rigidly, so the
-    library's absolute local rotations still pose the arms correctly (src/actors/humanoid.js)."""
+def build_rig(name, J, arm_down):
+    """Axis-aligned T-pose skeleton (same bone frames as the animation library), then each arm (the upper
+    arm and every bone below it, e.g. fingers or a hand puppet's jaw) is turned down by arm_down degrees
+    about the shoulder joint: the bone frames rotate rigidly, so the library's absolute local rotations
+    still pose the arms correctly (src/actors/humanoid.js)."""
     rig = S.build_armature(name, J)
     bpy.context.view_layer.objects.active = rig
     bpy.ops.object.mode_set(mode='EDIT')
     eb = rig.data.edit_bones
+
+    def under(e, root):
+        while e:
+            if e.name == root:
+                return True
+            e = e.parent
+        return False
+
     for side, g in (('L', 1), ('R', -1)):
-        chain = [b for b in (arm_bones or ['upperarm_', 'forearm_', 'hand_', 'thumb_', 'fingers_']) if (b + side) in eb]
-        pivot = eb['upperarm_' + side].head.copy()
+        root = 'upperarm_' + side
+        pivot = eb[root].head.copy()
         R = Matrix.Translation(pivot) @ Matrix.Rotation(math.radians(arm_down * g), 4, 'Y') @ Matrix.Translation(-pivot)
-        for b in chain:
-            e = eb[b + side]
+        for e in [e for e in eb if under(e, root)]:
             e.matrix = R @ e.matrix
     for e in eb:
         if e.name.startswith('seat_'):
@@ -740,6 +756,7 @@ def drop_review_material(ob, mat):
 def build(C, review_only=False, tag=''):
     import review
     t0 = time.time()
+    set_atlas(getattr(C, 'ATLAS_SCALE', 1.0))
     S.reset_scene()
     S.use_collection(C.NAME)
     C.GROUP_IDS = {g[0]: i + 1 for i, g in enumerate(C.GROUPS)}

@@ -178,6 +178,12 @@ export async function runViewer() {
   window.__viewer = {
     ready: true,
     chars,
+    // point the camera from one world point at another (scripted close-ups)
+    look(at, from) {
+      controls.target.set(...at);
+      camera.position.set(...from);
+      camera.lookAt(controls.target);
+    },
     async set(o) {
       Object.assign(state, o);
       apply();
