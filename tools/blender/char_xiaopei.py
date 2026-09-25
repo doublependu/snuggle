@@ -3,12 +3,16 @@
 Head, hair and braid are sculpted with signed distance fields (tools/blender/sdf.py): a round head with a
 painted face, blunt bangs, and a thick three-strand braid swinging off her right side.
 
-The body comes in two versions (BODY):
+The body comes in three versions (BODY):
 - 'classic': the first-pass body from plan 0, kept by request: primitives (mustard jacket with the
   gingham grid, cream trousers, boots, the yarn skein on its strap) on the T-posed shared skeleton. The
   sculpted head sits HEAD_DZ lower so its chin meets that body's collar.
 - 'puffer': a sculpted oversized quilted puffer (open over a cream checked shirt, hood down), balloon
   trousers gathered at the ankle and checked high-tops, in an A-pose (ARM_DOWN degrees below horizontal).
+- 'hero' (experiment): the body starts from the base mesh in ref/hero_male.glb (hero_base.py), warped onto
+  the same A-pose skeleton and reshaped toward the ref photo: the shirt becomes the jacket, the bracers
+  the rolled cuffs, the rolled trousers her gathered ones, the boots high-tops. Hood, skein and laces are
+  sculpted on top. ref/ is not in git, so this version only builds where that file exists.
 """
 import math
 import numpy as np
@@ -17,10 +21,11 @@ from sdf import (Field, Ellipsoid, Sphere, RoundCone, Capsule, Box, Torus, Tube,
                  lerp_list, smin)
 import face as F
 import snuglib as S
+import hero_base as HB
 
 NAME = 'xiaopei'
-BODY = 'classic'
-HEAD_DZ = -0.045 if BODY == 'classic' else 0.0
+BODY = 'hero'
+HEAD_DZ = {'classic': -0.045, 'hero': -0.02}.get(BODY, 0.0)
 H = 1.15 + HEAD_DZ
 ARM_DOWN = 0 if BODY == 'classic' else 50  # the classic body is T-posed like the animation library
 
@@ -338,7 +343,7 @@ def shoes_field():
     f = Field((-0.16, -0.14, -0.01), (0.16, 0.1, 0.16), vs=0.002)
     for g in (1, -1):
         x = HIP[0] * 1.12 * g
-        f.add(Capsule((x, 0.0, 0.1), (x, 0.0, 0.07), 0.031), k=0.0)  # sock
+        f.add(Capsule((x, 0.0, 0.13 if BODY == 'hero' else 0.1), (x, 0.0, 0.07), 0.031), k=0.0)  # sock
         f.add(Box((x, -0.018, 0.04), (0.04, 0.066, 0.036), 0.028), k=0.015)  # high-top
         f.add(Ellipsoid((x, -0.062, 0.035), (0.04, 0.038, 0.032)), k=0.015)  # round toe
         f.add(Box((x, -0.02, 0.009), (0.043, 0.071, 0.009), 0.008), k=0.004)  # sole
@@ -434,11 +439,221 @@ def classic_body():
     return P
 
 
+# ---------------------------------------------------------------- hero-based body (experiment)
+
+# base bone -> our bone (weights are merged)
+HERO_BONES = {'root': 'hips', 'pelvis': 'hips', 'torso': 'spine', 'shoulders': 'chest', 'head': 'neck'}
+for _s in 'LR':
+    HERO_BONES.update({'bicep.' + _s: 'upperarm_' + _s, 'forearm.' + _s: 'forearm_' + _s, 'wrist.' + _s: 'forearm_' + _s,
+                       'hand.' + _s: 'hand_' + _s, 'thumb.' + _s: 'thumb_' + _s, 'fingers_base.' + _s: 'fingers_' + _s,
+                       'fingers_mid.' + _s: 'fingers_' + _s, 'fingers_tip.' + _s: 'fingers_' + _s,
+                       'thigh.' + _s: 'thigh_' + _s, 'shin.' + _s: 'shin_' + _s, 'foot.' + _s: 'foot_' + _s})
+
+# target half extents across each bone (front / depth, side / width), metres: her proportions in the jacket
+HERO_EXT = {'pelvis': (0.1, 0.125), 'torso': (0.12, 0.16), 'shoulders': (0.108, 0.14), 'head': (0.035, 0.035),
+            'bicep': (0.06, 0.06), 'forearm': (0.062, 0.062), 'wrist': (0.056, 0.056), 'hand': (0.026, 0.016),
+            'fingers_base': (0.024, 0.013), 'fingers_mid': (0.022, 0.012), 'fingers_tip': (0.02, 0.011),
+            'thumb': (0.01, 0.01), 'thigh': (0.075, 0.075), 'shin': (0.068, 0.068), 'foot': (0.075, 0.06)}
+# along-bone remaps (base fraction -> target fraction): trousers end at the ankle over the shoes; the tunic's
+# long flaps become a jacket hem at the top of the thighs
+HERO_KNOTS = {'shin': ([0, 0.64, 0.70, 1], [0, 0.73, 0.79, 1]), 'pelvis': ([0, 1, 3.2], [0, 1, 1.9])}
+
+
+def hero_targets():
+    """Our skeleton's segments in the A-pose, for each base bone."""
+    tgt = {}
+    for side, g in (('L', 1), ('R', -1)):
+        sh, el, wr, tip = arm_points(g)
+        d = arm_dir(g)
+        fr = np.array([0, -1.0, 0])
+        tgt['bicep.' + side] = (sh, el)
+        tgt['forearm.' + side] = (el, el + (wr - el) * 0.45)
+        tgt['wrist.' + side] = (el + (wr - el) * 0.45, wr)
+        tgt['hand.' + side] = (wr, wr + d * 0.045)
+        f0, f1 = wr + d * 0.045, wr + d * 0.075
+        for i, n in enumerate(('fingers_base.', 'fingers_mid.', 'fingers_tip.')):
+            tgt[n + side] = (f0 + (f1 - f0) * i / 3, f0 + (f1 - f0) * (i + 1) / 3)
+        tgt['thumb.' + side] = (wr + d * 0.02 + fr * 0.016, wr + d * 0.045 + fr * 0.03)
+        lx = 0.066 * g
+        tgt['thigh.' + side] = (np.array([lx, 0, HIP[2]]), np.array([lx, 0, KNEE_Z]))
+        tgt['shin.' + side] = (np.array([lx, 0, KNEE_Z]), np.array([lx, 0, ANKLE_Z]))
+        tgt['foot.' + side] = (np.array([lx, 0, ANKLE_Z]), np.array([lx * 1.02, -0.088, 0.03]))
+    tgt['pelvis'] = (np.array([0, 0, 0.475]), np.array([0, 0, 0.42]))
+    tgt['torso'] = (np.array([0, 0, 0.475]), np.array([0, 0, 0.62]))
+    tgt['shoulders'] = (np.array([0, 0, 0.62]), np.array([0, 0, NECK[0]]))
+    tgt['head'] = (np.array([0, 0.012, 0.765]), np.array([0, 0.012, 0.9]))  # stretches the stand-up collar up
+    return tgt
+
+
+def hero_outfit():
+    """Her body from the base mesh: classify, warp, reshape, smooth; a dense mesh with our bones and regions."""
+    body, J, T = HB.import_base()
+    region = HB.classify(body)
+    vb = HB.dominant_bone(body)
+    P0 = np.array([v.co[:] for v in body.data.vertices])
+    base = {'pelvis': (J['pelvis'], J['pelvis'] + [0, 0, -0.104]), 'torso': (J['torso'], J['shoulders']),
+            'shoulders': (J['shoulders'], J['head']), 'head': (J['head'], J['head'] + [0, 0, 0.12])}
+    for side in ('.L', '.R'):
+        chain = [('bicep', 'forearm'), ('forearm', 'wrist'), ('wrist', 'hand'), ('hand', 'fingers_base'),
+                 ('fingers_base', 'fingers_mid'), ('fingers_mid', 'fingers_tip'), ('thigh', 'shin'), ('shin', 'foot')]
+        for a, b in chain:
+            base[a + side] = (J[a + side], J[b + side])
+        base['fingers_tip' + side] = (J['fingers_tip' + side], T['fingers_tip' + side])
+        base['thumb' + side] = (J['thumb' + side], T['thumb' + side])
+        base['foot' + side] = (J['foot' + side], np.array([J['foot' + side][0] * 0.75, -0.24, 0.03]))
+    tgt = hero_targets()
+    maps = {}
+    for n, (a, b) in base.items():
+        stem = HB._stem(n)
+        up = [0, 0, 1.0] if stem == 'foot' else None
+        R = HB._frame(np.asarray(a, float), np.asarray(b, float), up)
+        m = np.array([v == n for v in vb])
+        loc = (P0[m] - a) @ R
+        bf, bs = np.percentile(np.abs(loc[:, 0]), 90), np.percentile(np.abs(loc[:, 2]), 90)
+        tf, ts = HERO_EXT[stem]
+        bm = HB.BoneMap(a, b, *tgt[n], front=tf / max(bf, 1e-3), side=ts / max(bs, 1e-3), knots=HERO_KNOTS.get(stem))
+        if up:
+            bm.R, bm.R2 = HB._frame(bm.a, bm.b, up), HB._frame(bm.a2, bm.b2, up)
+        maps[n] = bm
+    HB.warp(body, maps, maps['pelvis'])
+    region = hero_regions(body, region)
+    hero_reshape(body, region, vb)
+    region = hero_drop_flaps(body, region)
+    HB.rename_groups(body, HERO_BONES)
+    HB.store_regions(body, region)
+    HB.drop_attributes(body)
+    HB.subdivide(body, 2)
+    return body
+
+
+def _arm_s(p, g):
+    """Distance along her arm (from the shoulder joint) and from its axis."""
+    sh, el, wr, tip = arm_points(g)
+    d = arm_dir(g)
+    v = np.asarray(p) - sh
+    s_ = v @ d
+    return s_, np.linalg.norm(v - s_ * d)
+
+
+def hero_regions(ob, region):
+    """Her outfit's parts on the warped base: a rolled cuff only at the wrist (the rest of the bracer and the
+    bare forearm become sleeve)."""
+    R = HB.REGIONS
+    out = region.copy()
+    for p in ob.data.polygons:
+        c = np.array(p.center)
+        if region[p.index] in (R['jacket'], R['cuff']):
+            s_, dist = _arm_s(c, 1 if c[0] > 0 else -1)
+            out[p.index] = R['cuff'] if s_ > UPPER + FORE - 0.03 and dist < 0.09 else R['jacket']
+    return out
+
+
+SLEEVE_R = ([0.0, 0.05, 0.13, 0.2, 0.222, 0.238, 0.252], [0.064, 0.064, 0.066, 0.06, 0.055, 0.06, 0.057])
+
+
+def hero_reshape(ob, region, vb):
+    """Turn the base's short sleeves, bare forearms and bracers into one puffy sleeve ending in a rolled cuff
+    (every sleeve vertex is put back on a radius profile around her arm), then puff the jacket up a little.
+    (Laplacian smoothing collapses these thin low-poly tubes.)"""
+    import bmesh
+    R = HB.REGIONS
+    me = ob.data
+    vreg = np.zeros(len(me.vertices), int)
+    for p in me.polygons:
+        for i in p.vertices:
+            vreg[i] = max(vreg[i], region[p.index])
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    bm.verts.ensure_lookup_table()
+    for v in bm.verts:
+        if HB._stem(vb[v.index]) not in ('bicep', 'forearm', 'wrist') or vreg[v.index] not in (R['jacket'], R['cuff']):
+            continue
+        g = 1 if v.co.x > 0 else -1
+        sh, el, wr, tip = arm_points(g)
+        d = arm_dir(g)
+        rel = np.array(v.co) - sh
+        s_ = rel @ d
+        rv = rel - s_ * d
+        r = np.linalg.norm(rv)
+        if r < 1e-6:
+            continue
+        target = np.interp(s_, *SLEEVE_R)
+        k = np.clip((s_ - 0.02) / 0.04, 0, 1) * 0.85  # leave the shoulder seam to the torso
+        v.co = sh + s_ * d + rv / r * (r + (target - r) * k)
+    bm.normal_update()
+    for v in bm.verts:
+        r = vreg[v.index]
+        if r == R['jacket'] and abs(v.co.x) < 0.14:
+            v.co += v.normal * 0.009
+        elif r == R['trousers']:
+            v.co += v.normal * 0.004
+    bm.to_mesh(me)
+    bm.free()
+
+
+def hero_drop_flaps(ob, region, z_belt=0.452):
+    """Remove the base tunic's split flaps below the belt (single-sided panels; her jacket has a closed
+    hem, sculpted in hem_field) and the base's boots (her chunky high-tops are sculpted: shoes_field)."""
+    import bmesh
+    R = HB.REGIONS
+    HB.store_regions(ob, region)
+    bm = bmesh.new()
+    bm.from_mesh(ob.data)
+    dead = [f for f in bm.faces if (region[f.index] == R['jacket'] and f.calc_center_median().z < z_belt)
+            or region[f.index] == R['shoe']]
+    bmesh.ops.delete(bm, geom=dead, context='FACES')
+    bm.to_mesh(ob.data)
+    bm.free()
+    out = np.zeros(len(ob.data.polygons), np.int32)
+    ob.data.attributes['region'].data.foreach_get('value', out)
+    return out
+
+
+def hem_field():
+    """The jacket below the belt: a closed, slightly flared puffy hem, open at the front like the ref."""
+    f = Field((-0.24, -0.22, 0.34), (0.24, 0.2, 0.5), vs=0.0025)
+    outer = Scaled(RoundCone((0, 0.004, 0.462), (0, 0.004, 0.385), 0.16, 0.176), (1.0, 0.8, 1.0), (0, 0.004, 0.42))
+    f.add(outer)
+    f.add(Scaled(Torus((0, 0.004, 0.388), 0.168, 0.016), (1.02, 0.8, 1.0), (0, 0.004, 0.388)), k=0.012)
+    f.sub(Scaled(RoundCone((0, 0.004, 0.52), (0, 0.004, 0.33), 0.135, 0.15), (1.0, 0.78, 1.0), (0, 0.004, 0.42)), k=0.004)
+    f.sub(Box((0, -0.2, 0.42), (0.024, 0.08, 0.1), 0.01), k=0.008)
+    return f
+
+
+def collar_field():
+    """Her shirt's pointed collar, open over the jacket's stand-up collar."""
+    f = Field((-0.12, -0.16, 0.7), (0.12, 0.08, 0.86), vs=0.002)
+    for g in (1, -1):
+        pts = catmull([(0.016 * g, -0.066, 0.812), (0.04 * g, -0.092, 0.786), (0.064 * g, -0.106, 0.756)], n=8)
+        t = np.linspace(0, 1, len(pts))
+        f.add(Tube(pts, lerp_list([0.017, 0.018, 0.01, 0.003], t), flat=0.22, flat_dir=(0.3 * g, -1, 0.45)), k=0.004)
+    f.add(Scaled(Torus((0, 0.012, 0.81), 0.046, 0.008), (1.05, 1.0, 1.0), (0, 0.012, 0.81)), k=0.006)
+    return f
+
+
+def hem_weights(P):
+    """The hem follows the hips, and each side a little of its thigh (so walking doesn't cut through it)."""
+    x, z = P[:, 0], P[:, 2]
+    left = np.clip(0.5 + x / 0.06, 0, 1)
+    leg = np.clip((0.44 - z) / 0.07, 0, 1) * 0.35
+    W = np.stack([1 - leg, leg * left, leg * (1 - left)], axis=1)
+    return ['hips', 'thigh_L', 'thigh_R'], W
+
+
+def hood_field():
+    """The jacket's hood, down, bunched behind the collar: Doudou sleeps in it (seat_doudou)."""
+    f = Field((-0.16, 0.0, 0.62), (0.16, 0.24, 0.84), vs=0.0025)
+    f.add(Ellipsoid((0, 0.128, 0.728), (0.105, 0.062, 0.068)))
+    f.add(Scaled(Torus((0, 0.12, 0.752), 0.082, 0.02), (1.0, 0.8, 1.0), (0, 0.12, 0.752)), k=0.02)
+    f.sub(Ellipsoid((0, 0.142, 0.77), (0.072, 0.045, 0.045)), k=0.012)
+    return f
+
+
 HEAD_GROUPS = [
     # name, builder, kind, colour, triangle budget, symmetric
-    ('skin', skin_field, 'skin', 'skin', 1150, True),
-    ('hair', hair_field, 'hair', 'hair', 1350, False),
-    ('braid', lambda: braid_field()[0], 'hair', 'hair', 620, False),
+    ('skin', skin_field, 'skin', 'skin', 950, True),
+    ('hair', hair_field, 'hair', 'hair', 1050, False),
+    ('braid', lambda: braid_field()[0], 'hair', 'hair', 470, False),
 ]
 PUFFER_GROUPS = [
     ('jacket', jacket_field, 'plain', 'jacket', 1560, True),
@@ -448,7 +663,15 @@ PUFFER_GROUPS = [
     ('extras', extras_field, 'plain', 'yarn', 340, False),
 ]
 CLASSIC_GROUPS = [('body', classic_body, None, None, 4000, False)]
-GROUPS = HEAD_GROUPS + (CLASSIC_GROUPS if BODY == 'classic' else PUFFER_GROUPS)
+HERO_GROUPS = [
+    ('outfit', lambda: hero_outfit(), 'cloth', 'jacket', 2000, True),
+    ('hood', lambda: hood_field(), 'cloth', 'jacket', 260, True),
+    ('hem', lambda: hem_field(), 'cloth', 'jacket', 320, True),
+    ('shoes', lambda: shoes_field(), 'cloth', 'shoe', 400, True),
+    ('collar', lambda: collar_field(), 'cloth', 'shirt', 200, True),
+    ('extras', lambda: extras_field(), 'plain', 'yarn', 220, False),
+]
+GROUPS = HEAD_GROUPS + {'classic': CLASSIC_GROUPS, 'puffer': PUFFER_GROUPS, 'hero': HERO_GROUPS}[BODY]
 
 
 # ---------------------------------------------------------------- rig
@@ -498,7 +721,7 @@ def joints():
 
 
 # layers hidden under others (culled before decimation)
-CULL = {'skin': ['hair', 'jacket', 'shirt'], 'shirt': ['jacket'], 'trousers': ['jacket', 'shoes'], 'braid': ['hair'],
+CULL = {'skin': ['hair', 'jacket', 'shirt', 'hood', 'collar'], 'shirt': ['jacket'], 'trousers': ['jacket', 'shoes'], 'braid': ['hair'],
         'shoes': ['trousers']}  # groups that aren't fields (the classic body) are skipped
 
 ARMS = ['shoulder_L', 'upperarm_L', 'forearm_L', 'shoulder_R', 'upperarm_R', 'forearm_R']
@@ -506,6 +729,10 @@ WEIGHTS = {
     'skin': ('auto', ['head', 'neck', 'chest', 'forearm_L', 'hand_L', 'thumb_L', 'fingers_L', 'forearm_R', 'hand_R',
                       'thumb_R', 'fingers_R'] if BODY == 'puffer' else ['head', 'neck', 'chest']),
     'body': ('parts',),
+    'outfit': ('keep',),
+    'hood': ('dist', ['chest', 'hood']),
+    'hem': ('fn', lambda P: hem_weights(P)),
+    'collar': ('dist', ['chest', 'neck']),
     'hair': ('rigid', 'head'),
     'braid': ('dist', ['head', 'spring_braid_1', 'spring_braid_2', 'spring_braid_3']),
     'jacket': ('auto', ['hips', 'spine', 'chest', 'neck', 'hood'] + ARMS),
@@ -542,9 +769,17 @@ def _cuff_dist(P):
     return d
 
 
-def face_kind(group, c, n):
+def face_kind(group, c, n, region=None):
     """Per-face shader family: the gingham grid (cloth) only where the ref has checked fabric."""
     c = np.asarray(c)
+    if group == 'outfit':
+        if region == HB.REGIONS['skin']:
+            return 'skin'
+        if region == HB.REGIONS['shoe'] and c[2] < 0.017:
+            return 'plain'
+        return 'cloth'
+    if group in ('hood', 'hem', 'collar'):
+        return 'cloth'
     if group == 'jacket':
         return 'cloth' if _cuff_dist(c[None])[0] < 0.058 else 'plain'
     if group == 'shoes':
@@ -552,6 +787,34 @@ def face_kind(group, c, n):
     if group == 'extras':
         return 'plain'
     return None
+
+
+def paint_outfit(P, N, ao, ao_f, region):
+    """The hero-based body in her colours: jacket (open over the cream shirt), cuffs, hands, trousers, shoes."""
+    R = HB.REGIONS
+    x, y, z = P[:, 0], P[:, 1], P[:, 2]
+    col = np.tile(lin(COL['jacket']), (len(P), 1))
+    col[region == R['cuff']] = lin(COL['lining'])
+    col[region == R['skin']] = lin(COL['skin'])
+    col[region == R['trousers']] = lin(COL['trousers'])
+    shoe = region == R['shoe']
+    col[shoe] = lin(COL['shoe'])
+    col[shoe & (z < 0.017)] = lin(COL['sole'])
+    jacket = region == R['jacket']
+    # the jacket hangs open: the cream shirt shows down the front, its collar inside the jacket's
+    front = jacket & (np.abs(x) < 0.024) & (y < -0.04) & (z > 0.4) & (z < NECK[0] - 0.01)
+    col[front] = lin(COL['shirt'])
+    # the shirt shows in a V at the neck; the jacket's own stand-up collar stays mustard
+    col[jacket & (z > 0.735) & (y < -0.03) & (np.abs(x) < 0.028 + (z - 0.735) * 0.9)] = lin(COL['shirt'])
+    # flap pockets low on the front
+    for g_ in (1, -1):
+        pk = jacket & (np.abs(x - 0.085 * g_) < 0.042) & (y < -0.06) & (np.abs(z - 0.47) < 0.03)
+        col[pk] *= 0.9
+        edge = pk & ((np.abs(np.abs(x - 0.085 * g_) - 0.042) < 0.004) | (np.abs(np.abs(z - 0.47) - 0.03) < 0.004))
+        col[edge] *= 0.75
+    # the trousers' gathered cuffs at the ankle
+    col[(region == R['trousers']) & (z < 0.14)] *= 0.93
+    return col * shade(ao, ao_f)[:, None]
 
 
 def shade(ao, ao_f):
@@ -582,8 +845,10 @@ def lin(h):
     return F.lin(h)
 
 
-def paint(g, P, N, ao, ao_f, base):
+def paint(g, P, N, ao, ao_f, base, region=None):
     col = np.array(base, float)
+    if g == 'outfit':
+        return paint_outfit(P, N, ao, ao_f, region)
     if g == 'body':
         # the classic look: flat vertex-painted colours, gentle occlusion (the grid comes from the shader)
         return col * (0.72 + 0.28 * np.clip(ao, 0, 1))[:, None] * (0.85 + 0.15 * np.clip(ao_f, 0, 1))[:, None]

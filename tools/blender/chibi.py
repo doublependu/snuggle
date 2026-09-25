@@ -3,13 +3,15 @@ A-pose rig -> GLB. A character module (char_<name>.py) provides the sculpt and t
 
   NAME, H, ARM_DOWN, EYE_Z, MOUTH_Z      size, A-pose angle, face rows
   GROUPS  [(group, builder, kind, colour key, triangles, symmetric)]   builder() -> sdf.Field, or a list
-          of snuglib primitives ("part" groups: colours from their vertex paint, weights from each part's bones)
+          of snuglib primitives ("part" groups: colours from their vertex paint, weights from each part's bones),
+          or a dense mesh object ("mesh" groups, e.g. hero_base.py: its own vertex groups, optional 'region'
+          face attribute passed to face_kind / paint)
   COL     {colour key: '#hex'}           sRGB
   joints() -> {bone: (head, tail, parent)} in the T-pose (the rig then lowers the arms by ARM_DOWN)
   WEIGHTS {group: ('auto', bones) | ('dist', bones) | ('rigid', bone) | ('split', fn(center) -> bone)
-           | ('fn', fn(points) -> (bones, weights)) | ('parts',)}
-  face_kind(group, center, normal) -> kind or None   per-face shader family override (e.g. a cuff)
-  paint(group, P, N, ao, ao_f, base) -> linear RGB   per-texel albedo for one group (base: (n, 3))
+           | ('fn', fn(points) -> (bones, weights)) | ('parts',) | ('keep',)}
+  face_kind(group, center, normal, region) -> kind or None   per-face shader family override (e.g. a cuff)
+  paint(group, P, N, ao, ao_f, base, region=None) -> linear RGB   per-texel albedo (base: (n, 3))
   EYES, MOUTH                            face.EyeStyle / face.MouthStyle
 
 Atlas: 1024 x 512, glTF UVs (origin top-left).
@@ -169,6 +171,14 @@ def apply_weights(ob, rig, rule):
     kind = rule[0]
     if kind == 'parts':
         return
+    if kind == 'keep':  # the mesh came with weights: just normalise and keep the 4 largest
+        names = [g.name for g in ob.vertex_groups]
+        W = np.zeros((len(ob.data.vertices), len(names)))
+        for v in ob.data.vertices:
+            for g in v.groups:
+                W[v.index, g.group] = g.weight
+        set_weights(ob, W, names)
+        return
     if kind == 'rigid':
         set_weights(ob, np.ones((len(ob.data.vertices), 1)), [rule[1]])
     elif kind == 'dist':
@@ -259,12 +269,16 @@ def paint_group(ob, C, group, kind, colour):
     gid = me.color_attributes.new('Gid', 'FLOAT_COLOR', 'CORNER')
     base = S.srgb(C.COL[colour])
     gidv = (C.GROUP_IDS[group] / 255.0, 0, 0, 1)
+    ra = me.attributes.get('region')
+    regions = np.zeros(len(me.polygons), np.int32)
+    if ra:
+        ra.data.foreach_get('value', regions)
     for p in me.polygons:
         c, n = tuple(p.center), tuple(p.normal)
         k = kind
         if group == 'skin':
             k = face_region(C, c, n) or k
-        k = C.face_kind(group, c, n) or k
+        k = C.face_kind(group, c, n, int(regions[p.index]) if ra else None) or k
         code = CODE.get(k, 1) / 10
         for li in p.loop_indices:
             attr.data[li].color_srgb = (base[0], base[1], base[2], code)
@@ -294,7 +308,7 @@ def whiten(ob):
 # ---------------------------------------------------------------- UVs
 
 
-def chart_seams(ob, face_code, cone=58.0, smooth_iters=25, min_faces=12):
+def chart_seams(ob, face_code, cone=66.0, smooth_iters=25, min_faces=16):
     """Cut the mesh into a few large charts. Charts grow from seed faces while the face normals (of a
     smoothed copy, so quilting bumps don't matter) stay within `cone` degrees of the chart's normal; tiny
     charts are merged into a neighbour. Returns (count, chart per face, normals of the smoothed faces).
@@ -399,6 +413,9 @@ def unwrap(ob, C):
     me = ob.data
     if not me.uv_layers:
         me.uv_layers.new(name='UVMap')
+    while len(me.uv_layers) > 1:
+        me.uv_layers.remove(me.uv_layers[-1])
+    me.uv_layers.active = me.uv_layers[0]
     col = me.color_attributes['Col']
     codes = np.empty(len(col.data) * 4, np.float32)
     col.data.foreach_get('color', codes)
@@ -561,15 +578,17 @@ def occlusion(dense, P, gids, cover, id_to_group, rays=14, dist=0.07, fine_rays=
     Nd = np.zeros((H, W, 3))
     ao = np.ones((H, W))
     ao_f = np.ones((H, W))
+    Ix = np.zeros((H, W), np.int64)
     ys, xs = np.nonzero(cover)
     for k, (y, x) in enumerate(zip(ys, xs)):
         g = id_to_group.get(int(gids[y, x]))
         tree = dense.trees.get(g)
         if tree is None:
             continue
-        loc, nrm, _, _ = tree.find_nearest(Vector(P[y, x]), 0.05)
+        loc, nrm, idx, _ = tree.find_nearest(Vector(P[y, x]), 0.05)
         if loc is None:
             continue
+        Ix[y, x] = idx
         Pd[y, x] = loc
         Nd[y, x] = nrm
         o = loc + nrm * 0.0015
@@ -594,7 +613,7 @@ def occlusion(dense, P, gids, cover, id_to_group, rays=14, dist=0.07, fine_rays=
                 occ += 1.0
         ao_f[y, x] = 1.0 - occ / fine_rays
     log('  occlusion: %d texels in %.1fs' % (len(ys), time.time() - t0))
-    return Pd, Nd, ao, ao_f
+    return Pd, Nd, ao, ao_f, Ix
 
 
 def _save_image(arr_srgb, path, fmt='PNG', quality=90, alpha=False):
@@ -623,7 +642,7 @@ def paint_atlas(C, ob, his):
     u, n = np.unique(gids, return_counts=True)
     log('  baked: %d covered texels, gids %s, pos range %s..%s' % (cover.sum(), dict(zip(u.tolist(), n.tolist())), P[cover].min(0).round(2), P[cover].max(0).round(2)))
     dense = Dense(his)
-    Pd, Nd, ao, ao_f = occlusion(dense, P, gids, cover, id_to_group)
+    Pd, Nd, ao, ao_f, Ix = occlusion(dense, P, gids, cover, id_to_group)
     albedo = np.zeros((AH, AW, 3))
     body = cover.copy()
     body[:, AW // 2:] = False
@@ -634,7 +653,13 @@ def paint_atlas(C, ob, his):
         colour = [c for (n, _, _, c, _, _) in C.GROUPS if n == g][0]
         # part groups carry their colours in the vertex paint; sculpted groups take the palette colour
         base = vcol[m] if colour is None else np.tile(hexlin(C.COL[colour]), (int(m.sum()), 1))
-        albedo[m] = C.paint(g, Pd[m], Nd[m], ao[m], ao_f[m], base)
+        kw = {}
+        ra = his[g].data.attributes.get('region')
+        if ra:  # the region of the dense face under each texel
+            arr = np.zeros(len(his[g].data.polygons), np.int32)
+            ra.data.foreach_get('value', arr)
+            kw['region'] = arr[Ix[m]]
+        albedo[m] = C.paint(g, Pd[m], Nd[m], ao[m], ao_f[m], base, **kw)
     # face cells: painted expression cells x the occlusion baked on cell 0 (same geometry for every cell)
     ex0, ex1, ez0, ez1 = EYE_RECT_REL
     mx0, mx1, mz0, mz1 = MOUTH_RECT_REL
@@ -656,7 +681,7 @@ def paint_atlas(C, ob, his):
     albedo = _dilate(albedo, body | np.pad(np.zeros((AH, AW // 2), bool), ((0, 0), (0, AW // 2)), constant_values=True), 16)
     atlas = lin_to_srgb(albedo)
     os.makedirs(S.EXPORT_DIR, exist_ok=True)
-    _save_image(atlas, os.path.join(S.EXPORT_DIR, C.NAME + '_atlas.webp'), 'WEBP', 75)
+    _save_image(atlas, os.path.join(S.EXPORT_DIR, C.NAME + '_atlas.webp'), 'WEBP', 67)
     review = os.path.join(S.REPO, 'assets-src', 'review')
     os.makedirs(review, exist_ok=True)
     _save_image(atlas, os.path.join(review, C.NAME + '_atlas.png'))
@@ -719,10 +744,15 @@ def build(C, review_only=False, tag=''):
     S.use_collection(C.NAME)
     C.GROUP_IDS = {g[0]: i + 1 for i, g in enumerate(C.GROUPS)}
     rig = build_rig(C.NAME, C.joints(), C.ARM_DOWN)
-    his, los, fields, parts = {}, [], {}, {}
+    his, los, fields, parts, meshes = {}, [], {}, {}, {}
     for name, builder, *_ in C.GROUPS:
         res = builder()
-        (fields if isinstance(res, sdf.Field) else parts)[name] = res
+        if isinstance(res, sdf.Field):
+            fields[name] = res
+        elif isinstance(res, bpy.types.Object):
+            meshes[name] = res
+        else:
+            parts[name] = res
     for name, builder, kind, colour, tris, sym in C.GROUPS:
         t = time.time()
         if name in parts:
@@ -738,7 +768,15 @@ def build(C, review_only=False, tag=''):
             los.append(lo)
             log('%-9s parts -> %5d tris  %.1fs' % (name, sdf.tri_count(lo), time.time() - t))
             continue
-        hi = fields[name].mesh(name + '_hi', S._active_coll)
+        if name in meshes:
+            hi = meshes[name]
+            hi.name = name + '_hi'
+            if hi.name not in S._active_coll.objects:
+                for c in list(hi.users_collection):
+                    c.objects.unlink(hi)
+                S._active_coll.objects.link(hi)
+        else:
+            hi = fields[name].mesh(name + '_hi', S._active_coll)
         lo = hi.copy()
         lo.data = hi.data.copy()
         lo.name = name
