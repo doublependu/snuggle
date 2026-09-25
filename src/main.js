@@ -210,7 +210,8 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden && !G.paused && !G.menus.open) G.menus.togglePause();
 });
 
-boot().catch((e) => {
+if (params.has('viewer')) import('./dev/viewer.js').then((m) => m.runViewer()).catch((e) => console.error(e));
+else boot().catch((e) => {
   console.error(e);
   const s = $('status');
   if (s) s.textContent = 'Something went wrong while loading. Please refresh. (' + (e?.message || e) + ')';

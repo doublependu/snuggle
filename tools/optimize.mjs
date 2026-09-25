@@ -2,10 +2,10 @@
 // meshopt compression + quantization keeps every model small; the runtime decodes with MeshoptDecoder.
 // Usage: npm run assets [-- name1 name2]
 import { NodeIO } from '@gltf-transform/core';
-import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
+import { ALL_EXTENSIONS, EXTTextureWebP } from '@gltf-transform/extensions';
 import { dedup, prune, resample, quantize, meshopt, weld } from '@gltf-transform/functions';
 import { MeshoptEncoder, MeshoptDecoder } from 'meshoptimizer';
-import { readdirSync, statSync, mkdirSync } from 'node:fs';
+import { readdirSync, statSync, mkdirSync, existsSync, readFileSync } from 'node:fs';
 import { join, basename } from 'node:path';
 
 const SRC = 'assets-src/export';
@@ -52,6 +52,20 @@ function stripAnimChannels(doc) {
   }
 }
 
+// Sculpted characters (tools/blender/chibi.py) come with <name>_atlas.webp: attach it as the base colour
+// texture of their 'mixed' material. Done here rather than in Blender because the 'mixed' material has
+// no colour node on purpose (the exporter then keeps the shader codes in the colour alpha).
+function attachAtlas(doc, name) {
+  const file = join(SRC, name + '_atlas.webp');
+  if (!existsSync(file)) return false;
+  doc.createExtension(EXTTextureWebP).setRequired(true);
+  const tex = doc.createTexture(name + '_atlas').setImage(readFileSync(file)).setMimeType('image/webp').setURI(name + '_atlas.webp');
+  for (const m of doc.getRoot().listMaterials()) {
+    if (m.getName().startsWith('mixed')) m.setBaseColorTexture(tex);
+  }
+  return true;
+}
+
 // Materials only carry a name (the runtime shader family); drop PBR extras.
 function simplifyMaterials(doc) {
   for (const m of doc.getRoot().listMaterials()) {
@@ -67,6 +81,7 @@ for (const f of files) {
   const doc = await io.read(join(SRC, f));
   if (f === 'anim_humanoid.glb') stripAnimChannels(doc);
   simplifyMaterials(doc);
+  const atlas = attachAtlas(doc, basename(f, '.glb'));
   await doc.transform(
     dedup({ keepUniqueNames: true }),
     weld(),
@@ -79,6 +94,6 @@ for (const f of files) {
   await io.write(out, doc);
   const a = statSync(join(SRC, f)).size, b = statSync(out).size;
   total += b;
-  console.log(`${f.padEnd(24)} ${(a / 1024).toFixed(1).padStart(8)} KB -> ${(b / 1024).toFixed(1).padStart(7)} KB`);
+  console.log(`${f.padEnd(24)} ${(a / 1024).toFixed(1).padStart(8)} KB -> ${(b / 1024).toFixed(1).padStart(7)} KB${atlas ? '  (+ atlas)' : ''}`);
 }
 console.log(`total ${(total / 1024).toFixed(1)} KB in ${files.length} files`);

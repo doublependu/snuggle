@@ -17,7 +17,7 @@ export async function prologueTrain(z) {
   await wait(3.4);
   await talk([
     [null, 'Xiao Pei is on her way to live with her aunt in Lantern Bay. Everything she owns fits in one cardboard suitcase.'],
-    ['xiaopei', 'Auntie Mei says the harbour lanterns glow even in the rain… I hope she likes me.'],
+    ['xiaopei', 'Auntie Mei says the harbour lanterns glow even in the rain… I hope she likes me.', { face: 'worried' }],
   ]);
   G.cam.clearShot();
   G.cam.snapBehind(p);
@@ -40,10 +40,10 @@ export async function prologueTrain(z) {
   hint('notice');
   await G.events.once('noticed', (g) => g === z.cloud);
   await talk([
-    ['xiaopei', "Oh… you're just a little rain cloud. You look so soggy."],
+    ['xiaopei', "Oh… you're just a little rain cloud. You look so soggy.", { face: 'worried' }],
     ['cloud', '…forgot… my… umbrella…'],
     ['auntie', "Don't look at it, dear! Grumblings only get bigger if you pay them attention."],
-    ['xiaopei', 'When I felt soggy inside, Mama used to hum me a lullaby. Maybe…'],
+    ['xiaopei', 'When I felt soggy inside, Mama used to hum me a lullaby. Maybe…', { face: 'smile' }],
   ]);
   objective('Hum the lullaby to the cloud');
   hint('hum', 6);
@@ -77,7 +77,7 @@ export async function prologueTrain(z) {
     [null, 'The cloud stops raining. It curls up in her lap and snores.'],
     ['auntie', 'Well I never. It fell asleep!'],
     ['student', 'Um… miss? There is something else in your hood.'],
-    ['xiaopei', 'Huh?'],
+    ['xiaopei', 'Huh?', { face: 'surprised' }],
   ]);
   p.doudou.userData.awake = true;
   G.audio.play('yawn');
@@ -85,7 +85,7 @@ export async function prologueTrain(z) {
   await wait(0.8);
   await talk([
     ['doudou', '…five more minutes.'],
-    ['xiaopei', 'Wh— who are YOU?! How long have you been in there?'],
+    ['xiaopei', 'Wh— who are YOU?! How long have you been in there?', { face: 'surprised' }],
   ]);
   p.doudou.userData.awake = false;
   G.collection.add('doudou');
@@ -134,7 +134,7 @@ export async function prologueStation(z) {
   await talk([
     ['tangtang', a === 0 ? "Great! I'm Lin Tangtang, second-year, best baker at Mistbloom. You're a sorcerer, by the way." : "Visiting your aunt AND starting at Mistbloom. You're a sorcerer, by the way. I'm Lin Tangtang, second-year, best baker around."],
     ['tangtang', 'Also you have a cloud on you. And a bun in your hood. Welcome to Lantern Bay!'],
-    ['xiaopei', "A sorcerer? Me? I just hummed at it…"],
+    ['xiaopei', "A sorcerer? Me? I just hummed at it…", { face: 'surprised' }],
     ['tangtang', 'Exactly! Soothing a Grumbling on your first try? Master Fang is going to adore you. Here — custard tarts. Sharing snacks makes Cozy Energy.'],
   ]);
   G.collection.addTarts(3);

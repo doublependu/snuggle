@@ -1,7 +1,7 @@
 // One small family of stylized Lambert materials, picked by the glTF material *name* that the
 // Blender scripts assign (see tools/blender/snuglib.py). Colours come from vertex colours, so no
 // textures are downloaded. Variants are cached so the whole game compiles only a handful of programs.
-import { MeshLambertMaterial, MeshBasicMaterial, Color, DoubleSide } from 'three';
+import { MeshLambertMaterial, MeshBasicMaterial, Color, DoubleSide, Vector2 } from 'three';
 
 export const shared = {
   uTime: { value: 0 },
@@ -111,16 +111,31 @@ function patch(m, o) {
 
 const f = (x) => (Number.isInteger(x) ? x + '.0' : String(x));
 
+// Characters: 'mixed' plus the character's atlas (tools/blender/bake.py). The atlas holds the painted
+// albedo and baked shading; codes 9 / 10 mark the eye and mouth regions of the face, whose UVs are
+// shifted by uEye / uMouth to show another expression cell (src/actors/face.js). One material per
+// character instance (own face uniforms), one shared program.
+export function atlasMaterial(map) {
+  const m = new MeshLambertMaterial({ vertexColors: true, map });
+  const face = { uEye: { value: new Vector2() }, uMouth: { value: new Vector2() } };
+  patchMixed(m, face);
+  m.name = 'mixed';
+  m.userData.face = face;
+  return m;
+}
+
 // One program for every Blender mesh. Codes (alpha * 10): 1 plain/wood/stone, 2 cloth, 3 skin, 4 hair,
-// 5 eye/glow (unlit), 6 roof tiles, 7 paper (faceted), 8 ground.
-function patchMixed(m) {
-  m.customProgramCacheKey = () => 'mixed';
+// 5 eye/glow (unlit), 6 roof tiles, 7 paper (faceted), 8 ground, 9 / 10 face eyes / mouth (atlas only).
+function patchMixed(m, face = null) {
+  m.customProgramCacheKey = () => (face ? 'mixedAtlas' : 'mixed');
   m.onBeforeCompile = (sh) => {
+    if (face) Object.assign(sh.uniforms, face);
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vObjPos; varying vec3 vObjN;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvObjPos = position; vObjN = objectNormal;');
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vObjPos; varying vec3 vObjN;\n' + NOISE + GRID)
+      .replace('#include <common>', '#include <common>\nvarying vec3 vObjPos; varying vec3 vObjN;\n' + (face ? 'uniform vec2 uEye; uniform vec2 uMouth;\n' : '') + NOISE + GRID)
+      .replace('#include <map_fragment>', '')
       .replace(
         '#include <color_fragment>',
         `#include <color_fragment>
@@ -128,6 +143,13 @@ function patchMixed(m) {
         #ifdef USE_COLOR_ALPHA
           sCode = int(vColor.a * 10.0 + 0.5);
           diffuseColor.a = 1.0;
+        #endif
+        #ifdef USE_MAP
+          vec2 aUv = vMapUv;
+          if (sCode == 9) aUv += uEye;
+          else if (sCode == 10) aUv += uMouth;
+          diffuseColor.rgb *= texture2D(map, aUv).rgb;
+          if (sCode >= 9) sCode = 3;
         #endif
         if (sCode == 2) diffuseColor.rgb *= 1.0 - 0.3 * clothGrid(vObjPos, vObjN, 0.034);
         else if (sCode == 1) diffuseColor.rgb *= 1.0 - 0.05 * vnoise(vObjPos * 38.0);
@@ -201,7 +223,7 @@ export function stylize(root, { shadows = true, receive = true, overrides = {} }
     if (!o.isMesh) return;
     const name = (o.material?.name || 'plain').split('.')[0];
     const kind = overrides[name] || name;
-    o.material = materialFor(kind);
+    o.material = kind === 'mixed' && o.material.map ? atlasMaterial(o.material.map) : materialFor(kind);
     const basic = KINDS[kind]?.basic;
     o.castShadow = shadows && !basic;
     o.receiveShadow = receive && !basic;

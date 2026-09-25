@@ -177,7 +177,7 @@ export class UI {
   }
 
   // ---------------------------------------------------------------- dialogue
-  say(who, text, { choices = null, auto = 0 } = {}) {
+  say(who, text, { choices = null, auto = 0, face = null } = {}) {
     const [name, color] = SPEAKERS[who] || [who || '', '#2f6f73'];
     this.dialogueOpen = true;
     G.frozen = true;
@@ -187,7 +187,7 @@ export class UI {
     this.dlgWho.style.background = color;
     this.dlgChoices.innerHTML = '';
     this.dlgMore.style.display = 'none';
-    G.events.emit('say', { who, text });
+    G.events.emit('say', { who, text, face });
     const full = text;
     let shown = 0;
     this.advance = false;
@@ -233,6 +233,7 @@ export class UI {
             shown = n;
             this.dlgText.textContent = full.slice(0, shown);
             if (shown === full.length) {
+              G.events.emit('typed', { who });
               this.dlgMore.style.display = choices ? 'none' : '';
               showChoices();
             }

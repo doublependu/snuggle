@@ -94,7 +94,7 @@ async function welcome(z) {
   await talk([
     ['tangtang', 'Master Fang! I found her! Cardboard suitcase and everything!'],
     ['fang', 'So I see. Welcome to Mistbloom Academy, Xiao Pei. We have been expecting you — for about fifty years, give or take.'],
-    ['xiaopei', 'F-fifty years? I only turned eleven…'],
+    ['xiaopei', 'F-fifty years? I only turned eleven…', { face: 'surprised' }],
   ]);
   fang.setAnim('pat', 0.3);
   await wait(0.6);
@@ -135,7 +135,7 @@ async function lesson(z) {
   await talk([['honk', 'THE NEW GIRL HAS CRUMBS ON HER FACE.']]);
   wb.h.overlayPlay('shy', 0.2);
   await talk([
-    ['xiaopei', 'Ah— custard tart crumbs! Um. Thank you… goose?'],
+    ['xiaopei', 'Ah— custard tart crumbs! Um. Thank you… goose?', { face: 'shy' }],
     ['honk', 'CAPTAIN HONK. THE BOY IS WEI BAO. HE SAYS HELLO. HE IS TOO SHY TO SAY IT HIMSELF.'],
     ['weibao', '…hello.'],
     ['fang', "Wei Bao's technique is Echo Friend. A Grumbling can speak through Captain Honk, so we can hear what it really needs."],
@@ -170,7 +170,7 @@ async function ending(z) {
     ['fang', 'A lost sock, a worried page of homework, a lonely pom-pom… and a kitchen full of tarts. You did wonderfully, Xiao Pei.'],
     ['honk', 'TOMORROW NIGHT IS THE NIGHT MARKET. WE WILL SHOW YOU THE BEST DUMPLING STALL. HONK.'],
     ['weibao', '…it really is the best one.'],
-    ['xiaopei', 'I think… I am going to like it here.'],
+    ['xiaopei', 'I think… I am going to like it here.', { face: 'happy' }],
   ]);
   p.doudou.userData.awake = true;
   G.audio.play('yawn');
@@ -198,9 +198,9 @@ export function wireAcademy(z) {
   G.events.on('soothed', async (g) => {
     if (G.zone !== z) return;
     const lines = {
-      sock: [['xiaopei', "You'll find your pair one day. Until then, you've got me."], ['sock', '…warm… toes…']],
-      homework: [['xiaopei', 'One page is enough for today. You did your best.'], ['homework', '…really…? …okay…']],
-      pompom: [['xiaopei', 'See? Everyone wanted you on their team.'], ['pompom', '…picked… me…!']],
+      sock: [['xiaopei', "You'll find your pair one day. Until then, you've got me.", { face: 'smile' }], ['sock', '…warm… toes…']],
+      homework: [['xiaopei', 'One page is enough for today. You did your best.', { face: 'smile' }], ['homework', '…really…? …okay…']],
+      pompom: [['xiaopei', 'See? Everyone wanted you on their team.', { face: 'happy' }], ['pompom', '…picked… me…!']],
     }[g.species];
     if (!lines) return;
     flag(g.species + 'Done', true);
@@ -213,7 +213,7 @@ export function wireAcademy(z) {
     if (G.zone !== z || g.species !== 'pompom') return;
     await talk([
       ['pompom', '…nobody picked me for their team…'],
-      ['xiaopei', 'Then come with me! I know some friends who are playing tag right now.'],
+      ['xiaopei', 'Then come with me! I know some friends who are playing tag right now.', { face: 'happy' }],
     ]);
     G.ui.toast('💡 It calms best with company: lead it to the courtyard where the Charm Sprites play tag, then hum.', 5.5);
   });

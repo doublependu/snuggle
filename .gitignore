@@ -145,6 +145,7 @@ vite.config.ts.timestamp-*
 ref/
 # Blender working files and raw exports (scripts in tools/blender are the source of truth)
 assets-src/
+__pycache__/
 
 # Playwright MCP session artifacts
 .playwright-mcp/

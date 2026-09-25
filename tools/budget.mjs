@@ -4,6 +4,9 @@
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 import { join } from 'node:path';
+import { NodeIO } from '@gltf-transform/core';
+import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
+import { MeshoptDecoder } from 'meshoptimizer';
 
 const DIST = 'dist';
 const BUDGET = {
@@ -12,6 +15,17 @@ const BUDGET = {
   total: 1200 * 1024,
 };
 const FIRST_ZONE_MODELS = ['xiaopei', 'anim_humanoid', 'creatures', 'train', 'folk_a', 'folk_b', 'folk_c'];
+// per-character limits (ai/plan_1.md §2): bytes (mesh + atlas) and triangles
+const MODEL_BUDGET = {
+  xiaopei: [130, 7000],
+  tangtang: [120, 6000],
+  weibao: [120, 6000],
+  fang: [120, 6000],
+  folk_a: [60, 3500],
+  folk_b: [60, 3500],
+  folk_c: [60, 3500],
+  creatures: [100, 7 * 800],
+};
 
 if (!existsSync(DIST)) {
   console.error('dist/ not found: run `npm run build` first');
@@ -49,7 +63,24 @@ const check = (name, v, max) => {
   return ok;
 };
 const ok = [check('js', jsBytes, BUDGET.js), check('models', modelBytes, BUDGET.models), check('total', total, BUDGET.total)].every(Boolean);
+// characters: size and triangles against their own budget
+await MeshoptDecoder.ready;
+const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({ 'meshopt.decoder': MeshoptDecoder });
+console.log('Characters:');
+let modelsOk = true;
+for (const [name, [maxKb, maxTris]] of Object.entries(MODEL_BUDGET)) {
+  const p = join(DIST, 'assets', 'models', name + '.glb');
+  if (!existsSync(p)) continue;
+  const bytes = statSync(p).size;
+  const doc = await io.read(p);
+  let tris = 0;
+  for (const m of doc.getRoot().listMeshes()) for (const prim of m.listPrimitives()) tris += (prim.getIndices()?.getCount() ?? prim.getAttribute('POSITION').getCount()) / 3;
+  const ok = bytes <= maxKb * 1024 && tris <= maxTris;
+  modelsOk &&= ok;
+  const atlas = doc.getRoot().listTextures().length ? ' atlas' : '';
+  console.log(`${ok ? '✓' : '✗'} ${name.padEnd(10)} ${kb(bytes)} / ${maxKb} KB   ${String(tris).padStart(5)} / ${maxTris} tris${atlas}`);
+}
 // the full asset folder, for information (streams in after Begin)
 const all = readdirSync(join(DIST, 'assets', 'models')).reduce((a, f) => a + statSync(join(DIST, 'assets', 'models', f)).size, 0);
 console.log(`(all models, streamed later: ${kb(all)})`);
-process.exit(ok ? 0 : 1);
+process.exit(ok && modelsOk ? 0 : 1);

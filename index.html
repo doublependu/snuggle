@@ -12,7 +12,9 @@
     (function () {
       var z = 'train';
       try { z = (JSON.parse(localStorage.getItem('snuggle-sorcery-save')) || {}).zone || z; } catch (e) {}
-      var q = new URLSearchParams(location.search).get('zone');
+      var qs = new URLSearchParams(location.search);
+      if (qs.has('viewer')) return;
+      var q = qs.get('zone');
       if (q) z = q;
       var zones = {
         train: ['train', 'folk_a', 'folk_b', 'folk_c'],

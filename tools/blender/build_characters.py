@@ -1,6 +1,10 @@
-"""Rigged chibi characters. Each function builds one character from primitives, skins it to the
-shared humanoid skeleton, bakes vertex AO and exports assets-src/export/<name>.glb (no animations;
-clips live in anim_humanoid.glb, see build_anims.py)."""
+"""Rigged chibi characters -> assets-src/export/<name>.glb (no animations; clips live in anim_humanoid.glb,
+see build_anims.py).
+
+Sculpted characters (ai/plan_1.md) are built by chibi.py from a char_<name>.py module: SDF sculpt ->
+game mesh -> painted atlas (<name>_atlas.webp, attached by tools/optimize.mjs) -> A-pose rig.
+The rest are still the first-pass builders below (primitives skinned to the shared skeleton) until
+they get their own sculpt."""
 import os, sys, importlib
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -84,74 +88,6 @@ def finish(name, J, parts, ao=0.32, extra_objs=()):
     for m in meshes:
         bind(m, rig)
     return export_glb(name + '.glb', [rig, *meshes, *extra_objs])
-
-
-# ---------------------------------------------------------------- Xiao Pei
-
-def xiaopei():
-    reset_scene()
-    use_collection('xiaopei')
-    J = humanoid_joints(height=1.15, head_r=0.19, sh_w=0.11, arm=0.30, hip_w=0.07)
-    J['braid_1'] = ((0.07, 0.15, 0.9), (0.11, 0.17, 0.79), 'head')
-    J['braid_2'] = ((0.11, 0.17, 0.79), (0.14, 0.18, 0.66), 'braid_1')
-    J['braid_3'] = ((0.14, 0.18, 0.66), (0.16, 0.19, 0.53), 'braid_2')
-    chin = J['neck'][1][2] - 0.02
-    hc, hr = (0, 0, chin + 0.19), (0.19, 0.178, 0.19)
-    skin_c = '#f4d3c0'
-    P = []
-    P.append(ellipsoid('head', hc, hr, 'skin', C(skin_c), (18, 12), bones='head'))
-    P += face(hc, hr, skin=skin_c)
-    # hair cap with an opening for the face, bangs, side locks
-    hair = C('#1f1917')
-    P.append(ellipsoid('hair', (0, 0.012, hc[2] + 0.012), (0.199, 0.19, 0.2), 'hair', hair, (18, 12), bones='head',
-                       cut=lambda co: co.y < -0.25 and co.z < 0.42))
-    for i, yaw in enumerate((-44, -24, -6, 12, 30, 46)):
-        p, n = on_sphere(hc, hr, yaw, 38, 0.0)
-        P.append(ellipsoid('bang%d' % i, p + Vector((0, -0.01, -0.025)), (0.045, 0.026, 0.06), 'hair', hair, (8, 6),
-                           rot=(-20, 0, -yaw * 0.6), bones='head'))
-    for s, g in (('L', 1), ('R', -1)):
-        p, n = on_sphere(hc, hr, 74 * g, -12, -0.012)
-        P.append(ellipsoid('lock_' + s, p + Vector((0, -0.005, -0.03)), (0.02, 0.03, 0.085), 'hair', hair, (8, 6),
-                           rot=(8, 0, 0), bones='head'))
-    # braid
-    pts = [Vector((0.06, 0.16, 0.9)), Vector((0.1, 0.18, 0.8)), Vector((0.125, 0.19, 0.72)), Vector((0.14, 0.195, 0.65)),
-           Vector((0.15, 0.2, 0.58))]
-    bb = ['head', 'braid_1', 'braid_1', 'braid_2', 'braid_3']
-    for i, p in enumerate(pts):
-        P.append(ellipsoid('braid%d' % i, p, (0.042 - i * 0.003, 0.04 - i * 0.003, 0.055), 'hair', hair, (8, 6),
-                           rot=(0, 18 if i % 2 else -18, 0), bones=bb[i]))
-    P.append(torus('braid_tie', (0.155, 0.2, 0.545), 0.026, 0.012, 'cloth', C('#e0662c'), (10, 5), bones='braid_3'))
-    P.append(cone('braid_tuft', (0.157, 0.2, 0.54), (0.17, 0.205, 0.45), 0.03, 0.006, 'hair', hair, segs=7,
-                  bones='braid_3'))
-    # neck + body
-    P.append(tube('neck', (0, 0, J['neck'][0][2] - 0.03), (0, 0, chin + 0.04), 0.045, 0.045, 'skin', C(skin_c), segs=8,
-                  rings=1, bones=['chest', 'neck']))
-    hip_z = J['hips'][0][2]
-    top = J['chest'][1][2]
-    jacket = '#e2a13a'
-    P.append(tube('jacket', (0, 0, hip_z - 0.075), (0, 0, top + 0.01), 0.165, 0.11, 'cloth', C(jacket), segs=14, rings=5,
-                  bulge=0.02, flat_x=1.12, bones=['hips', 'spine', 'chest']))
-    P.append(ellipsoid('collar', (0, -0.035, top - 0.005), (0.085, 0.075, 0.045), 'cloth', C('#f1e9d8'), (12, 6),
-                       bones='chest'))
-    P.append(ellipsoid('hood', (0, 0.125, top - 0.045), (0.12, 0.07, 0.085), 'cloth', C('#d4922f'), (12, 8),
-                       bones='hood'))
-    P.append(tube('placket', (0, -0.14, hip_z - 0.08), (0, -0.105, top - 0.04), 0.012, 0.012, 'cloth', C('#c07f26'),
-                  segs=6, rings=2, bones=['hips', 'spine', 'chest']))
-    for s, g in (('L', 1), ('R', -1)):
-        P.append(box('pocket_' + s, (0.085 * g, -0.146, hip_z - 0.0), (0.055, 0.012, 0.05), 'cloth', C('#d6972f'),
-                     rot=(0, 0, -12 * g), bones=['hips', 'spine'], bevel=0.008))
-    # chest strap with the yarn bundle (Lullaby Thread)
-    P.append(tube('strap', (-0.1, -0.1, top - 0.01), (0.13, -0.12, hip_z + 0.02), 0.012, 0.012, 'cloth',
-                  C('#8a5a33'), segs=6, rings=3, bones=['chest', 'spine']))
-    P.append(ellipsoid('yarn', (-0.025, -0.16, top - 0.11), (0.058, 0.045, 0.055), 'cloth', C('#e1873a'), (10, 8),
-                       bones='chest'))
-    P.append(torus('yarn_wrap', (-0.025, -0.16, top - 0.11), 0.05, 0.008, 'cloth', C('#c96a26'), (12, 4),
-                   rot=(90, 0, 30), bones='chest'))
-    # trousers
-    P.append(ellipsoid('seat', (0, 0.0, hip_z - 0.04), (0.13, 0.11, 0.09), 'cloth', C('#ece2cc'), (12, 8),
-                       bones=['hips', 'thigh_L', 'thigh_R']))
-    P += limbs(J, jacket, cuff='#9c7a4c', hand=skin_c, leg='#ece2cc', sock='#d9d0bf', boot='#e8dcc4', lace='#d1692e')
-    return finish('xiaopei', J, P)
 
 
 def head_basics(J, skin_c, head_r=0.19, squash=(1.0, 0.94, 1.0)):
@@ -372,7 +308,17 @@ def folk(name):
     return finish(name, J, P, ao=0.28)
 
 
-BUILDERS = {'xiaopei': xiaopei, 'tangtang': tangtang, 'weibao': weibao, 'fang': fang,
+def sculpted(module):
+    def build():
+        import chibi
+        importlib.reload(chibi)
+        mod = importlib.import_module(module)
+        importlib.reload(mod)
+        return chibi.build(mod)[0]
+    return build
+
+
+BUILDERS = {'xiaopei': sculpted('char_xiaopei'), 'tangtang': tangtang, 'weibao': weibao, 'fang': fang,
             'folk_a': lambda: folk('folk_a'), 'folk_b': lambda: folk('folk_b'), 'folk_c': lambda: folk('folk_c')}
 
 if __name__ == '__main__':

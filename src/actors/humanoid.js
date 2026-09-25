@@ -1,11 +1,22 @@
 // Skinned chibi characters driven by the shared animation library (anim_humanoid.glb).
 // Clips are retargeted once per character: missing bones get rest tracks, and the hips translation
 // track is rescaled to the character's hip height. Upper-body overlay clips (hum/talk/wave/...)
-// are masked copies that play over locomotion with a higher weight.
-import { AnimationClip, AnimationMixer, LoopOnce, LoopRepeat, QuaternionKeyframeTrack, VectorKeyframeTrack, Vector3 } from 'three';
+// are masked copies that play over locomotion with a higher weight. Tracks hold absolute local
+// rotations, so a character may be bound in its own rest pose (A-pose) as long as its bone axes
+// match the library's (tools/blender/snuglib.py).
+// Characters with an atlas get a painted Face; bones named spring_<chain>_<n> swing on damped springs.
+import { AnimationClip, AnimationMixer, Box3, LoopOnce, LoopRepeat, MathUtils, Quaternion, QuaternionKeyframeTrack, VectorKeyframeTrack, Vector3 } from 'three';
 import { clone as skeletonClone } from 'three/addons/utils/SkeletonUtils.js';
 import { loadGLB } from '../core/assets.js';
 import { stylize } from '../render/materials.js';
+import { Face } from './face.js';
+
+const _p = new Vector3();
+const _right = new Vector3();
+const _fwd = new Vector3();
+const _q = new Quaternion();
+const _q2 = new Quaternion();
+const _pq = new Quaternion();
 
 const UPPER = new Set(['spine', 'chest', 'neck', 'head', 'hood', 'shoulder_L', 'upperarm_L', 'forearm_L', 'hand_L', 'shoulder_R', 'upperarm_R', 'forearm_R', 'hand_R']);
 const ONCE = new Set(['land', 'throw']);
@@ -82,6 +93,8 @@ export class Humanoid {
     stylize(root);
     this.bones = {};
     this.meshes = [];
+    this.triangles = 0;
+    this.face = null;
     root.traverse((o) => {
       if (o.isBone) this.bones[o.name] = o;
       if (o.isSkinnedMesh) {
@@ -89,8 +102,22 @@ export class Humanoid {
         o.geometry.computeBoundingSphere();
         o.geometry.boundingSphere.radius *= 1.6;
         this.meshes.push(o);
+        this.triangles += (o.geometry.index?.count ?? o.geometry.attributes.position.count) / 3;
+        if (o.material.userData.face && o.userData.face) {
+          const layout = typeof o.userData.face === 'string' ? JSON.parse(o.userData.face) : o.userData.face;
+          this.face = new Face(o.material.userData.face, layout);
+        }
       }
     });
+    // size in the bind pose (framing, seating); head radius from the head bone to the top
+    root.updateMatrixWorld(true);
+    const box = new Box3().setFromObject(root);
+    this.height = box.max.y - root.position.y;
+    const headY = this.bones.head ? this.bones.head.getWorldPosition(_p).y - root.position.y : this.height * 0.7;
+    this.headRadius = (this.height - headY) / 2;
+    this.springs = this.findSprings();
+    this.vel = new Vector3();
+    this.lastPos = null;
     this.mixer = new AnimationMixer(root);
     this.clips = clips;
     this.actions = {};
@@ -145,9 +172,70 @@ export class Humanoid {
     const every = distance > 25 ? 4 : distance > 12 ? 2 : 1;
     this.lodTimer += dt;
     this.lodFrame = (this.lodFrame || 0) + 1;
+    this.face?.update(dt);
     if (this.lodFrame % every) return;
     this.mixer.update(this.lodTimer);
+    if (this.springs.length) this.updateSprings(this.lodTimer);
     this.lodTimer = 0;
+  }
+
+  // Chains of spring_<chain>_<n> bones (legacy: braid_<n>), ordered root to tip.
+  findSprings() {
+    const chains = {};
+    for (const [name, b] of Object.entries(this.bones)) {
+      const m = /^spring_(.+)_(\d+)$/.exec(name) || /^(braid)_(\d+)$/.exec(name);
+      if (m) (chains[m[1]] ||= []).push([Number(m[2]), b]);
+    }
+    return Object.values(chains).map((list) => {
+      const bones = list.sort((a, b) => a[0] - b[0]).map(([, b]) => b);
+      return { bones, rest: bones.map((b) => b.quaternion.clone()), angle: new Vector3(), vel: new Vector3(), phase: Math.random() * 6 };
+    });
+  }
+
+  // Secondary motion from the root's own movement (works for the player and walking NPCs alike):
+  // speed swings the chain back, acceleration and gravity add to it, a slow sway keeps it alive.
+  updateSprings(dt) {
+    if (dt <= 0) return;
+    const p = this.root.getWorldPosition(_p);
+    if (!this.lastPos) this.lastPos = p.clone();
+    const vx = (p.x - this.lastPos.x) / dt,
+      vy = (p.y - this.lastPos.y) / dt,
+      vz = (p.z - this.lastPos.z) / dt;
+    this.lastPos.copy(p);
+    const k = Math.min(1, dt * 20);
+    const ax = ((vx - this.vel.x) * k) / dt,
+      az = ((vz - this.vel.z) * k) / dt;
+    this.vel.x += (vx - this.vel.x) * k;
+    this.vel.y += (MathUtils.clamp(vy, -6, 6) - this.vel.y) * k;
+    this.vel.z += (vz - this.vel.z) * k;
+    const yaw = this.root.rotation.y;
+    const s = Math.sin(yaw),
+      c = Math.cos(yaw);
+    const speed = Math.hypot(this.vel.x, this.vel.z);
+    const fwdAcc = MathUtils.clamp(ax * s + az * c, -30, 30);
+    const sideAcc = MathUtils.clamp(ax * c - az * s, -30, 30);
+    _right.set(c, 0, -s);
+    _fwd.set(s, 0, c);
+    this.sprTime = (this.sprTime || 0) + dt;
+    for (const ch of this.springs) {
+      const tx = -speed * 0.09 - fwdAcc * 0.015 + this.vel.y * 0.04;
+      const tz = sideAcc * 0.02 + Math.sin(this.sprTime * 1.3 + ch.phase) * 0.03;
+      const h = Math.min(dt, 1 / 30);
+      ch.vel.x += ((tx - ch.angle.x) * 40 - ch.vel.x * 7) * h;
+      ch.vel.z += ((tz - ch.angle.z) * 40 - ch.vel.z * 7) * h;
+      ch.angle.addScaledVector(ch.vel, h);
+      ch.angle.x = MathUtils.clamp(ch.angle.x, -0.9, 0.6);
+      ch.angle.z = MathUtils.clamp(ch.angle.z, -0.6, 0.6);
+      ch.bones.forEach((b, i) => {
+        const w = 0.45 + i * 0.3;
+        _q.setFromAxisAngle(_right, -ch.angle.x * w);
+        _q2.setFromAxisAngle(_fwd, ch.angle.z * w);
+        _q.multiply(_q2);
+        b.parent.getWorldQuaternion(_pq);
+        // local = parentWorld^-1 * swing * parentWorld * rest
+        b.quaternion.copy(_pq).invert().multiply(_q).multiply(_pq).multiply(ch.rest[i]);
+      });
+    }
   }
 
   worldBone(name, target = new Vector3()) {

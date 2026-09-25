@@ -598,7 +598,8 @@ def export_glb(filename, objs, animations=False, anim_mode='NLA_TRACKS', extras=
     os.makedirs(EXPORT_DIR, exist_ok=True)
     path = os.path.join(EXPORT_DIR, filename)
     for o in bpy.context.view_layer.objects:
-        o.select_set(False)
+        if o:
+            o.select_set(False)
     for o in objs:
         o.select_set(True)
     bpy.context.view_layer.objects.active = objs[0]

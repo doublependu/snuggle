@@ -40,8 +40,16 @@ export class NPC {
     };
     G.interactables.add(this.interactable);
     G.npcs.set(id, this);
-    this.offSay = G.events.on('say', ({ who }) => this.speak(who === id || (id === 'weibao' && who === 'honk'), who));
-    this.offSaid = G.events.on('said', () => this.speak(false));
+    this.offSay = G.events.on('say', ({ who, face }) => {
+      this.speak(who === id || (id === 'weibao' && who === 'honk'), who);
+      if (who === id) this.h.face?.set(face || 'neutral');
+      this.h.face?.talk(who === id);
+    });
+    this.offTyped = G.events.on('typed', () => this.h.face?.talk(false));
+    this.offSaid = G.events.on('said', () => {
+      this.speak(false);
+      this.h.face?.set('neutral');
+    });
   }
 
   get position() {
@@ -129,6 +137,7 @@ export class NPC {
     G.interactables.delete(this.interactable);
     G.npcs.delete(this.id);
     this.offSay();
+    this.offTyped();
     this.offSaid();
     this.root.removeFromParent();
   }

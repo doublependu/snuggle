@@ -1,17 +1,30 @@
-// Xiao Pei: capsule character controller against the zone BVH, animation state, Doudou riding in
-// her hood, and a spring-driven braid.
-import { Line3, MathUtils, Quaternion, Vector3 } from 'three';
+// Xiao Pei: capsule character controller against the zone BVH, animation state and Doudou riding in
+// her hood (her braid swings on the Humanoid's spring chains).
+import { Line3, MathUtils, Vector3 } from 'three';
 import { G } from '../game.js';
 
 const _f = new Vector3();
 const _r = new Vector3();
 const _m = new Vector3();
 const _seg = new Line3();
-const _q = new Quaternion();
-const _q2 = new Quaternion();
-const _pq = new Quaternion();
-const _axis = new Vector3();
-const UP = new Vector3(0, 1, 0);
+const _p = new Vector3();
+
+// Put Doudou in Xiao Pei's hood. Newer models carry a seat_doudou bone (where his base sits);
+// older ones fall back to a fixed offset. Call while the skeleton is still in its bind pose.
+export function seatDoudou(humanoid, doudou) {
+  const root = humanoid.root;
+  root.updateMatrixWorld(true);
+  const seat = humanoid.bones.seat_doudou;
+  if (seat) root.worldToLocal(seat.getWorldPosition(_p));
+  else _p.set(0.02, 0.705, -0.12);
+  doudou.position.copy(_p);
+  doudou.rotation.set(seat ? -0.35 : -0.15, 0.25, 0.05);
+  doudou.scale.setScalar(seat ? 0.68 : 0.82);
+  root.add(doudou);
+  doudou.updateMatrixWorld(true);
+  (seat || humanoid.bones.hood)?.attach(doudou);
+  return doudou;
+}
 
 export class Player {
   constructor(humanoid, doudou) {
@@ -35,24 +48,16 @@ export class Player {
     this.stepPhase = 0;
     this.moveScale = 1;
     this.root.name = 'xiaopei';
-    // Doudou sleeps in the hood; attach while the skeleton is in rest pose so the offset is exact.
+    // Doudou sleeps in the hood
     this.doudou = doudou;
-    if (doudou) {
-      this.root.updateMatrixWorld(true);
-      const hood = humanoid.bones.hood;
-      doudou.position.set(0.02, 0.705, -0.12);
-      doudou.rotation.set(-0.15, 0.25, 0.05);
-      doudou.scale.setScalar(0.82);
-      this.root.add(doudou);
-      doudou.updateMatrixWorld(true);
-      if (hood) hood.attach(doudou);
-    }
-    // braid spring
-    this.braid = ['braid_1', 'braid_2', 'braid_3'].map((n) => humanoid.bones[n]).filter(Boolean);
-    this.braidRest = this.braid.map((b) => b.quaternion.clone());
-    this.braidAngle = new Vector3(); // x: forward/back, z: side
-    this.braidVel = new Vector3();
-    this.prevVel = new Vector3();
+    if (doudou) seatDoudou(humanoid, doudou);
+    // her face follows the dialogue like the NPCs'
+    G.events.on('say', ({ who, face }) => {
+      if (who === 'xiaopei') humanoid.face?.set(face || 'neutral');
+      humanoid.face?.talk(who === 'xiaopei');
+    });
+    G.events.on('typed', () => humanoid.face?.talk(false));
+    G.events.on('said', () => humanoid.face?.set('neutral'));
   }
 
   teleport(p, facing = this.facing) {
@@ -216,40 +221,7 @@ export class Player {
       }
     }
     h.update(dt);
-    this.updateBraid(dt);
     this.updateDoudou(dt);
-  }
-
-  updateBraid(dt) {
-    if (!this.braid.length) return;
-    // acceleration in character space drives a damped spring
-    const ax = (this.velocity.x - this.prevVel.x) / Math.max(dt, 1e-3);
-    const az = (this.velocity.z - this.prevVel.z) / Math.max(dt, 1e-3);
-    this.prevVel.copy(this.velocity);
-    const s = Math.sin(this.facing),
-      c = Math.cos(this.facing);
-    const fwdAcc = ax * s + az * c;
-    const sideAcc = ax * c - az * s;
-    const target = new Vector3(-this.speed * 0.09 - fwdAcc * 0.015 + (this.onGround ? 0 : this.velocity.y * 0.05), 0, sideAcc * 0.02 + Math.sin(G.time * 1.3) * 0.03);
-    const k = 40,
-      damp = 7;
-    this.braidVel.x += ((target.x - this.braidAngle.x) * k - this.braidVel.x * damp) * dt;
-    this.braidVel.z += ((target.z - this.braidAngle.z) * k - this.braidVel.z * damp) * dt;
-    this.braidAngle.addScaledVector(this.braidVel, dt);
-    this.braidAngle.x = MathUtils.clamp(this.braidAngle.x, -0.9, 0.6);
-    this.braidAngle.z = MathUtils.clamp(this.braidAngle.z, -0.6, 0.6);
-    // world-space swing about the character's right and forward axes, applied per segment
-    const right = _r.set(c, 0, -s);
-    const fwd = _f.set(s, 0, c);
-    this.braid.forEach((b, i) => {
-      const w = 0.45 + i * 0.3;
-      _q.setFromAxisAngle(right, -this.braidAngle.x * w);
-      _q2.setFromAxisAngle(fwd, this.braidAngle.z * w);
-      _q.multiply(_q2);
-      b.parent.getWorldQuaternion(_pq);
-      // local = parentWorld^-1 * swing * parentWorld * rest
-      b.quaternion.copy(_pq).invert().multiply(_q).multiply(_pq).multiply(this.braidRest[i]);
-    });
   }
 
   updateDoudou(dt) {
