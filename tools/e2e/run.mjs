@@ -118,6 +118,49 @@ function helpers(page, t) {
     assert(cond, msg) {
       if (!cond) throw new Error(msg);
     },
+    // Every visible character's head is on straight: the neck no more than 25° from its pose (no clip moves
+    // it; the look-at turns it at most ~22°), and the head's up axis within 50° of vertical (clips tilt it
+    // up to 24°, plus the look-at's nod). Characters playing 'overwhelmed' (59°) are skipped.
+    heads: () => page.evaluate(HEADS),
+    async headsUpright(where = '') {
+      const bad = (await h.heads()).filter((r) => r.neck > 25 || r.tilt > 50);
+      h.assert(!bad.length, `heads not upright${where && ' ' + where}: ` + bad.map((r) => `${r.id} neck ${r.neck}° tilt ${r.tilt}°`).join(', '));
+    },
+    // Record each character's worst neck turn and head tilt, every frame, until the zone changes.
+    async watchHeads() {
+      await page.evaluate(`window.__heads = ${HEADS}; window.__worst = {}; window.__G.updaters.add(() => {
+        for (const r of window.__heads()) {
+          const w = (window.__worst[r.id] ||= { neck: 0, tilt: 0 });
+          w.neck = Math.max(w.neck, r.neck);
+          w.tilt = Math.max(w.tilt, r.tilt);
+        }
+      });`);
+    },
+    // The worst seen since watchHeads() or the last call, then start again.
+    worstHeads: () =>
+      page.evaluate(() => {
+        const w = window.__worst;
+        window.__worst = {};
+        return w;
+      }),
   };
   return h;
+}
+
+// In the page: each visible character's neck turn away from its clip pose and head tilt from vertical, in
+// degrees. Head bones point straight up in the bind pose; no clip animates the neck, so its pose is its rest.
+function HEADS() {
+  const G = window.__G;
+  const list = [['xiaopei', G.player?.h], ...[...G.npcs].filter(([, n]) => !n.hidden).map(([id, n]) => [id, n.h])];
+  return list
+    .filter(([, h]) => h?.bones.neck && h.bones.head && h.base?.getClip().name !== 'overwhelmed')
+    .map(([id, h]) => {
+      const rest = h.clips.idle.tracks.find((t) => t.name === 'neck.quaternion').values;
+      const q = h.bones.neck.quaternion;
+      const dot = Math.min(1, Math.abs(q.x * rest[0] + q.y * rest[1] + q.z * rest[2] + q.w * rest[3]));
+      h.bones.head.updateWorldMatrix(true, false);
+      const e = h.bones.head.matrixWorld.elements;
+      const deg = (r) => Math.round((r * 180) / Math.PI);
+      return { id, neck: deg(2 * Math.acos(dot)), tilt: deg(Math.acos(e[5] / Math.hypot(e[4], e[5], e[6]))) };
+    });
 }

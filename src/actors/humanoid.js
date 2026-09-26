@@ -21,6 +21,7 @@ const _pq = new Quaternion();
 const _up = new Vector3(0, 1, 0);
 
 const UPPER = new Set(['spine', 'chest', 'neck', 'head', 'hood', 'shoulder_L', 'upperarm_L', 'forearm_L', 'hand_L', 'shoulder_R', 'upperarm_R', 'forearm_R', 'hand_R']);
+const LOOK = [['neck', 0.35], ['head', 0.65]]; // bones the look-at turns, and their share of the turn
 const ONCE = new Set(['land', 'throw']);
 const sitCache = new Map();
 let library = null;
@@ -133,6 +134,7 @@ export class Humanoid {
     this.overlay = null;
     this.speed = 1;
     this.lodTimer = 0;
+    this.lookSaved = {}; // per look bone: its clip pose and the turned pose updateLook left it in
   }
 
   action(name) {
@@ -226,6 +228,7 @@ export class Humanoid {
     this.lodFrame = (this.lodFrame || 0) + 1;
     this.face?.update(dt);
     if (this.lodFrame % every) return;
+    this.unlook();
     this.mixer.update(this.lodTimer);
     this.updateLook(this.lodTimer);
     if (this.springs.length) this.updateSprings(this.lodTimer);
@@ -254,7 +257,7 @@ export class Humanoid {
     yaw = MathUtils.clamp(yaw, -1.05, 1.05) * w;
     // chibi heads are big: a gentle nod reads better than a full one
     const pitch = MathUtils.clamp(Math.atan2(dy, Math.hypot(dx, dz)) * 0.6, -0.28, 0.22) * w;
-    for (const [name, k] of [['neck', 0.35], ['head', 0.65]]) {
+    for (const [name, k] of LOOK) {
       const b = this.bones[name];
       if (!b) continue;
       const turned = facing + yaw * (name === 'neck' ? k : 1);
@@ -263,7 +266,22 @@ export class Humanoid {
       _q2.setFromAxisAngle(_right, -pitch * k);
       _q2.multiply(_q);
       b.parent.getWorldQuaternion(_pq);
+      const saved = (this.lookSaved[name] ||= { pose: new Quaternion(), turned: new Quaternion() });
+      saved.pose.copy(b.quaternion);
       b.quaternion.premultiply(_pq).premultiply(_q2).premultiply(_pq.invert());
+      saved.turned.copy(b.quaternion);
+    }
+  }
+
+  // Take the look turn back off before the mixer runs. The mixer only writes a bone whose clip value
+  // changed, so a bone the clip holds still (the neck always: no clip animates it) kept every turn ever
+  // added to it: heads spun, or folded into the chest and stayed there. A bone that something else has
+  // posed since (the viewer, sitPose) is left alone.
+  unlook() {
+    for (const name in this.lookSaved) {
+      const b = this.bones[name];
+      const saved = this.lookSaved[name];
+      if (b.quaternion.equals(saved.turned)) b.quaternion.copy(saved.pose);
     }
   }
 

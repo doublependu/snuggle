@@ -84,6 +84,10 @@ export const TESTS = [
       h.assert(await h.eval(() => window.__G.zone.cloud === null), 'the soothed cloud respawned');
       await h.begin();
       await h.until(() => window.__G.ui.dialogueOpen && window.__G.player.state === 'sit', { timeout: 20000 });
+      // Xiao Pei looks round at the auntie while she talks
+      await h.until(() => window.__G.player.speaker?.id === 'auntie', { timeout: 10000, tick: () => h.skipDialogue() });
+      await h.page.waitForTimeout(3000);
+      await h.headsUpright('while the auntie talks');
       await playUntilZone(h, 'station');
       const r = await h.eval(() => ({ sprites: window.__G.save.sprites, followers: window.__G.sprites.list.map((s) => s.id) }));
       h.assert(r.sprites.cloud === 1 && r.sprites.doudou === 1, 'sprites ' + JSON.stringify(r.sprites));
@@ -277,6 +281,67 @@ export const TESTS = [
       h.assert(Math.max(...r.now) < 3.5, 'friends did not catch up: ' + r.now.map((d) => d.toFixed(1)));
       h.assert(r.far < 13, 'a friend fell far behind: ' + r.far.toFixed(1));
       await h.page.screenshot({ path: `${h.OUT}/followers.png` });
+      await h.headsUpright('after following');
+    },
+  },
+
+  // The playtest bug (plan 3): the look-at piled its turn onto the neck every frame, since no clip moves the
+  // neck and the mixer never reset it. Xiao Pei's head spun while Tangtang talked; Tangtang's folded into
+  // her chest and stayed there. Talk from her side, walk away (heads come back), then walk with friends.
+  {
+    name: 'look-no-drift',
+    async run(h) {
+      await h.open('?zone=academy&spawn=SPAWN_gate', base({ zone: 'academy', story: { prologueTrain: true, prologueDone: true, ch1_welcome: true, ch1_lesson: true } }));
+      await h.begin();
+      await h.watchHeads();
+      // Xiao Pei 1.4 m to Tangtang's side, turned 70° away from her, while Tangtang talks
+      await h.eval(() => {
+        const G = window.__G;
+        const t = G.npcs.get('tangtang');
+        const p = t.position.clone();
+        p.x += Math.cos(t.facing) * 1.4;
+        p.z -= Math.sin(t.facing) * 1.4;
+        G.player.teleport(p, Math.atan2(t.position.x - p.x, t.position.z - p.z) + 1.22);
+        G.cam.snapBehind(G.player);
+        G.ui.say('tangtang', 'Hold still, I want to see if the tarts are done.');
+      });
+      await h.worstHeads(); // the teleport frame
+      await h.page.waitForTimeout(15000);
+      const talk = await h.worstHeads();
+      const bad = Object.entries(talk).filter(([, w]) => w.neck > 25 || w.tilt > 50);
+      h.assert(!bad.length, 'heads drifted while Tangtang talked: ' + JSON.stringify(Object.fromEntries(bad)));
+      h.assert(talk.xiaopei?.neck >= 5, 'Xiao Pei never looked at Tangtang: ' + JSON.stringify(talk.xiaopei));
+      await h.page.screenshot({ path: `${h.OUT}/look-tangtang.png` });
+      // end the line and walk off: both necks come back to their pose
+      await h.skipDialogue();
+      await h.eval(() => {
+        const G = window.__G;
+        G.player.teleport(G.zone.marker('SPAWN_gate').position, 0);
+        G.cam.snapBehind(G.player);
+      });
+      await h.page.waitForTimeout(1500);
+      const back = Object.fromEntries((await h.heads()).map((r) => [r.id, r.neck]));
+      h.assert(back.xiaopei <= 1 && back.tangtang <= 1, 'necks did not come back: ' + JSON.stringify(back));
+      // friends at her elbows look at her the whole walk
+      await h.eval(() => {
+        const G = window.__G;
+        for (const [id, slot] of [['tangtang', { x: 1.3, z: 0.5 }], ['weibao', { x: -1.3, z: 0.8 }]]) {
+          const p = G.player.position;
+          G.npcs.get(id).root.position.set(p.x + slot.x, p.y, p.z + 1.5);
+          G.npcs.get(id).follow(slot);
+        }
+      });
+      await h.worstHeads();
+      for (const [yaw, ms] of [[Math.PI, 5000], [Math.PI / 2, 4000]]) {
+        await h.eval((y) => (window.__G.cam.yaw = y), yaw);
+        await h.page.keyboard.down('KeyW');
+        await h.page.waitForTimeout(ms);
+        await h.page.keyboard.up('KeyW');
+      }
+      await h.page.waitForTimeout(3000);
+      const walk = await h.worstHeads();
+      const badWalk = Object.entries(walk).filter(([, w]) => w.neck > 25 || w.tilt > 50);
+      h.assert(!badWalk.length, 'heads drifted while following: ' + JSON.stringify(Object.fromEntries(badWalk)));
     },
   },
 
@@ -292,6 +357,7 @@ export const TESTS = [
       await h.page.keyboard.down('KeyE');
       await h.page.waitForTimeout(1500);
       await h.page.screenshot({ path: `${h.OUT}/market-flock.png` });
+      await h.headsUpright('with the flock');
       await h.until(() => window.__G.save.story.flock1Done, { timeout: 60000 });
       await h.page.keyboard.up('KeyE');
       const s = await h.eval(() => ({ sprites: window.__G.save.sprites.sparrow, state: window.__G.player.state }));
@@ -475,6 +541,7 @@ export const TESTS = [
           await h.until(() => window.__G.frozen, { timeout: 10000 });
           await h.page.waitForTimeout(4500);
           await h.page.screenshot({ path: `${h.OUT}/chapter2-hook.png` });
+          await h.headsUpright('on the walk home');
         }
         await h.until(`window.__G.save.story.${flagName}`, { timeout: 60000, tick: () => h.skipDialogue() });
       }
@@ -483,6 +550,7 @@ export const TESTS = [
       h.assert(s.sparrows === 12, 'sparrow sprites ' + s.sparrows);
       h.assert(s.far, 'the far lanterns are still lit');
       h.assert(/Free roam/.test(s.obj), 'objective after the chapter: ' + s.obj);
+      await h.headsUpright('after Chapter 2');
     },
   },
 
@@ -506,6 +574,7 @@ export const TESTS = [
       await h.until(() => window.__G.interact.current?.label === 'Talk', { timeout: 5000 });
       await h.page.keyboard.press('KeyF');
       await skipUntil(() => window.__G.save.story.prologueDone && !window.__G.frozen);
+      await h.headsUpright('after meeting Tangtang');
       await to(() => {
         const G = window.__G;
         const b = G.zone.box('TRIGGER_academy');
@@ -540,6 +609,7 @@ export const TESTS = [
       await h.until(() => document.querySelector('.cook'), { timeout: 20000, tick: () => h.skipDialogue() });
       await h.until(() => !document.querySelector('.cook'), { timeout: 30000, every: 500, tick: () => h.page.keyboard.press('KeyE') });
       await skipUntil(() => window.__G.save.story.cookDone && !window.__G.frozen);
+      await h.headsUpright('after baking with Tangtang');
       // the lonely pom-pom
       await to(() => [...window.__G.grumblings].find((g) => g.species === 'pompom')?.wrap(3));
       await skipUntil(() => window.__G.save.story.pompomDone && !window.__G.frozen);
@@ -551,6 +621,7 @@ export const TESTS = [
       await skipUntil(() => window.__G.save.story.ch1Done && !window.__G.frozen, 90000);
       const obj = await h.eval(() => window.__G.ui.objective.textContent);
       h.assert(/Wei Bao/.test(obj), 'objective after Chapter 1: ' + obj);
+      await h.headsUpright('after Chapter 1');
     },
   },
 

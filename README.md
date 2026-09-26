@@ -21,8 +21,9 @@ npm run e2e          # end-to-end tests in headless Chrome: the story, touch UI 
 ```
 
 Handy URL parameters while developing: `?zone=train|station|academy|market|test`, `?spawn=SPAWN_gate`,
-`?quality=low|medium|high`, `?debug`, `?viewer` (every character, clip and face), `?zone=test&night`
-(the greybox under lantern light). In dev builds the game object is `window.__G` in the console.
+`?quality=low|medium|high`, `?debug`, `?viewer` (every character, clip and face; add `&look` to have
+them look at the camera), `?zone=test&night` (the greybox under lantern light). In dev builds the game
+object is `window.__G` in the console.
 
 **Playtesting on a phone?** The pause menu has **Copy bug report** (your device, the game state, recent
 errors and the save, ready to paste) and **Stuck? Back to last checkpoint**. To see the console itself:

@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Character viewer (?viewer): every character in a row under the game's lighting, with orbit
-// controls, clip / expression pickers, wireframe and silhouette views and a triangle readout.
+// controls, clip / expression pickers, wireframe and silhouette views, a look-at-the-camera toggle
+// (orbit to check how each head turns) and a triangle readout.
 // Used to review character art (ai/plan_1.md §3.5); lazy-loaded, never on the critical path.
-// URL: ?viewer&char=xiaopei&clip=walk&face=happy&cam=front|34|side|back|face|row&t=0.3&quality=high
+// URL: ?viewer&char=xiaopei&clip=walk&face=happy&cam=front|34|side|back|face|row&t=0.3&look&quality=high
 // Scripted use (Playwright): await window.__viewer.set({ char, clip, face, cam, t }).
 import {
   CircleGeometry, Color, DirectionalLight, HemisphereLight, Mesh, MeshBasicMaterial, PerspectiveCamera, Scene, Vector3, WebGLRenderer,
@@ -61,7 +62,7 @@ export async function runViewer() {
   });
 
   const silhouette = new MeshBasicMaterial({ color: 0x000000 });
-  const state = { char: params.get('char') || names[0], clip: params.get('clip') || 'idle', face: params.get('face') || 'neutral', cam: params.get('cam') || 'row', t: Number(params.get('t') ?? -1), wire: false, sil: false, spin: false };
+  const state = { char: params.get('char') || names[0], clip: params.get('clip') || 'idle', face: params.get('face') || 'neutral', cam: params.get('cam') || 'row', t: Number(params.get('t') ?? -1), wire: false, sil: false, spin: false, look: params.has('look') };
 
   function frame(cam) {
     const h = chars[state.char] || Object.values(chars)[0];
@@ -88,6 +89,7 @@ export async function runViewer() {
 
   function apply() {
     for (const h of Object.values(chars)) {
+      h.unlook(); // a frozen frame is only re-posed where it changes
       if (state.clip === 'bind') {
         h.mixer.stopAllAction();
         h.base = null;
@@ -129,6 +131,7 @@ export async function runViewer() {
     const b = document.createElement('label');
     const c = document.createElement('input');
     c.type = 'checkbox';
+    c.checked = !!state[key];
     c.onchange = () => ((state[key] = c.checked), apply());
     b.append(c, label);
     panel.append(b);
@@ -140,6 +143,7 @@ export async function runViewer() {
   toggle('wire', 'wire');
   toggle('sil', 'silhouette');
   toggle('spin', 'spin');
+  toggle('look', 'look');
   const stats = document.createElement('span');
   panel.append(stats);
   document.body.append(panel);
@@ -164,7 +168,10 @@ export async function runViewer() {
     shared.uTime.value = time;
     const frozen = state.t >= 0 || state.clip === 'bind';
     for (const h of Object.values(chars)) {
-      if (!frozen) h.update(dt);
+      // a frozen frame stays put while the head still turns to the camera
+      h.lookTarget = state.look ? camera.position : null;
+      h.mixer.timeScale = frozen ? 0 : 1;
+      if (!frozen || state.look) h.update(dt);
       else h.face?.update(0);
       if (state.spin) h.root.rotation.y += dt * 0.6;
     }
