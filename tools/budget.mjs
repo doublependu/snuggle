@@ -30,6 +30,8 @@ const MODEL_BUDGET = {
   creatures: [110, 9 * 800],
   market: [200, 60000],
   market_kit: [150, 30000], // planned 130 KB; 145 KB with every stall's lanterns (ai/next_2.md)
+  quiet: [200, 60000], // Chapter 3 (ai/plan_4.md §3.4)
+  quiet_kit: [150, 30000],
 };
 
 if (!existsSync(DIST)) {

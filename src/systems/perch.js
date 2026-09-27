@@ -202,7 +202,7 @@ export class Perch {
     const input = G.input;
     // standing up: Interact / Jump, or pushing the stick for a moment
     this.standT = input.move.lengthSq() > 0.5 ? this.standT + dt : 0;
-    G.ui.prompt('Stand up', { keyboard: 'F', gamepad: 'X', touch: '' }[input.device] || 'F');
+    G.ui.prompt('Stand up', input.device === 'touch' ? '' : input.label('interact'));
     G.touch?.setAct('Stand up');
     if (input.consume('interact') || input.consume('jump') || this.standT > 0.45 || (f.done && !f.sparrows.some((g) => g.state === 'cocoon' || g.state === 'sleep'))) {
       if (!G.frozen) return this.stand();

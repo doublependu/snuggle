@@ -6,7 +6,9 @@ import {
 import { G } from '../game.js';
 import { SPECIES, BOOK_ORDER } from '../content/species.js';
 import { makeCreature } from '../actors/creatures.js';
-import { writeSave, clearSave } from '../core/save.js';
+import { writeSave, resetSave, reloadFromSave } from '../core/save.js';
+import { KEYS, PAD, keyLabel, PAD_NAMES } from '../core/input.js';
+import { MEMORY_BOOK } from '../content/memories.js';
 
 const REPO = 'https://github.com/doublependu/snuggle';
 
@@ -21,9 +23,12 @@ export class Menus {
         <button class="btn alt" data-a="controls">Controls</button>
         <button class="btn alt" data-a="checkpoint">Stuck? Back to last checkpoint</button>
         <button class="btn alt" data-a="report">Copy bug report</button>
-        <button class="btn alt" data-a="restart">Start over</button>
+        <button class="btn alt" data-a="restart">Start again from the train</button>
       </div>
       <p class="small">Snuggle Sorcery is free software under the <a href="${REPO}/blob/main/LICENSE" target="_blank" rel="noopener">GNU GPL v3</a>. <a href="${REPO}" target="_blank" rel="noopener">Fork it on GitHub</a> and make your own cozy game!</p></div>`);
+    this.confirmRestart = this.menu('restart', `<div class="panel"><h2>Start again?</h2>
+      <p>Start the story again from the train? Your Sprite Book, Cozy Energy and story progress will be cleared. Your settings stay.</p>
+      <div class="col"><button class="btn alt" data-a="back">Cancel</button><button class="btn" data-a="restart-yes">Start again</button></div></div>`);
     this.report = this.menu('report', `<div class="panel"><h2>Bug report</h2><p class="small" style="margin:-6px 0 0">Paste this into your bug report or chat. It has your device, the game state and any errors.</p>
       <textarea class="report" readonly></textarea><p class="small copied" style="min-height:1.2em"></p>
       <div class="col"><button class="btn" data-a="copy">Copy again</button><button class="btn alt" data-a="back">Back</button></div></div>`);
@@ -35,21 +40,12 @@ export class Menus {
         <label for="s-i">Invert camera Y</label><input id="s-i" type="checkbox">
         <label for="s-r">Reduce motion</label><input id="s-r" type="checkbox">
         <label for="s-h">Hum: tap to toggle</label><input id="s-h" type="checkbox">
+        <label for="s-t">Text size</label><select id="s-t"><option value="1">Normal</option><option value="1.15">Large</option><option value="1.3">Larger</option><option value="1.5">Largest</option></select>
       </div><div class="col" style="margin-top:16px"><button class="btn" data-a="back">Back</button></div></div>`);
-    this.controls = this.menu('controls', `<div class="panel"><h2>Controls</h2><table class="controls"><tbody>
-        <tr><td>Move</td><td>WASD / arrows · left stick · touch stick</td></tr>
-        <tr><td>Camera</td><td>Mouse (click to capture) · right stick · drag right side</td></tr>
-        <tr><td>Hum (soothe)</td><td>Hold E or left mouse · RT · big Hum button</td></tr>
-        <tr><td>On-beat bonus</td><td>Re-press Hum when the ring pulses</td></tr>
-        <tr><td>Notice / talk</td><td>F or Enter · X · context button</td></tr>
-        <tr><td>Jump</td><td>Space · A · Jump button</td></tr>
-        <tr><td>Sprint</td><td>Shift · LB · push the stick all the way</td></tr>
-        <tr><td>Friend assist</td><td>Q · Y · Assist button</td></tr>
-        <tr><td>Sprite Book</td><td>Tab or B · Back/Select · 📖</td></tr>
-        <tr><td>Pause</td><td>Esc or P · Start · Ⅱ</td></tr>
-      </tbody></table><div class="col" style="margin-top:14px"><button class="btn" data-a="back">Back</button></div></div>`);
+    this.controls = this.menu('controls', `<div class="panel"><h2>Controls</h2><table class="controls"><tbody></tbody></table>
+      <div class="col" style="margin-top:14px"><button class="btn alt" data-a="remap">Change controls</button><button class="btn" data-a="back">Back</button></div></div>`);
     this.book = this.menu('book', `<div class="panel"><h2>Sprite Book</h2><p class="small" style="margin:-8px 0 12px">Every soothed Grumbling becomes a Charm Sprite. Equip one as your helper.</p>
-      <div class="grid"></div><div class="col" style="margin-top:14px"><button class="btn" data-a="close">Close</button></div></div>`);
+      <div class="grid"></div><div class="mems"></div><div class="col" style="margin-top:14px"><button class="btn" data-a="close">Close</button></div></div>`);
     this.book.classList.add('book');
     this.stack = [];
     this.thumbs = {};
@@ -131,7 +127,12 @@ export class Menus {
         this.show(this.settings);
         break;
       case 'controls':
+        this.fillControls();
         this.show(this.controls);
+        break;
+      case 'remap':
+        // the rebinding panel is only loaded when someone wants it
+        import('./remap.js').then((m) => m.openRemap(this, { G, KEYS, PAD, keyLabel, PAD_NAMES, writeSave })).catch((e) => console.error(e));
         break;
       case 'back':
         this.back();
@@ -139,7 +140,7 @@ export class Menus {
       case 'checkpoint':
         // the save always holds the last checkpoint (zone, spawn and story flags); reloading replays from there
         writeSave(G.save);
-        location.reload();
+        reloadFromSave();
         break;
       case 'report':
         this.show(this.report);
@@ -149,10 +150,12 @@ export class Menus {
         this.copyReport();
         break;
       case 'restart':
-        if (confirm('Start the story over from the train? Your Sprite Book will be cleared.')) {
-          clearSave();
-          location.reload();
-        }
+        this.show(this.confirmRestart);
+        break;
+      case 'restart-yes':
+        // a fresh save (settings kept) and a lock, so the unload autosave can't write the old progress back
+        G.save = resetSave(G.save.settings);
+        reloadFromSave();
         break;
     }
   }
@@ -189,6 +192,26 @@ export class Menus {
     }
   }
 
+  // The controls table, with the keys and buttons as they are bound now.
+  fillControls() {
+    const i = G.input;
+    const k = (a) => i.label(a, 'keyboard'),
+      p = (a) => i.label(a, 'gamepad');
+    const rows = [
+      ['Move', `${k('move')} / arrows · left stick · touch stick`],
+      ['Camera', 'Mouse (click to capture) · right stick · drag right side'],
+      ['Hum (soothe)', `Hold ${k('hum')} or left mouse · ${p('hum')} · big Hum button`],
+      ['On-beat bonus', 'Re-press Hum when the ring pulses'],
+      ['Notice / talk', `${k('interact')} or Enter · ${p('interact')} · context button`],
+      ['Jump', `${k('jump')} · ${p('jump')} · Jump button`],
+      ['Sprint', `${k('sprint')} · ${p('sprint')} · push the stick all the way`],
+      ['Friend assist', `${k('assist')} · ${p('assist')} · Assist button`],
+      ['Sprite Book', `${k('book')} · ${p('book')} · 📖`],
+      ['Pause', `Esc or ${k('pause')} · ${p('pause')} · Ⅱ`],
+    ];
+    this.controls.querySelector('tbody').innerHTML = rows.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('');
+  }
+
   // ---------------------------------------------------------------- settings
   bindSettings() {
     const $ = (id) => this.settings.querySelector(id);
@@ -222,6 +245,10 @@ export class Menus {
       G.input.humToggle = e.target.checked;
       G.input.humLatched = false;
     });
+    $('#s-t').addEventListener('change', (e) => {
+      s().textSize = +e.target.value;
+      applyTextSize(s().textSize);
+    });
   }
   syncSettings() {
     const s = G.save.settings;
@@ -233,6 +260,7 @@ export class Menus {
     $('#s-i').checked = s.invertY;
     $('#s-r').checked = s.reducedMotion;
     $('#s-h').checked = s.humToggle;
+    $('#s-t').value = String(s.textSize || 1);
   }
 
   // ---------------------------------------------------------------- sprite book
@@ -263,6 +291,11 @@ export class Menus {
       }
       grid.append(e);
     }
+    // Chapter 3: the Quiet District's memories, once the friends have been there
+    const mems = this.book.querySelector('.mems');
+    mems.innerHTML = save.story.ch3_arrive
+      ? `<h3>Memories of the Quiet District</h3><div class="memrow">${MEMORY_BOOK.map(([id, icon, title]) => (save.story['mem_' + id] ? `<span class="mem">${icon}<small>${title}</small></span>` : '<span class="mem unknown">?<small>Not yet remembered</small></span>')).join('')}</div>`
+      : '';
     if (this.stack.at(-1) !== this.book) this.show(this.book);
   }
 
@@ -282,7 +315,7 @@ export class Menus {
       c.rotation.y = -0.35;
       scene.add(c);
       const cam = new PerspectiveCamera(30, 1, 0.05, 20);
-      const h = { grey: 0.55, cloud: 0.5, homework: 0.5 }[id] || 0.35;
+      const h = { grey: 0.55, cloud: 0.52, homework: 0.58, sock: 0.48, pompom: 0.5 }[id] || 0.35;
       cam.position.set(0.35, h * 0.9, h * 3.2);
       cam.lookAt(0, h * 0.5, 0);
       const rt = new WebGLRenderTarget(size, size);
@@ -311,6 +344,11 @@ export class Menus {
     }
     return this.thumbs[id];
   }
+}
+
+// Text size (Settings): scales the reading text (dialogue, choices, prompts, toasts, menus); see ui.css --ts.
+export function applyTextSize(k = 1) {
+  document.documentElement.style.setProperty('--ts', String(k || 1));
 }
 
 export function bugReport() {

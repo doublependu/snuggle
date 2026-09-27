@@ -3,7 +3,7 @@
 import { PerspectiveCamera, Scene, WebGLRenderer } from 'three';
 import css from './ui/ui.css?inline';
 import { G, logError } from './game.js';
-import { loadSave, writeSave } from './core/save.js';
+import { loadSave, writeSave, reloadFromSave } from './core/save.js';
 import { Input } from './core/input.js';
 import { Audio } from './core/audio.js';
 import { Quality, probeTier } from './core/quality.js';
@@ -11,7 +11,7 @@ import { trackProgress, prefetch } from './core/assets.js';
 import { shared } from './render/materials.js';
 import { Glows, Sparkles } from './render/vfx.js';
 import { UI } from './ui/ui.js';
-import { Menus } from './ui/menus.js';
+import { Menus, applyTextSize } from './ui/menus.js';
 import { createTouch } from './ui/touch.js';
 import { lockZoom } from './ui/zoomlock.js';
 import { Humanoid } from './actors/humanoid.js';
@@ -31,6 +31,7 @@ const ZONES = {
   station: () => import('./world/zones/station.js'),
   academy: () => import('./world/zones/academy.js'),
   market: () => import('./world/zones/market.js'),
+  quiet: () => import('./world/zones/quiet.js'),
   test: () => import('./world/zones/test.js'),
 };
 
@@ -66,6 +67,8 @@ async function boot() {
   G.scene.add(G.camera);
   G.input = new Input(canvas);
   Object.assign(G.input, { sensitivity: save.settings.sensitivity, invertY: save.settings.invertY, humToggle: save.settings.humToggle });
+  G.input.setBindings(save.settings.keys, save.settings.pad);
+  applyTextSize(save.settings.textSize);
   G.audio = new Audio();
   G.audio.volume = save.settings.volume;
   G.audio.musicVolume = save.settings.music;
@@ -124,6 +127,12 @@ async function boot() {
     G.paused = false;
     if (G.input.device === 'touch') document.documentElement.requestFullscreen?.().catch(() => {});
     G.zone.start?.();
+    // production builds: cache the game for the next visit, a few seconds into play (see vite.config.js)
+    if (!import.meta.env.DEV && 'serviceWorker' in navigator && !params.has('nosw')) setTimeout(() => navigator.serviceWorker.register('./sw.js').catch(() => {}), 5000);
+    // the composed music loads after Begin (it is code, not audio files: a few KB)
+    import('./core/music.js')
+      .then(({ Music }) => G.audio.ctx && G.audio.attachScore(new Music(G.audio)))
+      .catch((e) => console.error(e));
   };
   const onKey = (e) => {
     if (e.code !== 'Tab') start();
@@ -212,6 +221,7 @@ function frame(now) {
     G.fx.sparkles.update(dt);
     G.ui.update(dt);
   }
+  G.audio.duck = G.ui.dialogueOpen ? 0.55 : 1;
   G.audio.update();
   G.renderer.render(G.scene, G.camera);
   input.endFrame();
@@ -246,7 +256,7 @@ function watchContext(canvas) {
     overlay.hidden = false;
     if (!G.paused && !G.menus.open) G.menus.togglePause();
     clearTimeout(timer);
-    timer = setTimeout(() => location.reload(), 5000);
+    timer = setTimeout(reloadFromSave, 5000);
   });
   canvas.addEventListener('webglcontextrestored', () => {
     clearTimeout(timer);

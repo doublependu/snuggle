@@ -4,6 +4,10 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 
 const BASE = './assets/models/';
+// Content revisions from the preload script in index.html (production builds only; see vite.config.js).
+const REV = window.__modelRev || {};
+// Every model fetch uses this URL, so it matches the <link rel=preload> and nothing downloads twice.
+export const modelURL = (name) => BASE + name + '.glb' + (REV[name] ? '?v=' + REV[name] : '');
 const loader = new GLTFLoader();
 loader.setMeshoptDecoder(MeshoptDecoder);
 
@@ -31,7 +35,7 @@ export function loadGLB(name) {
   if (p) return p;
   progress.set(name, [0, 0]);
   p = loader
-    .loadAsync(BASE + name + '.glb', (e) => {
+    .loadAsync(modelURL(name), (e) => {
       progress.set(name, [e.loaded, e.total || e.loaded]);
       report();
     })

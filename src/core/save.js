@@ -21,7 +21,8 @@ export function defaultSave() {
     tarts: 0,
     chestnuts: 0,
     candies: {}, // collectible id -> true
-    settings: { volume: 0.8, music: 0.6, sensitivity: 1, invertY: false, reducedMotion: false, humToggle: false, quality: 'auto' },
+    // keys / pad: only the actions the player rebound (core/input.js); textSize scales the reading text
+    settings: { volume: 0.8, music: 0.6, sensitivity: 1, invertY: false, reducedMotion: false, humToggle: false, quality: 'auto', textSize: 1, keys: {}, pad: {} },
   };
 }
 
@@ -54,7 +55,12 @@ export function loadSave() {
   }
 }
 
+// Set by resetSave(): nothing may write until the page is gone. The unload autosave (main.js) would
+// otherwise put the old progress straight back while "Start again" reloads.
+let locked = false;
+
 export function writeSave(data) {
+  if (locked) return false;
   try {
     localStorage.setItem(KEY, JSON.stringify(data));
     return true;
@@ -63,10 +69,20 @@ export function writeSave(data) {
   }
 }
 
-export function clearSave() {
-  try {
-    localStorage.removeItem(KEY);
-  } catch {
-    /* storage unavailable */
-  }
+// Reload and play on from the save. ?zone= and ?spawn= would override it, so they are dropped
+// (other parameters such as ?debug or ?quality stay).
+export function reloadFromSave() {
+  const u = new URL(location.href);
+  u.searchParams.delete('zone');
+  u.searchParams.delete('spawn');
+  location.replace(u.href);
+}
+
+// A fresh story that keeps the player's settings. Saving stays locked until the page reloads.
+export function resetSave(settings) {
+  const fresh = defaultSave();
+  if (settings) fresh.settings = { ...fresh.settings, ...settings };
+  writeSave(fresh);
+  locked = true;
+  return fresh;
 }

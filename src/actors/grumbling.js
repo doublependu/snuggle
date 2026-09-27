@@ -5,7 +5,7 @@
 import { Mesh, MeshBasicMaterial, RingGeometry, SphereGeometry, Vector3 } from 'three';
 import { G } from '../game.js';
 import { SPECIES } from '../content/species.js';
-import { makeCreature } from './creatures.js';
+import { makeCreature, animateParts } from './creatures.js';
 import { Rain } from '../render/vfx.js';
 import { materialFor } from '../render/materials.js';
 
@@ -36,7 +36,7 @@ export class Grumbling {
       label: 'Notice',
       radius: 3.2,
       position: this.obj.position,
-      enabled: () => this.enabled && !this.noticed && this.state !== 'gone',
+      enabled: () => this.enabled && !this.noticed && this.state !== 'gone' && !this.behaviour.noNotice?.(),
       action: () => this.notice(),
     };
     G.interactables.add(this.interactable);
@@ -70,9 +70,10 @@ export class Grumbling {
     G.events.emit('noticed', this);
   }
 
-  // Lullaby Thread wraps; returns true when fully soothed.
+  // Lullaby Thread wraps; returns true when fully soothed. A behaviour may refuse it for now (the grey
+  // Grumblings of Chapter 3 won't be hugged until someone has kept them company).
   wrap(amount) {
-    if (!this.active) return false;
+    if (!this.active || this.behaviour.refuses?.()) return false;
     if (!this.noticed) this.notice();
     this.progress = Math.min(1, this.progress + amount / this.size);
     this.calmedT = 0.4;
@@ -133,6 +134,7 @@ export class Grumbling {
     const bob = Math.sin(this.t * (calm ? 2 : 3.2));
     const s = this.size * (1 - this.progress * 0.25);
     o.scale.set(s * (1 + bob * 0.04) + shake, s * (1 - bob * 0.05), s * (1 + bob * 0.04));
+    animateParts(o, this.t, calm ? 1 : this.progress);
     if (dist < 8 && !this.behaviour.ownsFacing) {
       const want = Math.atan2(p.position.x - o.position.x, p.position.z - o.position.z);
       o.rotation.y += (Math.atan2(Math.sin(want - o.rotation.y), Math.cos(want - o.rotation.y))) * Math.min(1, dt * 4);
@@ -224,6 +226,12 @@ function knockOver(from, color) {
     }
   };
   G.updaters.add(fn);
+}
+
+// Zones register the behaviours only they use (the Quiet District's grey Grumblings), so the shared bundle
+// stays small: registerBehaviour('heavy', (g) => ({ update, idle, rate, refuses, ... })).
+export function registerBehaviour(name, fn) {
+  BEHAVIOURS[name] = fn;
 }
 
 const BEHAVIOURS = {

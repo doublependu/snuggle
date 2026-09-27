@@ -4,6 +4,7 @@
 // get stuck. Attached to an NPC with npc.follow(slot); scripts can still take over with npc.walkTo().
 import { Line3, MathUtils, Vector3 } from 'three';
 import { G } from '../game.js';
+import { gaitFor } from './player.js';
 
 const _t = new Vector3();
 const _d = new Vector3();
@@ -64,8 +65,10 @@ export class Follower {
     }
     const s = this.speed;
     if (s < 0.2) n.h.play(n.base === 'sit' ? 'sit' : 'idle', 0.3);
-    else if (s < 2.5) n.h.play('walk', 0.25, MathUtils.clamp(s / 0.95, 0.7, 2.4));
-    else n.h.play('run', 0.25, MathUtils.clamp(s / 2.2, 1, 2));
+    else {
+      const [clip, ts] = gaitFor(n.h, s, n.h.base === n.h.actions.run);
+      n.h.play(clip, 0.25, ts);
+    }
   }
 
   // Keep the feet on the ground and out of walls (a short capsule against the zone's collision BVH).

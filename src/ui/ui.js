@@ -196,11 +196,13 @@ export class UI {
   }
 
   // ---------------------------------------------------------------- dialogue
-  say(who, text, { choices = null, auto = 0, face = null } = {}) {
+  // memory: a sepia line from fifty years ago (Chapter 3's Charm Sprite memories); who may be a plain name
+  say(who, text, { choices = null, auto = 0, face = null, memory = false } = {}) {
     const [name, color] = SPEAKERS[who] || [who || '', '#2f6f73'];
     this.dialogueOpen = true;
     G.frozen = true;
     this.dlg.classList.add('show');
+    this.dlg.classList.toggle('memory', !!memory);
     this.dlgWho.textContent = name;
     this.dlgWho.style.display = name ? '' : 'none';
     this.dlgWho.style.background = color;

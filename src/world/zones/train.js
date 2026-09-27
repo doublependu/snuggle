@@ -29,11 +29,7 @@ export async function create() {
   z.cloud = z.grumblingAt('GRUMB_cloud', { enabled: false });
   z.collision.build();
   z.killY = -4;
-  G.audio.bed('rumble', 1);
-  G.audio.bed('rain', 0.7);
-  G.audio.bed('clack', 1);
-  G.audio.bed('pad', 1);
-  z.onExit = () => ['rumble', 'rain', 'clack'].forEach((b) => G.audio.bed(b, 0));
+  G.audio.mix('train');
   z.start = () => prologueTrain(z);
   return z;
 }

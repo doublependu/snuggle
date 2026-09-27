@@ -320,7 +320,29 @@ def stage(x, name='stage', w=3.0, d=2.2):
     return piece(name, V, K, x)
 
 
-PIECES = [mstall_lantern, mstall_toy, mstall_tea, mstall_sweets, mstall_fish, mdumpling, mcart, lantern_post, lantern_string,
+def erhu(x, name='erhu'):
+    """The street musician's erhu (not placed: the runtime rests it on her lap). Origin at the left-hand grip
+    on the neck; the hexagonal sound box sits below, the pegs above."""
+    V = [tube('box', (0, -0.05, -0.42), (0, 0.06, -0.42), 0.05, 0.05, 'wood', C('#5a3322'), segs=6, rings=1),
+         disc('skin', (0, -0.052, -0.42), 0.046, 'paper', C('#e8dcc0'), (0, -1, 0), 6, (1, 1), None, 0.003),
+         tube('neck', (0, 0, -0.38), (0, 0, 0.2), 0.011, 0.009, 'wood', C('#3a2418'), segs=5, rings=1),
+         cone('scroll', (0, 0, 0.2), (0, -0.02, 0.25), 0.012, 0.004, 'wood', C('#3a2418'), segs=5)]
+    for i, z in enumerate((0.1, 0.15)):
+        V.append(tube('peg%d' % i, (-0.035, 0, z), (0.035, 0, z), 0.007, 0.007, 'wood', C('#2a1a12'), segs=4, rings=1))
+    for sx in (-0.006, 0.006):
+        V.append(tube('str%d' % (sx > 0), (sx, -0.014, 0.12), (sx, -0.05, -0.4), 0.0015, 0.0015, 'plain', C('#e8e4d8'), segs=3, rings=1))
+    return piece(name, V, [], x, ao=False)
+
+
+def erhu_bow(x, name='erhu_bow'):
+    """The erhu's bow: a thin bamboo stick with its horsehair, along -Y (the runtime points it with lookAt).
+    Origin at the frog, where her right hand holds it."""
+    V = [tube('stick', (0, 0, 0), (0, -0.46, 0.012), 0.009, 0.006, 'wood', C('#b8904e'), segs=4, rings=1),
+         tube('hair', (0, -0.02, -0.016), (0, -0.44, -0.006), 0.006, 0.006, 'plain', C('#efe8da'), segs=3, rings=1)]
+    return piece(name, V, [], x, ao=False)
+
+
+PIECES = [erhu, erhu_bow, mstall_lantern, mstall_toy, mstall_tea, mstall_sweets, mstall_fish, mdumpling, mcart, lantern_post, lantern_string,
           stool, bench_m, crate, bollard, boat, lambda x: facade(x, 'facade_a'),
           lambda x: facade(x, 'facade_b', col='#e6d6bf', trim='#55291e', shut='#6b4430'), stage]
 

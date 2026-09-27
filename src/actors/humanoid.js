@@ -24,6 +24,7 @@ const UPPER = new Set(['spine', 'chest', 'neck', 'head', 'hood', 'shoulder_L', '
 const LOOK = [['neck', 0.35], ['head', 0.65]]; // bones the look-at turns, and their share of the turn
 const ONCE = new Set(['land', 'throw']);
 const sitCache = new Map();
+const gaitCache = new Map();
 let library = null;
 
 async function animLibrary() {
@@ -80,7 +81,9 @@ function retarget(lib, charRest) {
 }
 
 export class Humanoid {
-  static async load(name) {
+  // fresh: always a clone, leaving the loaded scene untouched (a caller that swaps the materials, like the
+  // golden figures in Chapter 3's memories, must not change what later characters are cloned from)
+  static async load(name, { fresh = false } = {}) {
     const [gltf, lib] = await Promise.all([loadGLB(name), animLibrary()]);
     let entry = cache.get(name);
     if (!entry) {
@@ -91,8 +94,8 @@ export class Humanoid {
       entry = { clips: retarget(lib, rest), used: false };
       cache.set(name, entry);
     }
-    const root = entry.used ? skeletonClone(gltf.scene) : gltf.scene;
-    entry.used = true;
+    const root = entry.used || fresh ? skeletonClone(gltf.scene) : gltf.scene;
+    if (!fresh) entry.used = true;
     return new Humanoid(name, root, entry.clips);
   }
 
@@ -209,6 +212,73 @@ export class Humanoid {
     this.root.updateMatrixWorld(true);
     const out = { hipsY: this.clipHipsY('sit'), knee };
     sitCache.set(this.name, out);
+    return out;
+  }
+
+  // A walk or run cycle measured once per character (like sitPose): the speed the clip was made for (how
+  // fast a planted foot moves back under the body, so matching it means no sliding feet), and the phases
+  // (0..1) at which each foot touches down, for footsteps.
+  gait(name) {
+    const key = this.name + ':' + name;
+    const cached = gaitCache.get(key);
+    if (cached) return cached;
+    const clip = this.clips[name];
+    if (!clip) return null;
+    const saved = [];
+    this.root.traverse((o) => o.isBone && saved.push([o, o.position.clone(), o.quaternion.clone()]));
+    const pos = this.root.position.clone(),
+      rot = this.root.rotation.clone(),
+      scl = this.root.scale.clone();
+    this.root.position.set(0, 0, 0);
+    this.root.rotation.set(0, 0, 0);
+    this.root.scale.set(1, 1, 1);
+    const m = new AnimationMixer(this.root);
+    const act = m.clipAction(clip).play();
+    const N = 240,
+      T = clip.duration;
+    const feet = ['foot_L', 'foot_R'].map((b) => ({ bone: this.bones[b], y: [], z: [] }));
+    for (let i = 0; i < N; i++) {
+      act.time = (i / N) * T;
+      m.update(0);
+      this.root.updateMatrixWorld(true);
+      for (const f of feet) {
+        if (!f.bone) continue;
+        f.bone.getWorldPosition(_p);
+        f.y.push(_p.y);
+        f.z.push(_p.z);
+      }
+    }
+    m.stopAllAction();
+    m.uncacheRoot(this.root);
+    for (const [o, p, q] of saved) {
+      o.position.copy(p);
+      o.quaternion.copy(q);
+    }
+    this.root.position.copy(pos);
+    this.root.rotation.copy(rot);
+    this.root.scale.copy(scl);
+    this.root.updateMatrixWorld(true);
+    // a foot is planted while it is within a few mm of its lowest; the speed is how fast, on average, it
+    // moves back under the body meanwhile (the body has to move that fast for it to look planted)
+    let v = 0,
+      nv = 0;
+    const plants = [];
+    for (const f of feet) {
+      if (!f.y.length) continue;
+      const low = Math.min(...f.y);
+      const down = f.y.map((y) => y < low + 0.004);
+      for (let i = 0; i < N; i++) {
+        const a = (i + N - 1) % N,
+          b = (i + 1) % N;
+        if (down[i]) {
+          v += -(f.z[b] - f.z[a]) / ((2 * T) / N);
+          nv++;
+        }
+        if (down[b] && !down[i]) plants.push(b / N);
+      }
+    }
+    const out = { speed: nv ? Math.max(0.2, v / nv) : name === 'run' ? 2.2 : 0.95, plants, duration: T };
+    gaitCache.set(key, out);
     return out;
   }
 

@@ -5,6 +5,7 @@
 // players start wherever their save is, so every zone is measured with a save placed there.
 // Usage: npm run build && npm run perf
 //   CHROME=/path/to/chrome  RUNS=5  ZONES=train,academy  node tools/perf/load-test.mjs
+//   URL=https://snuggle-sorcery.<you>.workers.dev npm run perf   (a deployed site: real CDN, real headers)
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { gzipSync } from 'node:zlib';
@@ -44,18 +45,21 @@ const server = createServer(async (req, res) => {
 });
 
 const executablePath = process.env.CHROME || ['/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find(existsSync);
-if (!existsSync(join(DIST, 'index.html'))) {
+const REMOTE = process.env.URL ? process.env.URL.replace(/\/?$/, '/') : null;
+if (!REMOTE && !existsSync(join(DIST, 'index.html'))) {
   console.error('dist/ missing: run `npm run build` first');
   process.exit(1);
 }
-await new Promise((r) => server.listen(0, r));
-const base = `http://localhost:${server.address().port}/`;
-const ZONES = (process.env.ZONES || 'train,station,academy,market').split(',');
+if (!REMOTE) await new Promise((r) => server.listen(0, r));
+const base = REMOTE || `http://localhost:${server.address().port}/`;
+if (REMOTE) console.log('Measuring ' + REMOTE + ' (network throttling is added on top of the real connection)');
+const ZONES = (process.env.ZONES || 'train,station,academy,market,quiet').split(',');
 // a save in each zone, as a returning player would have (story flags only matter after Begin)
 const SAVES = {
   station: { prologueTrain: true },
   academy: { prologueTrain: true, prologueDone: true },
   market: { prologueTrain: true, prologueDone: true, ch1Done: true, ch2_start: true },
+  quiet: { prologueTrain: true, prologueDone: true, ch1Done: true, ch2_start: true, ch2Done: true, ch3_start: true, ch3_greys: true, ch3_arrive: true },
 };
 const browser = await chromium.launch({
   executablePath,
@@ -97,6 +101,40 @@ for (const zone of ZONES) for (const prof of PROFILES) {
   console.log(`${ok ? '✓' : '✗'} ${zone.padEnd(8)} ${prof.name}: median TTI ${(med / 1000).toFixed(2)} s (runs: ${times.map((t) => (t / 1000).toFixed(2)).join(', ')}) target ${(prof.goal / 1000).toFixed(1)} s`);
   console.log(`    GPU: ${gpu}`);
 }
+// A returning player with the service worker (production builds cache the game after the first visit):
+// visit once and play until the cache is full, then measure the next visit on the must-pass profile.
+if (existsSync(join(DIST, 'sw.js')) && !process.env.NO_REPEAT) {
+  const prof = PROFILES[0];
+  const times = [];
+  for (let i = 0; i < RUNS; i++) {
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+    const page = await ctx.newPage();
+    await page.goto(base + '?zone=train', { waitUntil: 'load' });
+    await page.waitForFunction(() => !document.getElementById('begin').disabled, null, { timeout: 60000 });
+    await page.click('#begin', { force: true });
+    let cached = 0;
+    for (let k = 0; k < 120 && !cached; k++) {
+      await page.waitForTimeout(500);
+      cached = await page.evaluate(async () => {
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (reg?.active?.state !== 'activated') return 0;
+        const keys = await caches.keys();
+        return keys.length ? (await (await caches.open(keys[0])).keys()).length : 0;
+      });
+    }
+    const cdp = await ctx.newCDPSession(page);
+    await cdp.send('Network.enable');
+    await cdp.send('Network.emulateNetworkConditions', { offline: false, latency: prof.rtt, downloadThroughput: prof.down / 8, uploadThroughput: prof.up / 8 });
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: prof.cpu });
+    await page.goto(base + '?zone=train', { waitUntil: 'commit' });
+    times.push(await page.waitForFunction(() => window.__snuggle?.readyAt, null, { timeout: 60000, polling: 50 }).then((h) => h.jsonValue()));
+    await ctx.close();
+  }
+  times.sort((a, b) => a - b);
+  const med = times[Math.floor(times.length / 2)];
+  console.log(`${med <= prof.goal ? '✓' : '✗'} repeat visit (service worker) ${prof.name}: median TTI ${(med / 1000).toFixed(2)} s (runs: ${times.map((t) => (t / 1000).toFixed(2)).join(', ')}) target ${(prof.goal / 1000).toFixed(1)} s`);
+  if (med > prof.goal) failed = true;
+}
 await browser.close();
-server.close();
+if (!REMOTE) server.close();
 process.exit(failed ? 1 : 0);

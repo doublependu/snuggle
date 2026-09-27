@@ -1,21 +1,29 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Greybox test zone (?zone=test): ramps, steps and boxes for tuning movement, plus one of each Grumbling.
+// ?zone=test&night: the greybox under lantern light. ?zone=test&quiet: the Quiet District's grey-out, height
+// fog and fog wall, grey Grumblings to keep company, and a Charm Sprite memory (Chapter 3).
 import { BoxGeometry, Mesh, PlaneGeometry, Vector3 } from 'three';
 import { G } from '../../game.js';
 import { Zone } from '../zone.js';
-import { materialFor } from '../../render/materials.js';
+import { materialFor, setGreyOut } from '../../render/materials.js';
 import { Grumbling } from '../../actors/grumbling.js';
 import { NPC } from '../../actors/npc.js';
+import { CreatureBatch } from '../../actors/creatures.js';
+import { Greys } from '../../systems/greys.js';
+import { Memories } from '../../systems/memories.js';
 
 export async function create() {
   const z = new Zone('test');
-  const night = new URLSearchParams(location.search).has('night');
-  z.setupEnvironment(night ? NIGHT : {});
-  const ground = new Mesh(new PlaneGeometry(80, 80).rotateX(-Math.PI / 2), materialFor('cloth', { color: 0x9dbb7a, vertexColors: false }));
+  const qs = new URLSearchParams(location.search);
+  const night = qs.has('night');
+  const quiet = qs.has('quiet');
+  const fade = quiet ? { fade: 1 } : {};
+  z.setupEnvironment(night ? NIGHT : quiet ? QUIET_TEST : {});
+  const ground = new Mesh(new PlaneGeometry(80, 80).rotateX(-Math.PI / 2), materialFor('cloth', { color: 0x9dbb7a, vertexColors: false, ...fade }));
   ground.receiveShadow = true;
   z.group.add(ground);
   const box = (x, y, z_, w, h, d, color = 0xd9c7a8, ry = 0) => {
-    const m = new Mesh(new BoxGeometry(w, h, d), materialFor('plain', { color, vertexColors: false }));
+    const m = new Mesh(new BoxGeometry(w, h, d), materialFor('plain', { color, vertexColors: false, ...fade }));
     m.position.set(x, y + h / 2, z_);
     m.rotation.y = ry;
     m.castShadow = m.receiveShadow = true;
@@ -56,7 +64,8 @@ export async function create() {
     z.lamps({ minX: -40, minZ: -40, maxX: 40, maxZ: 40 }, lamps);
     for (const l of lamps) G.fx.glows.add(l.position, l.color, 1.2);
   }
-  z.start = () => G.ui.setObjective(night ? 'Greybox test zone (night)' : 'Greybox test zone');
+  if (quiet) await quietTest(z);
+  z.start = () => G.ui.setObjective(night ? 'Greybox test zone (night)' : quiet ? 'Greybox test zone (the Quiet District)' : 'Greybox test zone');
   G.save.tarts = Math.max(G.save.tarts, 3); // dev zone: tarts to test assists
   return z;
 }
@@ -67,3 +76,38 @@ export const NIGHT = {
   hemiSky: '#5a6aa8', hemiGround: '#2c2436', hemi: 1.0, sunColor: '#aebcff', sunI: 0.45, sun: new Vector3(-0.3, 0.55, -0.6),
   skySun: '#dfe6ff', clouds: 0, peaks: false, stars: 500, moon: true, shadows: false,
 };
+
+const QUIET_TEST = {
+  skyTop: '#8f98a8', horizon: '#c6c9ce', ground: '#8a8d90', fog: '#b3b8c0', fogNear: 14, fogFar: 90,
+  hemiSky: '#d6dbe4', hemiGround: '#8a8478', hemi: 1.5, sunColor: '#e8e4dc', sunI: 1.1, clouds: 16, cloudColor: '#d4d7dc', cloudShade: '#a3a8b0', peaks: false,
+  shadows: false,
+};
+
+// The Quiet District's pieces on the greybox: four grey Grumblings, one memory spot (the teahouse's, with
+// the Pom-pom's Cheer), a fog wall to the north (+z), and the grey-out with a pocket once it's remembered.
+async function quietTest(z) {
+  setGreyOut({ fade: 0.82, tint: '#e6e9ef', fog: { top: 1.0, falloff: 1.6, strength: 0.5 }, wall: { dir: new Vector3(0, 0, 1), start: 24, length: 10 } });
+  const heart = new Vector3(0, 0, 30);
+  const greys = [[-5, 7], [5, 6], [9, 16], [-9, 18]].map(([x, zz], i) =>
+    z.addGrumbling(new Grumbling('grey', new Vector3(x, 0, zz), { id: 'grey_' + i, heart, echo: ['I WAS A BIRTHDAY NOBODY REMEMBERED. HONK.', 'I WAS A LETTER NOBODY ANSWERED. HONK.', 'I WAS “I’M FINE, REALLY.” HONK.', 'I WAS A FRIEND WHO MOVED AWAY. HONK.'][i] })));
+  const batch = new CreatureBatch('grey', 8, { tint: true });
+  for (const g of greys) batch.add(g.obj);
+  z.group.add(...batch.parts);
+  G.updaters.add(() => batch.update());
+  z.greys = new Greys(z, greys);
+  z.markers.set('POINT_mem_teahouse', { name: 'POINT_mem_teahouse', position: new Vector3(-4, 0, -4), facing: 0, data: { radius: 6 } });
+  z.markers.set('CAM_mem_teahouse', { name: 'CAM_mem_teahouse', position: new Vector3(-0.5, 2.4, 1.5), facing: 0, data: {} });
+  z.memories = new Memories(z, {
+    teahouse: {
+      sprite: 'pompom',
+      clue: 'An empty mahjong table. One chair is pushed right in, as if nobody ever sat there.',
+      lines: [
+        ['Old friend', 'Your turn, Lau! You always take so long.'],
+        ['Old friend', '…Lau? Has anyone seen Lau this week?'],
+        [null, 'Every year, one more chair was pushed in. After a while, nobody came at all.'],
+      ],
+      figures: [{ model: 'folk_a', x: -0.9, z: 0.4, rot: 90, anim: 'sit' }, { model: 'folk_c', x: 0.9, z: 0.4, rot: -90, anim: 'talk' }],
+    },
+  });
+  for (const g of greys) g.opts.helped = () => z.memories.near(g.position);
+}

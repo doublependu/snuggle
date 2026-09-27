@@ -48,10 +48,8 @@ export async function create() {
     if (!G.save.story.prologueDone) return G.ui.toast('Talk to the girl with the sign on the platform first.', 3);
     G.goto('academy', 'SPAWN_gate');
   });
-  G.audio.bed('water', 0.8);
-  G.audio.bed('birds', 1);
-  G.audio.bed('pad', 1);
-  z.onExit = () => ['water', 'rain', 'birds'].forEach((b) => G.audio.bed(b, 0));
+  z.stepFx = '#d2c3a6';
+  G.audio.mix('station');
   z.killY = -6;
   z.start = () => prologueStation(z);
   return z;

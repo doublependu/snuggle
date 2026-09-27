@@ -1,0 +1,14 @@
+// Cloudflare deploy: an assets-only Worker (no script) serving the static build in dist/.
+// Every request is a static-asset request. `npm run deploy` builds, checks the budget and deploys;
+// `npm run cf:dev` serves dist/ locally through the same asset server (http://localhost:8787).
+// Caching and security headers are in public/_headers (copied into dist/ by the build).
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "snuggle-sorcery",
+  "compatibility_date": "2026-09-26",
+  "assets": {
+    "directory": "./dist",
+    // a missing file is a real 404, not index.html (a missing model would otherwise fail as a GLB parse error)
+    "not_found_handling": "none"
+  }
+}

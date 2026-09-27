@@ -5,12 +5,14 @@ import { Vector3 } from 'three';
 import { G, flag, wait, until } from '../game.js';
 import { talk, ask, objective, hint, shot, near } from './helpers.js';
 import { cookingGame } from '../systems/cooking.js';
+import { chapter3Objective } from './chapter3.js';
 import { writeSave } from '../core/save.js';
 
 const npc = (id) => G.npcs.get(id);
 
 export function chapterObjective() {
   const f = (k) => flag(k);
+  if (f('ch2Done')) return chapter3Objective();
   if (!f('ch1_welcome')) return 'Meet Master Fang in the courtyard';
   if (!f('ch1_lesson')) return "Attend Master Fang's lesson at the pavilion";
   const left = [];
@@ -273,6 +275,14 @@ export function wireAcademy(z) {
       ])],
     ]);
   wb.onTalk = async () => {
+    if (flag('ch3_greys')) {
+      // Chapter 3: the ferry across the harbour to the Quiet District (or the night market)
+      const a = await ask('honk', flag('ch3_arrive') ? 'WHERE TO? HONK.' : 'THE FERRY TO THE QUIET DISTRICT LEAVES FROM THE HARBOUR. TANGTANG IS COMING TOO. HONK.', ['The Quiet District', 'The night market', 'Not yet']);
+      G.ui.closeDialogue();
+      if (a === 0) G.goto('quiet', 'SPAWN_ferry');
+      else if (a === 1) G.goto('market', 'SPAWN_start');
+      return;
+    }
     if (flag('ch1Done')) {
       // Chapter 2: off to the night market (and back again any time)
       const a = await ask('honk', flag('ch2_start') ? 'BACK TO THE NIGHT MARKET? HONK.' : 'THE NIGHT MARKET AWAITS. TANGTANG IS ALREADY THERE, GUARDING THE DUMPLINGS. HONK.', ['Let’s go!', 'Not yet']);

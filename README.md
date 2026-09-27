@@ -18,12 +18,35 @@ npm run build        # static site in dist/ — host it anywhere (relative paths
 npm run budget       # load-size check for a first visit and for a returning player in every zone
 npm run perf         # throttled time-to-interaction test in Chrome, per zone (needs a build)
 npm run e2e          # end-to-end tests in headless Chrome: the story, touch UI at phone sizes, saves
+npm run deploy       # publish to Cloudflare (see "Deploy" below)
 ```
 
-Handy URL parameters while developing: `?zone=train|station|academy|market|test`, `?spawn=SPAWN_gate`,
+### Deploy (Cloudflare)
+
+The game deploys as an assets-only Cloudflare Worker ([`wrangler.jsonc`](wrangler.jsonc)): no server code, just
+the static build in `dist/`, so every request is a (free) static-asset request.
+
+```bash
+npx wrangler login   # once: opens a browser to connect your Cloudflare account
+npm run deploy       # build + budget check + wrangler deploy -> https://snuggle-sorcery.<your-subdomain>.workers.dev
+npm run cf:dev       # the same asset server locally (http://localhost:8787), no account needed
+npm run cf:check     # checks headers, caching and types on wrangler dev; or: npm run cf:check -- <your URL>
+URL=<your URL> npm run perf   # time to interaction from Cloudflare's edge, throttled like the local test
+```
+
+- **Caching** ([`public/_headers`](public/_headers)): everything under `/assets/` is cached for a year. JS chunks
+  have content hashes in their names, and production builds add each model's content revision to its URL
+  (`xiaopei.glb?v=…`, from `vite.config.js`), so a changed model is never served stale. `index.html` always
+  revalidates, so a new deploy shows up on the next load.
+- **Custom domain:** add it in the Cloudflare dashboard, or a `routes` entry with `"custom_domain": true` in
+  `wrangler.jsonc`. **Deploy on every push:** connect the GitHub repo under Workers Builds in the dashboard
+  (build command `npm run build`, deploy command `npx wrangler deploy`).
+
+Handy URL parameters while developing: `?zone=train|station|academy|market|quiet|test`, `?spawn=SPAWN_gate`,
 `?quality=low|medium|high`, `?debug`, `?viewer` (every character, clip and face; add `&look` to have
-them look at the camera), `?zone=test&night` (the greybox under lantern light). In dev builds the game
-object is `window.__G` in the console.
+them look at the camera), `?zone=test&night` (the greybox under lantern light), `?zone=test&quiet` (the
+Quiet District's grey-out, fog wall, grey Grumblings and a memory, on the greybox), `?nosw` (no service
+worker). In dev builds the game object is `window.__G` in the console.
 
 **Playtesting on a phone?** The pause menu has **Copy bug report** (your device, the game state, recent
 errors and the save, ready to paste) and **Stuck? Back to last checkpoint**. To see the console itself:
@@ -43,6 +66,9 @@ Web Inspector and the Develop menu of Safari on a Mac.
 | Point out a free good thing (sparrows) | click it, or 1–3 | d-pad left / right | tap it |
 | Sprite Book / pause | Tab / Esc | Back / Start | 📖 / Ⅱ |
 
+Keys and gamepad buttons can be changed in **Pause > Controls > Change controls**, and **Settings** has a text
+size for the dialogue, prompts and menus.
+
 **Soothing:** Notice a Grumbling, then hold Hum to wrap it in the Lullaby Thread. Dodge its tantrums (rain,
 paper balls, darting socks, sighs) — a hit snaps the thread and costs Calm. Run out of Calm and Xiao Pei just
 sits down for "five more minutes"; there is no game over. Fully wrapped Grumblings fall asleep and become
@@ -57,9 +83,17 @@ Each sparrow loves one good thing best (Wei Bao's Echo Friend tells you which). 
 from Tangtang gives a **Sweet Lullaby**, Echo Friend an **Echo Lullaby**, both together **Everyone Together**.
 Between flocks: roast chestnuts on the beat, float lanterns from the pier, and guide lost children home.
 
-**This build:** the Prologue (the Rainy Train, Lantern Bay station), Chapter 1 (Mistbloom Academy) and
-Chapter 2 (the Night Market Mix-Up). Later chapters are planned in [`ai/plan_0.md`](ai/plan_0.md); what was
-built and what's next is in [`ai/next_2.md`](ai/next_2.md).
+**The Quiet District (Chapter 3):** the Grumblings are turning grey and heavy, and they don't want to be hugged:
+humming at one only makes it turn away. Keep it company instead — walk up and stay close (sitting on a bench
+nearby is faster, and friends count too) until it looks up at you; then it lets the thread wrap it. Its
+Charm Sprite has **Recall**. Across the harbour, the district has forgotten itself and gone grey: look for faint
+glows, say what you notice, and choose which Charm Sprite remembers it (the Soggy Cloud's umbrella, the Lost
+Sock's nose, the Homework's reading…). Each memory brings a pocket of colour back, relights its lanterns and
+lifts a shutter. And check on the neighbours who never left.
+
+**This build:** the Prologue (the Rainy Train, Lantern Bay station), Chapter 1 (Mistbloom Academy), Chapter 2
+(the Night Market Mix-Up) and Chapter 3 (the Quiet District). Later chapters are planned in
+[`ai/plan_0.md`](ai/plan_0.md); what was built and what's next is in [`ai/next_4.md`](ai/next_4.md).
 
 ## How it's made
 
@@ -71,19 +105,32 @@ built and what's next is in [`ai/next_2.md`](ai/next_2.md).
   zone (the *lamp map*, [`src/render/lamps.js`](src/render/lamps.js)); every material adds it with one texture
   fetch, so a hundred lanterns cost the same as one and light kit pieces, characters and the water alike.
   Without a shadow map (the low tier, and night), soft blob shadows keep everyone grounded.
+- **The Quiet District's grey** is a few instructions in the same shaders: zone scenery fades to grey except in
+  *pockets of colour* around restored memories (up to eight spheres, one uniform array), and a height fog
+  thickens near the ground and toward the fog wall. Characters and Charm Sprites keep their colour.
 - **All sound is synthesized** with WebAudio (the lullaby, rain, the train, Captain Honk, the night market's
-  crowd and its street musician).
+  crowd and its street musician). The **music** is composed as note data ([`src/content/music.js`](src/content/music.js)):
+  every track is a variation on Xiao Pei's mother's lullaby, played by a small step sequencer
+  ([`src/core/music.js`](src/core/music.js)) on the lullaby's beat clock, so soothing stays in time with it. It
+  loads after Begin, and each place has its own ambience mix (`G.audio.mix`).
+- **Feel:** walk and run clips play at the speed that keeps a planted foot planted (measured once per
+  character from the clip, `Humanoid.gait`), footsteps and little puffs land where the feet do, Xiao Pei
+  pivots on the spot before walking off the other way, and turns to face whoever is talking to her.
+- **Repeat visits:** production builds register a service worker after Begin that caches the whole game, so a
+  returning player starts from the cache (even offline).
 - **Assets are built by Python scripts in Blender** ([`tools/blender`](tools/blender)), driven through the Blender
   MCP while developing. Characters are rigged to one shared chibi skeleton, so a single animation library
   (`anim_humanoid.glb`) drives everyone. Character bodies start from a CC0 base mesh
   ([`tools/blender/base`](tools/blender/base)) warped onto each character's proportions, with sculpted heads,
   hair and clothes (signed distance fields), painted faces that blink and emote, and a small baked atlas.
   Blender is also the level editor: zones carry marker empties (`SPAWN_`, `NPC_`, `GRUMB_`, `POINT_`,
-  `PLACE_<kit piece>`, `SCATTER_`, `WATER_`, `TRIGGER_`, `AREA_`, `LIGHT_`, `SEAT_`, `GOOD_`) that the game reads.
+  `PLACE_<kit piece>`, `SCATTER_`, `WATER_`, `TRIGGER_`, `AREA_`, `LIGHT_`, `SEAT_`, `GOOD_`, `POINT_mem_`)
+  that the game reads.
 - Trees, lotus pads, candies, sky, water, rain and the scenery outside the train are generated in JavaScript.
-- Load budget: the first playable scene needs about 0.75 MB; a returning player's zone at most 1.35 MB, with
-  townsfolk streaming in after Begin. Every zone is interactive in under 2.2 s on a throttled 10 Mbps / 4x-CPU
-  profile. Quality tiers + dynamic resolution keep integrated GPUs and entry-level phones happy.
+- Load budget: the first playable scene needs about 0.79 MB; a returning player's zone at most 1.4 MB, with
+  townsfolk streaming in after Begin. Every zone is interactive in under 2.3 s on a throttled 10 Mbps / 4x-CPU
+  profile (a repeat visit, from the service worker's cache, in about 0.6 s). Quality tiers + dynamic
+  resolution keep integrated GPUs and entry-level phones happy.
 
 ### Rebuilding assets
 
@@ -91,6 +138,7 @@ built and what's next is in [`ai/next_2.md`](ai/next_2.md).
 # headless (developed with Blender 5.2 LTS); or run one build_*.py at a time
 blender -b -P tools/blender/build_all.py
 blender -b -P tools/blender/build_market.py      # just the night market (kit + zone)
+blender -b -P tools/blender/build_quiet.py       # just the Quiet District (kit + zone)
 npm run assets       # meshopt-compress assets-src/export/*.glb into public/assets/models/
 ```
 

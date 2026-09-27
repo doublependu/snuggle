@@ -97,7 +97,8 @@ export class Soothe {
       _b.copy(t.position);
       _b.y += 0.3 * t.size;
       const los = G.collision ? G.collision.hasLineOfSight(_a, _b) : true;
-      if (los) {
+      // a Grumbling that won't be hugged yet: no thread (its behaviour reacts to the humming)
+      if (los && !t.behaviour.refuses?.()) {
         active = true;
         // on-beat bonus when Hum is (re)pressed near a pulse
         if (G.input.pressed('hum')) {

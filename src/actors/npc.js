@@ -5,6 +5,7 @@ import { Quaternion, Vector3 } from 'three';
 import { G } from '../game.js';
 import { Humanoid } from './humanoid.js';
 import { Follower } from './follower.js';
+import { gaitFor } from './player.js';
 
 const _v = new Vector3();
 const _q = new Quaternion();
@@ -84,7 +85,8 @@ export class NPC {
   // Walk (script-driven) to a point; resolves on arrival.
   walkTo(p, speed = 1.6) {
     this.walkTarget = { p: p.clone(), speed };
-    this.h.play(speed > 2.4 ? 'run' : 'walk', 0.2, speed > 2.4 ? speed / 2.2 : speed / 0.95);
+    const [clip, ts] = gaitFor(this.h, speed);
+    this.h.play(clip, 0.2, ts);
     return new Promise((res) => (this.walkTarget.res = res));
   }
 

@@ -52,6 +52,9 @@ body.touch .helper { bottom: auto; top: 84px; }
 .calm i { width: 14px; height: 14px; border-radius: 50%; background: #f6b3a0; border: 2px solid #fff; box-shadow: 0 1px 3px #0003; transition: opacity .2s, transform .2s; }
 .calm i.gone { opacity: .25; transform: scale(.7); }
 .feel { font-size: 13px; font-weight: 700; color: #fff; text-shadow: 0 1px 4px #000a; max-width: 70vw; text-align: center; }
+/* keeping a grey Grumbling company (Chapter 3): a cool ring that fills while she stays close */
+.soothe.company .prog { stroke: #b9c6e0; }
+.soothe.company .pulse { border-color: #d6dfef; }
 
 /* toasts, chapter cards, fade */
 .toasts { z-index: 3; position: absolute; top: 64px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 6px; }
@@ -79,6 +82,10 @@ body.touch .helper { bottom: auto; top: 84px; }
 .dialogue.show { display: block; animation: toastIn .25s ease; }
 .dialogue .who { position: absolute; top: -14px; left: 18px; padding: 3px 14px; border-radius: 999px; color: #fff; font-weight: 800; font-size: 14px; background: #2f6f73; }
 .dialogue .text { font-size: clamp(15px, 2.6vw, 18px); line-height: 1.45; min-height: 2.9em; }
+/* a memory from fifty years ago (Chapter 3): sepia paper, italic */
+.dialogue.memory { background: #f3e6cdf2; border-color: #cfae7a; }
+.dialogue.memory .text { font-style: italic; color: #5a4632; }
+.dialogue.memory .who { background: #a07a4a !important; }
 .dialogue .more { position: absolute; right: 16px; bottom: 8px; font-size: 12px; opacity: .6; animation: bob 1s ease-in-out infinite; }
 @keyframes bob { 50% { transform: translateY(3px); } }
 .choices { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
@@ -112,6 +119,7 @@ body.touch .touchui { display: block; }
 .menu .panel { touch-action: pan-y; overscroll-behavior: contain; width: min(520px, 100%); max-height: calc(100vh - 32px); overflow: auto; padding: 22px 22px 18px; text-align: center; }
 .menu h2 { margin: 0 0 14px; font-size: 28px; }
 .menu .col { display: flex; flex-direction: column; gap: 10px; }
+#menu-restart p { margin: 0 0 16px; line-height: 1.45; }
 .btn { padding: 11px 18px; border-radius: 999px; border: 0; background: #2f6f73; color: #fff; font-weight: 800; font-size: 16px; cursor: pointer; box-shadow: 0 3px 0 #1f4b4e; }
 .btn.alt { background: #efe0c8; color: #4a3428; box-shadow: 0 3px 0 #d7c09d; }
 .btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #1f4b4e; }
@@ -125,6 +133,11 @@ body.touch .touchui { display: block; }
 
 /* sprite book */
 .book .panel { width: min(760px, 100%); }
+.mems h3 { margin: 14px 0 6px; font-size: 15px; }
+.memrow { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 6px; }
+.mem { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px; border-radius: 12px; background: #f3e6cd; border: 2px solid #cfae7a; font-size: 22px; }
+.mem small { font-size: 11px; font-weight: 700; color: #5a4632; text-align: center; line-height: 1.2; }
+.mem.unknown { background: #eee9df; border-color: #d8d0c2; color: #b0a898; font-weight: 800; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
 .entry { position: relative; padding: 10px; border-radius: 14px; background: #fff8ee; border: 2px solid #eadbc3; text-align: center; font-size: 12px; }
 .entry img { width: 96px; height: 96px; display: block; margin: 0 auto 4px; }
@@ -202,3 +215,27 @@ body.touch .nut span { display: none; }
 #ui.soothing .prompt { bottom: calc(9% + 150px); }
 .cook.nuts, .cook.lanterns { top: auto; bottom: max(14px, env(safe-area-inset-bottom)); transform: translateX(-50%); }
 body.touch .cook.nuts, body.touch .cook.lanterns { bottom: 118px; }
+
+/* rebinding the controls (ui/remap.js) */
+.remap thead td { font-weight: 800; opacity: .7; padding-bottom: 4px; }
+.remap .key-btn { padding: 4px 12px; font-size: 14px; min-width: 76px; }
+.remap .key-btn.listening { background: #e0662c; color: #fff; box-shadow: 0 3px 0 #b8481a; }
+
+/* text size (Settings): --ts scales the reading text */
+:root { --ts: 1; }
+.dialogue .text { font-size: calc(clamp(15px, 2.6vw, 18px) * var(--ts)); }
+.dialogue .who { font-size: calc(14px * var(--ts)); }
+.choices button { font-size: calc(15px * var(--ts)); }
+.prompt { font-size: calc(15px * var(--ts)); }
+.objective { font-size: calc(14px * var(--ts)); }
+.toast { font-size: calc(14px * var(--ts)); }
+.bubble { font-size: calc(13px * var(--ts)); max-width: calc(240px * var(--ts)); }
+.feel { font-size: calc(13px * var(--ts)); }
+.goodchip { font-size: calc(14px * var(--ts)); }
+.btn { font-size: calc(16px * var(--ts)); }
+.settings { font-size: calc(15px * var(--ts)); }
+.controls { font-size: calc(14px * var(--ts)); }
+.small { font-size: calc(12px * var(--ts)); }
+.entry { font-size: calc(12px * var(--ts)); }
+@media (max-width: 640px) { .objective { font-size: calc(12px * var(--ts)); } }
+@media (max-height: 520px) { .menu .btn { font-size: calc(14px * var(--ts)); } }

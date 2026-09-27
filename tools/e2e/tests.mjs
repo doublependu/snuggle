@@ -174,9 +174,11 @@ export const TESTS = [
     touch: true,
     viewport: ph.viewport,
     async run(h) {
-      await h.open('?zone=train', base({ story: { train_intro: true } }));
+      // at the largest text size, so every button must still fit and be tappable
+      await h.open('?zone=train', base({ story: { train_intro: true }, settings: { ...base().settings, textSize: 1.5 } }));
       await h.begin();
       h.assert(await h.eval(() => document.body.classList.contains('touch')), 'not in touch mode');
+      h.assert(await h.eval(() => getComputedStyle(document.documentElement).getPropertyValue('--ts').trim() === '1.5'), 'text size not applied');
       for (const sel of ['.hud-tr .round:nth-child(1)', '.hud-tr .round:nth-child(2)']) {
         const r = await h.hit(sel);
         h.assert(r.ok, `${sel} is covered by ${r.top}`);
@@ -190,6 +192,19 @@ export const TESTS = [
         const r = await h.hit(`#menu-pause [data-a="${a}"]`);
         h.assert(r.ok, `pause menu "${a}" is covered by ${r.top}`);
       }
+      // "Start again" asks in the game's own panel (not the browser's confirm box); Cancel goes back
+      const tapSel = async (sel) => {
+        const bb = await (await h.page.$(sel)).boundingBox();
+        await h.page.touchscreen.tap(bb.x + bb.width / 2, bb.y + bb.height / 2);
+      };
+      await tapSel('#menu-pause [data-a="restart"]');
+      await h.until(() => document.getElementById('menu-restart').classList.contains('show'), { timeout: 3000 });
+      for (const a of ['back', 'restart-yes']) {
+        const r = await h.hit(`#menu-restart [data-a="${a}"]`);
+        h.assert(r.ok, `start-again "${a}" is covered by ${r.top}`);
+      }
+      await tapSel('#menu-restart [data-a="back"]');
+      await h.until(() => document.getElementById('menu-pause').classList.contains('show'), { timeout: 3000 });
       const res = await (await h.page.$('#menu-pause [data-a="resume"]')).boundingBox();
       await h.page.touchscreen.tap(res.x + res.width / 2, res.y + res.height / 2);
       await h.until(() => !window.__G.menus.open && !window.__G.paused, { timeout: 3000 });
@@ -228,6 +243,75 @@ export const TESTS = [
       await h.page.touchscreen.tap(res.x + res.width / 2, res.y + res.height / 2);
       await h.until(() => !window.__G.paused, { timeout: 3000 });
       h.assert(await h.eval(() => !!localStorage.getItem('snuggle-sorcery-save')), 'no autosave on hide');
+    },
+  },
+
+  // Pause menu > Start again: back to the very start of the story on the train, settings kept. (The unload
+  // autosave used to write the old progress straight back during the reload.) Also with ?zone= in the URL.
+  ...[
+    ['restart-to-train', '?zone=market'],
+    ['restart-url', '?zone=academy&spawn=SPAWN_gate'],
+  ].map(([name, q]) => ({
+    name,
+    async run(h) {
+      const zone = new URLSearchParams(q).get('zone');
+      const settings = { ...base().settings, volume: 0.3, sensitivity: 1.7 };
+      await h.open(q, base({ zone, spawn: 'SPAWN_start', tarts: 2, cozy: 55, sprites: { doudou: 1, cloud: 1, sparrow: 3 }, soothed: { 'train:cloud': true }, story: { ...CH1_DONE, ch2_start: true, ch2Done: true }, settings }));
+      await h.begin();
+      await h.eval(() => window.__G.menus.togglePause());
+      await h.page.click('#menu-pause [data-a="restart"]');
+      await h.reloaded(() => h.page.click('#menu-restart [data-a="restart-yes"]'));
+      const s = await h.eval(() => ({ zone: window.__G.zone.id, url: location.search, save: window.__G.save, stored: JSON.parse(localStorage.getItem('snuggle-sorcery-save')) }));
+      h.assert(s.zone === 'train', 'started again in ' + s.zone);
+      h.assert(!/zone=|spawn=/.test(s.url), 'zone parameters kept: ' + s.url);
+      for (const save of [s.save, s.stored]) {
+        h.assert(save.zone === 'train' && !Object.keys(save.story).length && !Object.keys(save.sprites).length && !Object.keys(save.soothed).length, 'progress kept: ' + JSON.stringify(save));
+        h.assert(save.cozy === 0 && save.tarts === 0, 'cozy / tarts kept');
+        h.assert(save.settings.volume === 0.3 && save.settings.sensitivity === 1.7 && save.settings.quality === 'low', 'settings lost: ' + JSON.stringify(save.settings));
+      }
+      // Begin: the train intro plays from the very start
+      await h.begin();
+      await h.until(() => window.__G.ui.dialogueOpen, { timeout: 15000 });
+      h.assert(!(await h.eval(() => window.__G.save.story.train_intro)), 'intro already seen');
+    },
+  })),
+
+  // Controls > Change controls: rebind Hum to F (Notice / talk had F, so it takes E: a swap), it works at
+  // once, the Controls table and the hints follow, it survives a reload, and Reset puts the defaults back.
+  {
+    name: 'controls-remap',
+    async run(h) {
+      await h.open('?zone=train', base({ story: { train_intro: true } }));
+      await h.begin();
+      await h.eval(() => window.__G.menus.togglePause());
+      await h.page.click('#menu-pause [data-a="controls"]');
+      await h.page.click('#menu-controls [data-a="remap"]');
+      await h.until(() => document.getElementById('menu-remap')?.classList.contains('show'), { timeout: 5000 });
+      await h.page.click('#menu-remap [data-r="key:hum"]');
+      await h.page.keyboard.press('KeyF');
+      const b = await h.eval(() => ({ hum: window.__G.input.keyBind.hum[0], interact: window.__G.input.keyBind.interact[0], saved: window.__G.save.settings.keys }));
+      h.assert(b.hum === 'KeyF' && b.interact === 'KeyE', 'rebinding / swap: ' + JSON.stringify(b));
+      await h.page.click('#menu-remap [data-a="back"]'); // back to Controls
+      await h.page.waitForTimeout(300);
+      const table = await h.eval(() => document.querySelector('#menu-controls tbody').textContent);
+      h.assert(/Hold F/.test(table) && /E or Enter/.test(table), 'controls table: ' + table);
+      await h.eval(() => window.__G.menus.resume());
+      await h.page.keyboard.down('KeyF');
+      await h.page.waitForTimeout(200);
+      const held = await h.eval(() => window.__G.input.humHeld);
+      await h.page.keyboard.up('KeyF');
+      h.assert(held, 'F does not hum');
+      h.assert((await h.eval(() => window.__G.input.label('hum'))) === 'F', 'hint label');
+      await h.reloaded(() => h.page.reload());
+      h.assert((await h.eval(() => window.__G.input.keyBind.hum[0])) === 'KeyF', 'binding lost after a reload');
+      await h.begin();
+      await h.eval(() => window.__G.menus.togglePause());
+      await h.page.click('#menu-pause [data-a="controls"]');
+      await h.page.click('#menu-controls [data-a="remap"]');
+      await h.until(() => document.getElementById('menu-remap')?.classList.contains('show'), { timeout: 5000 });
+      await h.page.click('#menu-remap [data-r="reset"]');
+      const r = await h.eval(() => ({ hum: window.__G.input.keyBind.hum[0], saved: window.__G.save.settings.keys }));
+      h.assert(r.hum === 'KeyE' && !Object.keys(r.saved).length, 'reset: ' + JSON.stringify(r));
     },
   },
 
@@ -549,7 +633,7 @@ export const TESTS = [
       const s = await h.eval(() => ({ sparrows: window.__G.save.sprites.sparrow, far: window.__G.zone.far.every((l) => window.__G.fx.glows.size[l.i] === 0), obj: window.__G.ui.objective.textContent }));
       h.assert(s.sparrows === 12, 'sparrow sprites ' + s.sparrows);
       h.assert(s.far, 'the far lanterns are still lit');
-      h.assert(/Free roam/.test(s.obj), 'objective after the chapter: ' + s.obj);
+      h.assert(/Walk home/.test(s.obj), 'objective after the chapter: ' + s.obj);
       await h.headsUpright('after Chapter 2');
     },
   },
@@ -625,6 +709,255 @@ export const TESTS = [
     },
   },
 
+  // Chapter 3: a grey Grumbling won't be hugged. Humming at it is refused (no thread, no progress, no Notice
+  // prompt); staying close fills the company ring until it's ready; then the thread wraps it into a sprite.
+  {
+    name: 'quiet-grey',
+    async run(h) {
+      await h.open('?zone=quiet', base({ zone: 'quiet', spawn: 'SPAWN_ferry', cozy: 40, sprites: CH2_SPRITES, story: CH3_ARRIVED }));
+      await h.begin();
+      const toGrey = () =>
+        h.eval(() => {
+          const G = window.__G;
+          const g = G.zone.greys.list[0];
+          G.player.teleport(g.position.clone().add({ x: 0, y: 0, z: -1.6 }), 0);
+          G.cam.snapBehind(G.player);
+        });
+      await toGrey();
+      await h.page.waitForTimeout(400);
+      h.assert((await h.eval(() => window.__G.interact.current?.label)) !== 'Notice', 'an unready grey offers Notice');
+      await h.page.keyboard.down('KeyE');
+      await h.page.waitForTimeout(2500);
+      await h.page.keyboard.up('KeyE');
+      const r = await h.eval(() => ({ p: window.__G.zone.greys.list[0].progress, c: window.__G.zone.greys.list[0].company, ring: document.querySelector('.soothe').classList.contains('company') }));
+      h.assert(r.p === 0 && r.c < 0.1, 'humming wrapped an unready grey: ' + JSON.stringify(r));
+      h.assert(r.ring, 'no company ring near the grey');
+      await toGrey();
+      await h.until(() => window.__G.zone.greys.list[0].ready, { timeout: 30000, tick: () => h.skipDialogue() });
+      await h.until(() => !window.__G.frozen, { timeout: 20000, tick: () => h.skipDialogue() });
+      await h.page.screenshot({ path: `${h.OUT}/quiet-grey.png` });
+      await h.page.keyboard.down('KeyE');
+      await h.until(() => window.__G.save.sprites.grey === 1, { timeout: 40000 });
+      await h.page.keyboard.up('KeyE');
+      h.assert(await h.eval(() => window.__G.sprites.list.some((s) => s.id === 'grey')), 'no grey sprite follower');
+      await h.headsUpright('in the Quiet District');
+    },
+  },
+
+  // Chapter 3: a Charm Sprite memory. The wrong sprite gets a friendly line; the right one plays the
+  // memory, and after a reload its pocket of colour, its lanterns and its lifted shutter are still there.
+  {
+    name: 'quiet-memory',
+    async run(h) {
+      await h.open('?zone=quiet', base({ zone: 'quiet', spawn: 'SPAWN_ferry', sprites: CH2_SPRITES, story: CH3_ARRIVED }));
+      await h.begin();
+      await remember(h, 'post', 'Sock');
+      await h.until(() => !window.__G.ui.dialogueOpen && !window.__G.frozen, { timeout: 20000, tick: () => h.skipDialogue() });
+      h.assert(!(await h.eval(() => window.__G.save.story.mem_post)), 'the wrong sprite restored the memory');
+      await remember(h, 'post', 'Cloud');
+      await h.until(() => window.__G.ui.dlg.classList.contains('memory'), { timeout: 20000 });
+      await h.page.waitForTimeout(1200);
+      await h.page.screenshot({ path: `${h.OUT}/quiet-memory.png` });
+      await h.until(() => window.__G.save.story.mem_post && !window.__G.frozen, { timeout: 60000, tick: () => h.skipDialogue() });
+      const lit = () => h.eval(() => ({ pockets: window.__G.zone.memories.pockets.length, lamps: window.__G.zone.lampList.length, shutter: window.__G.zone.group.getObjectByName('SHUT_post')?.position.y }));
+      const before = await lit();
+      h.assert(before.pockets === 1 && before.lamps > 0, 'nothing restored: ' + JSON.stringify(before));
+      await h.reloaded(() => h.page.reload());
+      await h.begin();
+      const after = await lit();
+      h.assert(after.pockets === 1 && after.lamps === before.lamps && after.shutter > 1, 'not restored after a reload: ' + JSON.stringify(after));
+    },
+  },
+
+  // Chapter 3, start to end: home up the market stairs, the grey morning at the Academy (Honk's "nobody
+  // remembers us"), the ferry, five memories, keeping a grey Grumbling company, the kitchen door in the
+  // fog, the ferry home, and Master Fang's story by the pavilion.
+  {
+    name: 'chapter3-full',
+    async run(h) {
+      await h.open('?zone=market', base({ zone: 'market', cozy: 60, sprites: CH2_SPRITES, story: { ...CH1_DONE, ch2_start: true, ch2_tutorial: true, flock1Done: true, flock2Done: true, flock3Done: true, ch2_dumplings: true, ch2Done: true } }));
+      await h.begin();
+      const skipUntil = (pred, timeout = 60000) => h.until(pred, { timeout, tick: () => h.skipDialogue() });
+      h.assert(/Walk home/.test(await h.eval(() => window.__G.ui.objective.textContent)), 'market objective');
+      await h.eval(() => {
+        const G = window.__G;
+        const b = G.zone.box('TRIGGER_academy');
+        G.player.teleport(b.getCenter(G.player.position.clone()).setY(b.min.y + 1.0), 0); // lands on the top landing
+      });
+      await skipUntil(() => window.__G.zone?.id === 'academy');
+      // the grey morning
+      await skipUntil(() => window.__G.save.story.ch3_start && !window.__G.frozen);
+      await h.eval(() => {
+        const G = window.__G;
+        const g = G.zone.morningGreys[0];
+        G.player.teleport(g.position.clone().add({ x: 0, y: 0, z: -2.2 }), 0);
+      });
+      await skipUntil(() => /humming/.test(window.__G.ui.objective.textContent) && !window.__G.frozen);
+      await h.page.keyboard.down('KeyE');
+      await skipUntil(() => window.__G.frozen, 30000);
+      await h.page.keyboard.up('KeyE');
+      await skipUntil(() => window.__G.save.story.ch3_greys && !window.__G.frozen);
+      await h.headsUpright('after the grey morning');
+      // Wei Bao at the gate: the ferry
+      await h.until(() => !window.__G.npcs.get('weibao').walkTarget, { timeout: 30000 });
+      await h.eval(() => {
+        const G = window.__G;
+        const wb = G.npcs.get('weibao');
+        G.player.teleport(wb.position.clone().add({ x: 0, y: 0, z: -1.2 }), 0);
+      });
+      await h.until(() => window.__G.interact.current?.label === 'Talk', { timeout: 5000 });
+      await h.page.keyboard.press('KeyF');
+      await skipUntil(() => window.__G.zone?.id === 'quiet');
+      await skipUntil(() => window.__G.save.story.ch3_arrive && !window.__G.frozen);
+      // five memories, each with the Charm Sprite who remembers it
+      for (const [id, pick] of [['notice', 'Homework'], ['post', 'Cloud'], ['sweets', 'Sock'], ['teahouse', 'Pom-pom'], ['thread', 'Sparrow']]) {
+        await skipUntil(() => !window.__G.frozen && !window.__G.ui.dialogueOpen);
+        await remember(h, id, pick);
+        await skipUntil(`window.__G.save.story.mem_${id} && !window.__G.frozen`);
+      }
+      await skipUntil(() => !window.__G.frozen && !window.__G.ui.dialogueOpen);
+      await h.headsUpright('after the memories');
+      // keep a grey Grumbling company, then soothe it
+      await h.eval(() => {
+        const G = window.__G;
+        const g = G.zone.greys.list.find((x) => !x.soothed);
+        G.zone.testGrey = g;
+        G.player.teleport(g.position.clone().add({ x: 0, y: 0, z: -1.5 }), 0);
+      });
+      await skipUntil(() => window.__G.zone.testGrey.ready, 40000);
+      await skipUntil(() => !window.__G.frozen && !window.__G.ui.dialogueOpen);
+      await h.page.keyboard.down('KeyE');
+      await h.until(() => window.__G.save.sprites.grey >= 1, { timeout: 40000 });
+      await h.page.keyboard.up('KeyE');
+      await skipUntil(() => /warm/.test(window.__G.ui.objective.textContent) && !window.__G.frozen && !window.__G.ui.dialogueOpen, 30000);
+      // the kitchen door in the fog
+      await remember(h, 'kitchen', 'Grey');
+      await skipUntil(() => window.__G.save.story.ch3_return && !window.__G.frozen, 90000);
+      await h.page.screenshot({ path: `${h.OUT}/chapter3-kitchen.png` });
+      // the ferry home
+      await h.until(() => window.__G.npcs.get('ferryman'), { timeout: 30000 });
+      await h.eval(() => {
+        const G = window.__G;
+        const f = G.npcs.get('ferryman');
+        G.player.teleport(f.position.clone().add({ x: 0, y: 0, z: -1.2 }), 0);
+      });
+      await h.until(() => window.__G.interact.current?.label === 'Talk' && window.__G.interact.current === window.__G.npcs.get('ferryman').interactable, { timeout: 5000 });
+      await h.page.keyboard.press('KeyF');
+      await skipUntil(() => window.__G.zone?.id === 'academy' && !window.__G.frozen);
+      // Master Fang's story by the pavilion
+      await h.eval(() => {
+        const G = window.__G;
+        G.player.teleport(G.zone.marker('POINT_lessonseat').position.clone().add({ x: 0, y: 0, z: 2 }), Math.PI);
+      });
+      await h.until(() => window.__G.frozen, { timeout: 10000 });
+      await h.page.waitForTimeout(1500);
+      await h.page.screenshot({ path: `${h.OUT}/chapter3-story.png` });
+      await h.headsUpright('during the story');
+      await skipUntil(() => window.__G.save.story.ch3Done && !window.__G.frozen, 120000);
+      const obj = await h.eval(() => window.__G.ui.objective.textContent);
+      h.assert(/Free roam/.test(obj), 'objective after Chapter 3: ' + obj);
+    },
+  },
+
+  // Feel: the walk and run clips play at the speed that keeps a planted foot planted (Humanoid.gait), for Xiao
+  // Pei walking, running and sprinting and for a friend walking somewhere. Stepped by hand at 1/480 s (the
+  // headless browser renders ~15 fps, too few frames land in a footfall): how far a foot drifts while it is
+  // down, as a share of how far the body moved. Plus turning on the spot, and turning to face a speaker.
+  {
+    name: 'feel-stride',
+    async run(h) {
+      await h.open('?zone=test', base({ zone: 'test' }));
+      await h.begin();
+      const r = await h.eval(() => {
+        const G = window.__G;
+        const p = G.player;
+        G.paused = true;
+        const dt = 1 / 480;
+        // slip share for a character root moved by step(); feet within 4 mm of their lowest count as down
+        const measure = (h, root, step, n = 1920) => {
+          const st = { min: [9, 9], prev: [null, null], slip: 0, body: 0 };
+          let prevRoot = root.clone();
+          for (let i = 0; i < n; i++) {
+            step();
+            ['foot_L', 'foot_R'].forEach((b, k) => {
+              const f = h.worldBone(b, root.clone());
+              const y = f.y - root.y;
+              if (i > n * 0.3) st.min[k] = Math.min(st.min[k], y);
+              const down = y < st.min[k] + 0.004;
+              if (down && st.prev[k] && i > n / 2) {
+                const bx = root.x - prevRoot.x,
+                  bz = root.z - prevRoot.z,
+                  bl = Math.hypot(bx, bz) || 1;
+                st.slip += ((f.x - st.prev[k].x) * bx + (f.z - st.prev[k].z) * bz) / bl;
+                st.body += bl;
+              }
+              st.prev[k] = down ? f : null;
+            });
+            prevRoot = root.clone();
+          }
+          return Math.abs(st.slip / st.body);
+        };
+        const run = (stick, sprint) => {
+          p.teleport(p.position.clone().set(-20, 0, -36), 0);
+          G.cam.snapBehind(p);
+          G.input.move.set(0, stick);
+          if (sprint) G.input.keys.add('sprint');
+          const out = measure(p.h, p.position, () => p.update(dt));
+          G.input.keys.delete('sprint');
+          G.input.move.set(0, 0);
+          return out;
+        };
+        const out = { walk: run(0.35), run: run(1), sprint: run(1, true) };
+        // a friend walking somewhere at a stroll
+        const tt = G.npcs.get('tangtang');
+        tt.root.position.set(20, 0, -36);
+        tt.walkTo(tt.root.position.clone().set(20, 0, 30), 1.6);
+        out.friend = measure(tt.h, tt.root.position, () => {
+          G.camera.position.copy(tt.root.position).add({ x: 0, y: 2, z: -4 }); // close, so no distance LOD
+          tt.update(dt);
+        });
+        // turning on the spot: from a standstill, pushing back pivots first, without moving away
+        for (let i = 0; i < 240; i++) p.update(dt);
+        const at = p.position.clone(),
+          f0 = p.facing;
+        G.input.move.set(0, -1);
+        let turned = false;
+        for (let i = 0; i < 120; i++) {
+          p.update(dt);
+          if (p.turnT > 0) turned = true;
+        }
+        out.turned = turned;
+        out.turnMoved = p.position.distanceTo(at);
+        for (let i = 0; i < 200; i++) p.update(dt);
+        out.turnAngle = Math.abs(Math.atan2(Math.sin(p.facing - f0), Math.cos(p.facing - f0)));
+        G.input.move.set(0, 0);
+        G.paused = false;
+        return out;
+      });
+      h.assert(r.walk < 0.05 && r.run < 0.18 && r.sprint < 0.3 && r.friend < 0.08, 'feet slide: ' + JSON.stringify(r));
+      h.assert(r.turned && r.turnMoved < 0.05 && r.turnAngle > 2.8, 'no turn on the spot: ' + JSON.stringify(r));
+      // facing whoever talks to her: Tangtang behind her says something, and Xiao Pei turns round
+      await h.eval(() => {
+        const G = window.__G;
+        const tt = G.npcs.get('tangtang');
+        tt.walkTarget = null;
+        G.player.teleport(tt.position.clone().add({ x: 0, y: 0, z: -2 }), Math.PI);
+        window.__said = G.ui.say('tangtang', 'Over here!');
+      });
+      await h.page.waitForTimeout(1500);
+      const face = await h.eval(() => {
+        const G = window.__G;
+        const tt = G.npcs.get('tangtang').position,
+          p = G.player;
+        const want = Math.atan2(tt.x - p.position.x, tt.z - p.position.z);
+        G.ui.advance = true;
+        return Math.abs(Math.atan2(Math.sin(want - p.facing), Math.cos(want - p.facing)));
+      });
+      h.assert(face < 0.35, 'she did not turn to Tangtang: ' + face.toFixed(2));
+      console.log('    slip: ' + JSON.stringify(r, (k, v) => (typeof v === 'number' ? +v.toFixed(3) : v)));
+    },
+  },
+
   // On a phone: sit with a flock using the context button, tap a free good thing, hold the big Hum button,
   // and stand up again with the context button.
   {
@@ -668,6 +1001,35 @@ export const TESTS = [
     },
   },
 ];
+
+const CH2_SPRITES = { doudou: 1, cloud: 1, sock: 1, homework: 1, pompom: 1, sparrow: 12 };
+const CH3_ARRIVED = { prologueTrain: true, prologueDone: true, ch1Done: true, weibaoFriend: true, ch2_start: true, ch2Done: true, ch3_start: true, ch3_greys: true, ch3_arrive: true };
+
+// Walk up to a Chapter 3 memory spot, Look closer, and choose a Charm Sprite (by its button label). A friend's
+// comment on the last memory may open just as F is pressed; then the press only advances it, so try again.
+async function remember(h, id, pick) {
+  for (let tries = 0; tries < 5; tries++) {
+    await h.until(() => !window.__G.frozen && !window.__G.ui.dialogueOpen, { timeout: 30000, tick: () => h.skipDialogue() });
+    await h.eval((id) => {
+      const G = window.__G;
+      const m = G.zone.marker('POINT_mem_' + id);
+      G.player.teleport(m.position.clone().add({ x: -Math.sin(m.facing) * 1.2, y: 0, z: -Math.cos(m.facing) * 1.2 }), m.facing);
+      G.cam.snapBehind(G.player);
+    }, id);
+    await h.until(() => window.__G.interact.current?.label === 'Look closer', { timeout: 8000, tick: () => h.skipDialogue() });
+    await h.page.keyboard.press('KeyF');
+    await h.page.waitForTimeout(400);
+    // advance the clue, but never click a choice by accident
+    const got = await h.until(() => window.__G.ui.dlgChoices.childElementCount > 0 ? 'choices' : !window.__G.ui.dialogueOpen && !window.__G.frozen ? 'closed' : false, {
+      timeout: 20000,
+      tick: () => h.eval(() => window.__G.ui.dialogueOpen && !window.__G.ui.dlgChoices.childElementCount && (window.__G.ui.advance = true)),
+    });
+    if (got !== 'choices') continue;
+    await h.eval((pick) => [...window.__G.ui.dlgChoices.children].find((b) => b.textContent.includes(pick)).dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })), pick);
+    return;
+  }
+  throw new Error('could not look closer at memory ' + id);
+}
 
 const CH1_DONE = { prologueTrain: true, prologueDone: true, ch1_welcome: true, ch1_lesson: true, sockDone: true, homeworkDone: true, cookDone: true, pompomDone: true, ch1Done: true, weibaoFriend: true };
 

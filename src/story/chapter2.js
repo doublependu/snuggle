@@ -21,6 +21,7 @@ export function chapter2Objective() {
   if (left.length) return 'Sit with the sparrows ' + left.join(' and ');
   if (!f('ch2_dumplings')) return 'Meet everyone at the dumpling stall';
   if (!f('ch2Done')) return 'Walk home along the harbour wall';
+  if (!f('ch3_start')) return 'Walk home: up the stairs to the Academy';
   return 'Free roam: guide lost children home, float lanterns, roast chestnuts';
 }
 
@@ -229,7 +230,6 @@ async function hook(z) {
   G.frozen = true; // talk() unfroze her; stay put through the chapter cards
   G.cam.clearShot();
   await G.ui.card('Chapter 2 complete', 'The Night Market Mix-Up', 3);
-  await G.ui.card('Chapter 3: The Quiet District', 'Coming soon — float lanterns, roast chestnuts, and help every lost child home', 3.6);
   G.frozen = false;
   refreshObjective2();
 }

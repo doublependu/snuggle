@@ -3,8 +3,6 @@
 // Interactable: { label, position (Vector3), radius, enabled(), action(), key?, priority? (metres of preference) }
 import { G } from '../game.js';
 
-const KEYS = { keyboard: 'F', gamepad: 'X', touch: '' };
-
 export class Interact {
   constructor() {
     this.current = null;
@@ -33,7 +31,7 @@ export class Interact {
     }
     this.current = best;
     const label = best ? (typeof best.label === 'function' ? best.label() : best.label) : '';
-    G.ui.prompt(label, KEYS[G.input.device] || 'F');
+    G.ui.prompt(label, G.input.device === 'touch' ? '' : G.input.label('interact'));
     G.touch?.setAct(label);
     if (best && G.input.consume('interact')) best.action();
   }

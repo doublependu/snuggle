@@ -9,7 +9,7 @@ import { plantTrees } from '../procgen/trees.js';
 import { mulberry } from '../render/sky.js';
 import { G } from '../game.js';
 import { loadGLB } from '../core/assets.js';
-import { stylize } from '../render/materials.js';
+import { stylize, setGreyOut } from '../render/materials.js';
 import { createSky } from '../render/sky.js';
 import { BlobShadows } from '../render/vfx.js';
 import { bakeLampMap, clearLamps } from '../render/lamps.js';
@@ -34,6 +34,8 @@ export class Zone {
     this.grumblings = [];
     this.interactables = [];
     this.sun = new Vector3(0.45, 0.7, -0.4).normalize();
+    this.fade = false; // static scenery greys out with shared.uFade (the Quiet District); set before loading
+    this.stepFx = null; // colour of the little puff under each footstep (null: none, e.g. inside the train)
     G.zone = this; // actors created while the zone builds attach their effects here
   }
 
@@ -53,7 +55,7 @@ export class Zone {
       c.removeFromParent();
     }
     const shadows = castShadows ?? G.quality.tier.shadowSize >= 2048;
-    stylize(root, { shadows, receive: true });
+    stylize(root, { shadows, receive: true, fade: this.fade });
     root.traverse((o) => {
       o.matrixAutoUpdate = false;
     });
@@ -116,7 +118,7 @@ export class Zone {
           this.collision.addInstanced(o.geometry, mats.map((mm) => new Matrix4().multiplyMatrices(mm, o.matrixWorld)));
           return;
         }
-        stylize(o, { shadows });
+        stylize(o, { shadows, fade: this.fade });
         const im = new InstancedMesh(o.geometry, o.material, mats.length);
         mats.forEach((mm, i) => im.setMatrixAt(i, _m.multiplyMatrices(mm, o.matrixWorld)));
         im.castShadow = o.castShadow;
@@ -243,7 +245,7 @@ export class Zone {
     }
     const shadows = G.quality.tier.shadows;
     for (const [kind, list] of byKind) {
-      const im = plantTrees(kind, list, { collision: this.collision, sway: G.quality.tier.sway, shadows });
+      const im = plantTrees(kind, list, { collision: this.collision, sway: G.quality.tier.sway, shadows, fade: this.fade });
       if (im) this.group.add(im);
     }
     this.collision.build();
@@ -338,5 +340,6 @@ export class Zone {
     for (const g of geoms) g.dispose();
     this.sunLight?.shadow.map?.dispose();
     G.scene.fog = null;
+    setGreyOut();
   }
 }

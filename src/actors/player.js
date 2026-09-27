@@ -10,6 +10,20 @@ const _m = new Vector3();
 const _seg = new Line3();
 const _p = new Vector3();
 const _look = new Vector3();
+const _foot = new Vector3();
+const TURN_TIME = 0.34; // a pivot on the spot (the 'turn' clip plays meanwhile)
+const angleTo = (from, to) => MathUtils.euclideanModulo(to - from + Math.PI, Math.PI * 2) - Math.PI;
+
+// Walk or run for a speed, from the character's measured gait: the walk clip up to about 1.9x its natural
+// speed (a brisk stroll), then the run (with a little hysteresis so it doesn't flicker between them), each
+// played at the speed that keeps the planted foot still. Used by Xiao Pei, the NPCs and her friends.
+export function gaitFor(h, speed, wasRun = false) {
+  const walk = h.gait('walk'),
+    run = h.gait('run');
+  const up = (walk?.speed || 0.95) * (wasRun ? 1.7 : 1.9);
+  if (speed < up || !run) return ['walk', MathUtils.clamp(speed / (walk?.speed || 0.95), 0.5, 2.2)];
+  return ['run', MathUtils.clamp(speed / run.speed, 0.7, 3.4)];
+}
 
 // Put Doudou in Xiao Pei's hood. Newer models carry a seat_doudou bone (where his base sits);
 // older ones fall back to a fixed offset. Call while the skeleton is still in its bind pose.
@@ -48,6 +62,8 @@ export class Player {
     this.landTimer = 0;
     this.safe = new Vector3();
     this.stepPhase = 0;
+    this.turnT = 0;
+    this.stepWas = null;
     this.moveScale = 1;
     this.root.name = 'xiaopei';
     // Doudou sleeps in the hood
@@ -115,6 +131,12 @@ export class Player {
       return;
     }
     const locked = G.frozen;
+    // in a conversation, she turns to face whoever is talking to her (the head look-at does the rest)
+    if (locked && G.ui.dialogueOpen && this.speaker && !this.speaker.hidden && this.onGround && this.turnT <= 0) {
+      const sp = this.speaker.position;
+      const want = Math.atan2(sp.x - this.position.x, sp.z - this.position.z);
+      if (Math.abs(angleTo(this.facing, want)) > 1.05 && Math.hypot(sp.x - this.position.x, sp.z - this.position.z) > 0.6) this.startTurn(want);
+    }
     // camera-relative wish direction
     G.cam.basis(_f, _r);
     _m.set(0, 0, 0);
@@ -128,6 +150,12 @@ export class Player {
     if (this.humming) top = Math.min(top, 1.15);
     top *= this.moveScale;
     const accel = this.onGround ? 16 : 6;
+    // turning in place: from a standstill, a big change of direction pivots on the spot first
+    if (amount > 0.1 && this.turnT <= 0 && this.speed < 0.5 && this.onGround && !this.humming && !locked) {
+      const want = Math.atan2(_m.x, _m.z);
+      if (Math.abs(angleTo(this.facing, want)) > 1.75) this.startTurn(want);
+    }
+    if (this.turnT > 0) top = 0;
     const vx = _m.x * top,
       vz = _m.z * top;
     this.velocity.x += (vx - this.velocity.x) * Math.min(1, dt * accel * 0.6);
@@ -138,7 +166,11 @@ export class Player {
     }
     // face the movement (or the soothing target while humming)
     let wantFacing = null;
-    if (this.humming && G.soothe?.target) {
+    if (this.turnT > 0) {
+      this.turnT -= dt;
+      const k = 1 - Math.max(0, this.turnT) / TURN_TIME;
+      this.facing = this.turnFrom + this.turnBy * k * k * (3 - 2 * k);
+    } else if (this.humming && G.soothe?.target) {
       const t = G.soothe.target.position;
       wantFacing = Math.atan2(t.x - this.position.x, t.z - this.position.z);
     } else if (amount > 0.1) wantFacing = Math.atan2(_m.x, _m.z);
@@ -184,6 +216,7 @@ export class Player {
       if (wasAir && this.airTime > 0.35) {
         this.landTimer = 0.28;
         G.audio.play('land');
+        if (G.zone?.stepFx) G.fx.sparkles.emit(_foot.copy(this.position).setY(this.position.y + 0.04), 8, G.zone.stepFx, { speed: 0.9, up: 0.25, size: 0.18, life: 0.8, spread: 0.25 });
       }
       this.groundTime = Math.max(0, this.groundTime) + dt;
       this.airTime = 0;
@@ -201,9 +234,16 @@ export class Player {
     this.animate(dt);
   }
 
+  startTurn(want) {
+    this.turnT = TURN_TIME;
+    this.turnFrom = this.facing;
+    this.turnBy = angleTo(this.facing, want);
+  }
+
   animate(dt) {
     const h = this.h;
     this.landTimer -= dt;
+    if (this.state !== 'move') this.turnT = 0;
     // look at the Grumbling she is soothing, or at whoever is talking to her
     const t = G.soothe?.target;
     if (!G.ui.dialogueOpen) this.speaker = null;
@@ -219,24 +259,45 @@ export class Player {
       h.play('air', 0.15);
     } else if (this.landTimer > 0 && this.speed < 1) {
       h.play('land', 0.08);
+    } else if (this.turnT > 0) {
+      h.play('turn', 0.1);
     } else if (this.speed < 0.2) {
       h.play('idle', 0.25);
-    } else if (this.speed < 2.3) {
-      h.play('walk', 0.2, MathUtils.clamp(this.speed / 0.95, 0.7, 2.4));
     } else {
-      h.play('run', 0.2, MathUtils.clamp(this.speed / 2.2, 1, 2.1));
+      const [clip, ts] = gaitFor(h, this.speed, h.base === h.actions.run);
+      h.play(clip, 0.2, ts);
     }
     if (this.state === 'move') h.overlayPlay(this.humming ? 'hum' : this.overlayName || null, 0.25);
-    // footsteps
-    if (this.onGround && this.speed > 0.5 && this.state === 'move') {
-      this.stepPhase += dt * this.speed * 1.6;
-      if (this.stepPhase > 1) {
-        this.stepPhase = 0;
-        G.audio.play('step');
-      }
-    }
     h.update(dt);
+    this.footsteps();
     this.updateDoudou(dt);
+  }
+
+  // Footsteps where the feet really land in the walk and run clips (Humanoid.gait): a soft step sound and,
+  // in most zones, a little puff where the foot came down (zone.stepFx: dust, mist, a cool night puff).
+  footsteps() {
+    const h = this.h;
+    const a = h.base;
+    const clip = a === h.actions.walk ? 'walk' : a === h.actions.run ? 'run' : a === h.actions.turn ? 'turn' : null;
+    if (!clip || !this.onGround || this.state !== 'move') return void (this.stepWas = null);
+    const g = clip === 'turn' ? { plants: [0.25, 0.75] } : h.gait(clip);
+    const ph = (a.time / a.getClip().duration) % 1;
+    if (this.stepWas !== null && this.stepClip === clip) {
+      g.plants.forEach((p, i) => {
+        const crossed = this.stepWas <= ph ? this.stepWas < p && p <= ph : this.stepWas < p || p <= ph;
+        if (crossed) this.step(clip === 'turn' ? i : p > 0.7 ? 1 : 0, clip === 'run');
+      });
+    }
+    this.stepWas = ph;
+    this.stepClip = clip;
+  }
+  step(foot, running) {
+    G.audio.play('step');
+    const fx = G.zone?.stepFx;
+    if (!fx) return;
+    this.h.worldBone(foot ? 'foot_R' : 'foot_L', _foot);
+    _foot.y = this.position.y + 0.03;
+    G.fx.sparkles.emit(_foot, running ? 3 : 2, fx, { speed: running ? 0.35 : 0.22, up: 0.18, size: running ? 0.16 : 0.12, life: 0.7, spread: 0.08 });
   }
 
   updateDoudou(dt) {

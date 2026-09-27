@@ -72,8 +72,13 @@ export const SPECIES = {
   grey: {
     name: 'Grey Grumbling',
     feeling: 'Nobody remembers us.',
-    about: 'Heavy, quiet and drifting toward the Quiet District. Chapter 3.',
-    glow: '#dddddd',
+    about: 'Heavy and quiet, drifting toward the Quiet District. It won’t be hugged: stay with it first, and it remembers it isn’t alone.',
+    ability: 'recall',
+    abilityName: 'Recall',
+    abilityDesc: 'Remembers forgotten things: finds memories hidden in the fog.',
+    glow: '#d6dcea',
+    wrap: 6, // once someone has kept it company (systems/greys.js)
+    tantrum: 'heavy',
     chapter: 3,
   },
 };

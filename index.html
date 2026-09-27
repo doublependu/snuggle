@@ -9,8 +9,11 @@
   <title>Snuggle Sorcery</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='8' y='16' width='48' height='40' rx='14' fill='%23f6efe4' stroke='%23c9b79c' stroke-width='3'/%3E%3Cpath d='M14 20 L18 8 L26 17 M50 20 L46 8 L38 17' fill='%23f6efe4' stroke='%23c9b79c' stroke-width='3'/%3E%3Cpath d='M22 36h6M36 36h6' stroke='%235a4032' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E" />
   <script>
-    // Preload the models the first zone needs (from the save), in parallel with the JS.
+    // Preload the models the first zone needs (from the save), in parallel with the JS. Production builds
+    // fill in each model's content revision (vite.config.js); core/assets.js uses the same URLs.
     (function () {
+      var rev = {};
+      window.__modelRev = rev;
       var z = 'train';
       try { z = (JSON.parse(localStorage.getItem('snuggle-sorcery-save')) || {}).zone || z; } catch (e) {}
       var qs = new URLSearchParams(location.search);
@@ -23,10 +26,11 @@
         station: ['station', 'kit', 'tangtang'],
         academy: ['academy', 'kit', 'fang', 'tangtang', 'weibao'],
         market: ['market', 'market_kit', 'tangtang', 'weibao'],
+        quiet: ['quiet', 'quiet_kit', 'tangtang', 'weibao'],
       };
       ['xiaopei', 'anim_humanoid', 'creatures'].concat(zones[z] || []).forEach(function (n) {
         var l = document.createElement('link');
-        l.rel = 'preload'; l.as = 'fetch'; l.crossOrigin = 'anonymous'; l.href = './assets/models/' + n + '.glb';
+        l.rel = 'preload'; l.as = 'fetch'; l.crossOrigin = 'anonymous'; l.href = './assets/models/' + n + '.glb' + (rev[n] ? '?v=' + rev[n] : '');
         document.head.appendChild(l);
       });
     })();

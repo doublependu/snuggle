@@ -64,15 +64,23 @@ function helpers(page, t) {
     page,
     OUT,
     url: (q = '') => `http://127.0.0.1:${PORT}/${q}`,
-    // Load the game with an optional starting save (object, or null for a fresh game).
+    // Load the game with an optional starting save (object, or null for a fresh game). The seed runs once
+    // per tab (sessionStorage survives a reload), so reload tests see the game's own save afterwards.
     async open(q = '', save = null) {
       await page.addInitScript((s) => {
-        if (window.__seeded) return;
-        window.__seeded = true;
+        if (sessionStorage.getItem('__seeded')) return;
+        sessionStorage.setItem('__seeded', '1');
         localStorage.clear();
         if (s) localStorage.setItem('snuggle-sorcery-save', JSON.stringify(s));
       }, save);
       await page.goto(h.url(q), { waitUntil: 'load' });
+      await page.waitForFunction(() => !document.getElementById('begin').disabled, null, { timeout: 120000 });
+    },
+    // Wait for a reload (or navigation) the game starts itself, until Begin is ready again.
+    async reloaded(trigger) {
+      const nav = page.waitForNavigation({ waitUntil: 'load', timeout: 30000 });
+      await trigger();
+      await nav;
       await page.waitForFunction(() => !document.getElementById('begin').disabled, null, { timeout: 120000 });
     },
     async begin() {

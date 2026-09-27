@@ -5,10 +5,13 @@ import { G, flag } from '../../game.js';
 import { Zone } from '../zone.js';
 import { Rain } from '../../render/vfx.js';
 import { materialFor } from '../../render/materials.js';
-import { makeCreature } from '../../actors/creatures.js';
+import { makeCreature, animateParts } from '../../actors/creatures.js';
 import { SPECIES } from '../../content/species.js';
 import { bigTreeGeometry, candy, lotusBud, lotusField, noteSign } from '../../procgen/props.js';
 import { chapter1, wireAcademy, refreshObjective } from '../../story/chapter1.js';
+import { chapter3Academy, placeCast3 } from '../../story/chapter3.js';
+import { Grumbling } from '../../actors/grumbling.js';
+import '../../systems/greys.js'; // the grey Grumblings' behaviour (Chapter 3's morning)
 import { talk, ask } from '../../story/helpers.js';
 import { writeSave } from '../../core/save.js';
 
@@ -25,14 +28,24 @@ const NOTES = {
   overlook: 'Across the bay lies the old Quiet District. Check on your neighbours, dear students — even the shy ones. Especially the shy ones.',
 };
 
+// The grey morning of Chapter 3: an overcast sky, flat light, a cool haze over the harbour.
+const GREY_MORNING = {
+  skyTop: '#8b97a8', horizon: '#d2d4d6', ground: '#8f9a8c', fog: '#c6c9cd', fogNear: 40, fogFar: 180,
+  hemiSky: '#dfe4ec', hemiGround: '#88907a', hemi: 1.8, sunColor: '#efe8dc', sunI: 1.5, sun: new Vector3(-0.35, 0.55, 0.6),
+  clouds: 18, cloudColor: '#dadde2', cloudShade: '#a7adb6', skyline: { from: 1.2, to: 1.9 }, peakColor: '#9aa3ad', shadows: false,
+};
+
 export async function create() {
   const z = new Zone('academy');
-  // after Chapter 1 it is evening, and the night market (Chapter 2) is next
-  const evening = flag('ch1Done');
-  z.next = evening ? ['market', 'market_kit', 'folk_kid'] : [];
+  // after Chapter 1 it is evening, and the night market (Chapter 2) is next; after Chapter 2, the grey
+  // morning of Chapter 3, then dusk again when the friends come home from the Quiet District
+  const ch3 = flag('ch2Done');
+  const evening = flag('ch1Done') && (!ch3 || flag('ch3_return'));
+  const grey = ch3 && !flag('ch3_return');
+  z.next = ch3 ? ['quiet', 'quiet_kit', 'folk_kid'] : evening ? ['market', 'market_kit', 'folk_kid'] : [];
   await z.addGLB('academy');
   await z.placeKit('kit');
-  z.setupEnvironment(evening ? DUSK : {
+  z.setupEnvironment(grey ? GREY_MORNING : evening ? DUSK : {
     skyTop: '#6f9fcc', horizon: '#f3e2c6', ground: '#9fb59a', fog: '#eadfcb', fogNear: 50, fogFar: 210,
     hemiSky: '#ffeccc', hemiGround: '#8f9a6a', hemi: 2.0, sunColor: '#ffdcaa', sunI: 2.7, sun: new Vector3(-0.55, 0.5, 0.45),
     clouds: 12, cloudColor: '#fff6ea', cloudShade: '#e2c9b8', skyline: { from: 1.2, to: 1.9 }, peakColor: '#8aa0b3',
@@ -61,11 +74,14 @@ export async function create() {
   });
   z.updaters.push((dt) => {
     const t = G.time;
+    // the grey morning: they huddle together and hardly move
+    const huddle = grey ? 0.15 : 1;
     for (const s of taggers) {
-      const a = t * (0.9 + s.i * 0.07) + s.i * 1.6;
-      const r = 2.2 + Math.sin(t * 0.7 + s.i) * 0.8;
+      const a = t * (0.9 + s.i * 0.07) * huddle + s.i * 1.6;
+      const r = grey ? 0.7 : 2.2 + Math.sin(t * 0.7 + s.i) * 0.8;
       s.o.position.set(tag.x + Math.cos(a) * r, tag.y + 0.5 + Math.abs(Math.sin(t * 4 + s.i)) * 0.35, tag.z + Math.sin(a) * r);
       s.o.rotation.y = -a;
+      animateParts(s.o, t * 1.5 + s.i, grey ? 1 : 0);
       G.fx.glows.set(s.glow, s.o.position);
     }
   });
@@ -256,12 +272,25 @@ export async function create() {
       }
     }
   });
-  G.audio.bed('birds', 1);
-  G.audio.bed('water', 0.4);
-  G.audio.bed('pad', 1);
-  z.onExit = () => ['birds', 'water'].forEach((b) => G.audio.bed(b, 0));
+  G.audio.mix(grey ? 'academy-grey' : evening ? 'academy-dusk' : 'academy');
+  // ---- Chapter 3's morning: three grey Grumblings drift across the courtyard toward the gate
+  if (grey && !flag('ch3_greys')) {
+    const c = z.marker('POINT_fang_court').position;
+    z.morningGreys = [[2.5, 3.5], [-1.5, 5.5], [4.5, 7.0]].map(([dx, dz], i) =>
+      z.addGrumbling(new Grumbling('grey', c.clone().add(new Vector3(dx, 0, dz)), { id: 'morning' + i, aloof: true, wander: 1.2, heart: z.marker('SPAWN_gate').position })));
+    z.updaters.push(() => {
+      for (const g of z.morningGreys) {
+        if (g.atEnd && g.obj.parent) {
+          g.obj.scale.multiplyScalar(0.96); // gone down the hill, toward the harbour
+          if (g.obj.scale.x < 0.05) g.dispose();
+        }
+      }
+    });
+  }
   z.killY = -12;
-  z.start = () => chapter1(z);
+  z.stepFx = '#d6c6a4'; // dust on the paths
+  if (ch3) placeCast3(z);
+  z.start = () => (ch3 ? chapter3Academy(z) : chapter1(z));
   refreshObjective();
   return z;
 }

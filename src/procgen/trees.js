@@ -108,10 +108,10 @@ function geometryFor(kind) {
 export const TREE_KINDS = Object.keys(BUILDERS);
 
 // placements: [{ position: Vector3, scale, rot }]. Adds trunk colliders when a collision world is given.
-export function plantTrees(kind, placements, { collision = null, sway = true, shadows = true } = {}) {
+export function plantTrees(kind, placements, { collision = null, sway = true, shadows = true, fade = false } = {}) {
   if (!placements.length) return null;
   const geo = geometryFor(kind);
-  const mat = sway ? materialFor('leaf') : materialFor('leaf', { sway: 0 });
+  const mat = materialFor('leaf', { ...(sway ? {} : { sway: 0 }), ...(fade ? { fade: 1 } : {}) });
   const im = new InstancedMesh(geo, mat, placements.length);
   const m = new Matrix4();
   const q = new Quaternion();

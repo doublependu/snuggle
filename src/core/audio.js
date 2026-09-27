@@ -14,6 +14,19 @@ const PAD_CHORDS = [
 // The night-market musician's tune (Chapter 2): a bowed-string variation on the lullaby, 32 beats.
 const MUSICIAN = [62, 0, 66, 69, 71, 69, 66, 0, 64, 66, 69, 0, 66, 64, 62, 0, 69, 71, 74, 0, 71, 69, 66, 64, 66, 0, 64, 62, 64, 66, 62, 0];
 const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12);
+// Each place's soundscape: its ambience beds (level 0..1; any bed not listed fades out) and its music
+// track (content/music.js). Zones call G.audio.mix(id); proximity beds (the musician, the wok) are set
+// by their zones every frame on top of this. 'pad' is the simple chord pad heard until the music loads.
+const AMBIENCE = {
+  train: { rumble: 1, rain: 0.7, clack: 1, pad: 1, music: 'train' },
+  station: { water: 0.8, birds: 1, pad: 1, music: 'academy' },
+  academy: { birds: 1, water: 0.4, pad: 1, music: 'academy' },
+  'academy-dusk': { water: 0.4, insects: 0.5, pad: 1, music: 'dusk' },
+  'academy-grey': { wind: 0.3, water: 0.3, pad: 0.6, music: 'grey' },
+  market: { water: 0.6, crowd: 1, insects: 1, music: 'market' },
+  quiet: { wind: 0.55, water: 0.35, pad: 0.6, music: 'quiet' },
+};
+const BEDS = ['rumble', 'rain', 'clack', 'water', 'birds', 'insects', 'wind', 'crowd', 'pad'];
 
 export class Audio {
   constructor() {
@@ -52,6 +65,23 @@ export class Audio {
     this.noise = this.noiseBuffer(2);
     this.t0 = ctx.currentTime - (performance.now() / 1000 - this.t0);
     this.applyLoops();
+  }
+
+  get beatLength() {
+    return BEAT;
+  }
+
+  // Crossfade to a place's soundscape (AMBIENCE above). The composed music takes over from the simple pad
+  // once it has loaded (attachScore).
+  mix(id) {
+    this.mixId = id;
+    const m = AMBIENCE[id] || {};
+    for (const b of BEDS) this.bed(b, b === 'pad' && this.score ? 0 : m[b] || 0);
+    this.score?.play(m.music || null);
+  }
+  attachScore(score) {
+    this.score = score;
+    if (this.mixId) this.mix(this.mixId);
   }
 
   get now() {
@@ -115,7 +145,7 @@ export class Audio {
     o.stop(t + dur + 0.05);
     return o;
   }
-  burst(dur, { freq = 1200, q = 1, gain = 0.2, type = 'bandpass', at = 0, sweep = 0 } = {}) {
+  burst(dur, { freq = 1200, q = 1, gain = 0.2, type = 'bandpass', at = 0, sweep = 0, dest } = {}) {
     if (!this.ctx) return;
     const ctx = this.ctx;
     const t = at || ctx.currentTime;
@@ -130,7 +160,7 @@ export class Audio {
     g.gain.setValueAtTime(0.0001, t);
     g.gain.exponentialRampToValueAtTime(gain, t + 0.01);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    src.connect(f).connect(g).connect(this.sfx);
+    src.connect(f).connect(g).connect(dest || this.sfx);
     src.start(t, Math.random());
     src.stop(t + dur + 0.05);
   }
@@ -240,6 +270,18 @@ export class Audio {
         this.tone(220, 2.4, { type: 'triangle', gain: 0.08, slide: 0.6, attack: 0.3, verb: 0.8 });
         this.tone(233, 2.4, { type: 'sine', gain: 0.05, slide: 0.55, attack: 0.4, verb: 0.8 });
         break;
+      // ---- Chapter 3: the Quiet District
+      case 'memory': // the start of the lullaby on a music box, far away
+        [81, 78, 76, 74, 76, 78].forEach((m, i) => this.tone(mtof(m), 1.4, { gain: 0.045, at: t + i * 0.32, verb: 0.9, attack: 0.02 }));
+        break;
+      case 'relight':
+        this.burst(0.3, { freq: 1800, q: 0.9, gain: 0.05, sweep: 0.6 });
+        [740, 880, 1109].forEach((f, i) => this.tone(f, 0.9, { type: 'triangle', gain: 0.045, at: t + 0.12 + i * 0.1, verb: 0.7 }));
+        break;
+      case 'foghorn':
+        this.tone(98, 3.2, { type: 'sawtooth', gain: 0.035, attack: 0.6, release: 1.4, verb: 0.9 });
+        this.tone(97, 3.2, { type: 'triangle', gain: 0.05, attack: 0.6, release: 1.4, verb: 0.9 });
+        break;
       case 'thanks':
         [880, 1109, 1319].forEach((f, i) => this.tone(f, 0.5, { gain: 0.05, at: t + i * 0.09, verb: 0.5 }));
         break;
@@ -270,7 +312,9 @@ export class Audio {
         this.nextNote += BEAT;
       }
     } else this.nextNote = 0;
-    // background pad
+    // the composed music: quieter under dialogue, and further back while she hums (the lullaby is the star)
+    this.score?.update(this.humming ? 0.4 : this.duck ?? 1);
+    // background pad (until the music has loaded)
     if (this.loops.pad) {
       if (!this.padNext || this.padNext < ctx.currentTime) this.padNext = ctx.currentTime + 0.1;
       if (this.padNext < ctx.currentTime + 0.2) {
@@ -314,7 +358,7 @@ export class Audio {
   }
 
   // An erhu-ish bowed voice: a sawtooth through a vibrato'd lowpass, swelling in and out.
-  bowed(freq, dur, level, at) {
+  bowed(freq, dur, level, at, dest) {
     const ctx = this.ctx;
     const o = ctx.createOscillator();
     o.type = 'sawtooth';
@@ -336,7 +380,7 @@ export class Audio {
     g.gain.exponentialRampToValueAtTime(peak, at + 0.12);
     g.gain.setValueAtTime(peak, at + dur * 0.7);
     g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
-    o.connect(f).connect(g).connect(this.music);
+    o.connect(f).connect(g).connect(dest || this.music);
     const s = ctx.createGain();
     s.gain.value = 0.5;
     g.connect(s).connect(this.verb);

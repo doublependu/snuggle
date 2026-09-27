@@ -1,0 +1,11 @@
+# Cloudflare static-asset headers (read by the asset server, not served). See wrangler.jsonc.
+# Everything under /assets/ is immutable: JS chunks have content hashes in their names, and every model
+# URL carries its content revision (?v=..., added at build time by vite.config.js). index.html, sw.js and
+# the licence file keep Cloudflare's default (public, max-age=0, must-revalidate, with an ETag), so a new
+# deploy is picked up on the next load. No frame-blocking header: the game can be embedded (maize.live).
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin

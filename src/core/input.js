@@ -4,11 +4,19 @@
 //   edges: jump, interact, assist, book, pause, hum, confirm, back
 import { Vector2 } from 'three';
 
-const KEYMAP = {
-  KeyW: 'up', ArrowUp: 'up', KeyS: 'down', ArrowDown: 'down', KeyA: 'left', ArrowLeft: 'left', KeyD: 'right', ArrowRight: 'right',
-  Space: 'jump', ShiftLeft: 'sprint', ShiftRight: 'sprint', KeyE: 'hum', KeyF: 'interact', Enter: 'interact', KeyQ: 'assist',
-  Tab: 'book', KeyB: 'book', Escape: 'pause', KeyP: 'pause',
+// Default bindings; players can change them (Controls > Change controls, ui/remap.js), saved in the settings.
+// Keyboard: action -> key codes (the first is the one hints show). Gamepad: action -> button (standard
+// mapping). Escape always pauses and Enter always confirms, whatever else is bound.
+export const KEYS = {
+  up: ['KeyW', 'ArrowUp'], down: ['KeyS', 'ArrowDown'], left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'],
+  hum: ['KeyE'], interact: ['KeyF'], jump: ['Space'], sprint: ['ShiftLeft', 'ShiftRight'], assist: ['KeyQ'], book: ['Tab', 'KeyB'], pause: ['KeyP'],
 };
+export const PAD = { jump: 0, interact: 2, assist: 3, hum: 7, sprint: 4, book: 8, pause: 9 };
+const FIXED = { Escape: 'pause', Enter: 'interact' };
+export const PAD_NAMES = ['A', 'B', 'X', 'Y', 'LB', 'RB', 'LT', 'RT', 'Back', 'Start', 'L3', 'R3', 'D-pad ↑', 'D-pad ↓', 'D-pad ←', 'D-pad →'];
+export const keyLabel = (code = '') =>
+  ({ Space: 'Space', ShiftLeft: 'Shift', ShiftRight: 'Shift', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Escape: 'Esc', ControlLeft: 'Ctrl', AltLeft: 'Alt' })[code] ||
+  code.replace(/^(Key|Digit|Numpad)/, '');
 
 export class Input {
   constructor(canvas) {
@@ -29,7 +37,22 @@ export class Input {
     this.sensitivity = 1;
     this.invertY = false;
     this.dragging = null;
+    this.setBindings();
     this.bind();
+  }
+
+  // Apply the player's bindings (settings.keys / settings.pad: only the changed actions).
+  setBindings(keys = {}, pad = {}) {
+    this.keyBind = { ...KEYS, ...keys };
+    this.padBind = { ...PAD, ...pad };
+    this.keymap = { ...FIXED };
+    for (const [a, codes] of Object.entries(this.keyBind)) for (const c of codes) this.keymap[c] ??= a;
+  }
+  // The key or button a hint should show for an action, on the device in use ('move': e.g. WASD).
+  label(a, device = this.device) {
+    if (device === 'gamepad') return a === 'move' ? 'left stick' : PAD_NAMES[this.padBind[a]] ?? '';
+    if (a === 'move') return ['up', 'left', 'down', 'right'].map((x) => keyLabel(this.keyBind[x][0])).join('');
+    return keyLabel(this.keyBind[a]?.[0]);
   }
 
   onDevice(fn) {
@@ -44,7 +67,8 @@ export class Input {
 
   bind() {
     addEventListener('keydown', (e) => {
-      const a = KEYMAP[e.code];
+      if (this.capture) return this.capture(e); // Controls > Change controls is listening for a key
+      const a = this.keymap[e.code];
       if (!a) return;
       if (a === 'book' || a === 'jump' || e.code.startsWith('Arrow')) e.preventDefault();
       this.setDevice('keyboard');
@@ -52,7 +76,7 @@ export class Input {
       this.keys.add(a);
     });
     addEventListener('keyup', (e) => {
-      const a = KEYMAP[e.code];
+      const a = this.keymap[e.code];
       if (a) this.keys.delete(a);
     });
     addEventListener('blur', () => {
@@ -143,20 +167,24 @@ export class Input {
         this.press(a);
       }
     };
-    edge(0, 'jump');
-    edge(2, 'interact');
-    edge(3, 'assist');
+    const pb = this.padBind;
+    const used = Object.values(pb);
+    if (this.padCapture) {
+      // Controls > Change controls is listening for a button
+      const i = b.findIndex((x, k) => x && !pd.prev[k]);
+      pd.prev = b;
+      if (i >= 0) this.padCapture(i);
+      return;
+    }
+    for (const a of ['jump', 'interact', 'assist', 'book', 'pause', 'hum']) edge(pb[a], a);
     edge(1, 'back');
-    edge(8, 'book');
-    edge(9, 'pause');
-    edge(7, 'hum');
-    edge(5, 'hum');
+    if (!used.includes(5)) edge(5, 'hum'); // RB hums too, unless it was given another job
     edge(12, 'up_edge');
     edge(13, 'down_edge');
     edge(14, 'left_edge');
     edge(15, 'right_edge');
-    pd.hum = !!(b[7] || b[5]);
-    pd.sprint = !!(b[4] || b[10]);
+    pd.hum = !!(b[pb.hum] || (!used.includes(5) && b[5]));
+    pd.sprint = !!(b[pb.sprint] || (!used.includes(10) && b[10]));
     if (pd.move.lengthSq() > 0 || pd.look.lengthSq() > 0) this.setDevice('gamepad');
     pd.prev = b;
   }

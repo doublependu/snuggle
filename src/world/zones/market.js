@@ -4,6 +4,8 @@
 // floating lanterns (systems/chestnuts.js, systems/lanterns.js), lost children to guide home
 // (systems/guide.js), a street musician, and across the water the Quiet District, whose lights go out.
 import { Vector3 } from 'three';
+import { loadGLB } from '../../core/assets.js';
+import { stylize } from '../../render/materials.js';
 import { G, flag } from '../../game.js';
 import { Zone } from '../zone.js';
 import { Perch } from '../../systems/perch.js';
@@ -60,16 +62,42 @@ export async function create() {
     G.audio.bed('musician', Math.max(0.12, Math.min(1, 1 - (p.distanceTo(stage) - 4) / 26)));
     G.audio.bed('sizzle', Math.max(0, 1 - p.distanceTo(wok) / 7));
   });
-  z.whenNPC('musician', (n) => {
-    n.h.overlayPlay('stir', 0.3, 3); // bowing the erhu
+  z.whenNPC('musician', async (n) => {
+    // she plays the erhu: it rests on her lap, the bow follows her right hand, and the bowing is in time
+    // with the beat (two strokes, out and back, every two beats), a ♪ at each change of stroke
+    n.h.overlayPlay('erhu', 0.3, 3);
     n.noLook = true;
-    n.opts.overlay = 'stir'; // back to playing after a chat
-    let notes = 0;
-    z.updaters.push((dt) => {
-      notes -= dt;
-      if (notes < 0) {
-        notes = 1.4 + Math.random();
-        G.ui.floaty(n.position.clone().setY(n.position.y + 1.6), Math.random() < 0.5 ? '♪' : '♫');
+    n.opts.overlay = 'erhu'; // back to playing after a chat
+    const kit = await loadGLB('market_kit');
+    const erhu = kit.scene.getObjectByName('erhu')?.clone(true);
+    const bow = kit.scene.getObjectByName('erhu_bow')?.clone(true);
+    if (!erhu || !bow || z.disposed) return;
+    stylize(erhu, { shadows: false });
+    stylize(bow, { shadows: false });
+    // on her lap, in front of her hips, leaning back a little (her own frame: +z is where she faces)
+    n.h.root.updateMatrixWorld(true);
+    const hips = n.h.root.worldToLocal(n.h.bones.hips.getWorldPosition(new Vector3()));
+    erhu.position.set(0.07, hips.y + 0.2, hips.z + 0.17);
+    erhu.rotation.set(-0.12, 0, 0);
+    n.root.add(erhu);
+    z.group.add(bow);
+    const hand = new Vector3(),
+      strings = new Vector3();
+    const act = n.h.action('erhu_upper');
+    let stroke = 0;
+    z.updaters.push(() => {
+      const b = G.audio.beat();
+      if (act && n.h.overlay === act) act.time = (((b.index % 2) + b.phase) / 2) * act.getClip().duration;
+      n.h.worldBone('hand_R', hand);
+      erhu.updateMatrixWorld();
+      strings.set(0, -0.035, -0.3);
+      erhu.localToWorld(strings);
+      bow.position.copy(hand);
+      bow.lookAt(strings);
+      const s = b.index % 2;
+      if (s !== stroke) {
+        stroke = s;
+        if (n.h.overlay === act) G.ui.floaty(n.position.clone().setY(n.position.y + 1.5), Math.random() < 0.5 ? '♪' : '♫');
       }
     });
     n.onTalk = async () => {
@@ -133,12 +161,14 @@ export async function create() {
     if (!flag('ch2_start')) return;
     G.goto('academy', 'SPAWN_gate');
   });
-  G.audio.bed('water', 0.6);
-  G.audio.bed('crowd', 1);
-  G.audio.bed('insects', 1);
-  G.audio.bed('pad', 0);
-  z.onExit = () => ['water', 'crowd', 'insects', 'musician', 'sizzle', 'wind'].forEach((b) => G.audio.bed(b, 0));
+  G.audio.mix('market');
+  const perchExit = z.onExit; // the perch system's own cleanup (its chips and keys)
+  z.onExit = () => {
+    perchExit?.();
+    ['musician', 'sizzle'].forEach((b) => G.audio.bed(b, 0));
+  };
   z.killY = -5;
+  z.stepFx = '#8e95ad'; // a cool puff on the night-time flagstones
   z.safeMinY = -0.3;
   // fell off the pier or the sea wall: a splash, and back to dry land
   z.updaters.push(() => {

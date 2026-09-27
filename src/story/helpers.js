@@ -18,23 +18,25 @@ export function objective(text) {
   G.events.emit('objective', text);
 }
 
+// {action} shows the key or button bound to it on the device in use (the player may have changed them).
 const HINTS = {
   move: {
-    keyboard: 'Move with <b>WASD</b>. Click the view to look around with the <b>mouse</b>.',
+    keyboard: 'Move with <b>{move}</b>. Click the view to look around with the <b>mouse</b>.',
     gamepad: 'Move with the <b>left stick</b>, look with the <b>right stick</b>.',
     touch: 'Drag on the <b>left</b> to walk, drag on the <b>right</b> to look around.',
   },
-  notice: { keyboard: 'Walk up to it and press <b>F</b> to Notice it.', gamepad: 'Walk up to it and press <b>X</b> to Notice it.', touch: 'Walk up to it and tap <b>Notice</b>.' },
-  hum: { keyboard: 'Hold <b>E</b> (or the left mouse button) to hum.', gamepad: 'Hold <b>RT</b> to hum.', touch: 'Hold the big <b>Hum</b> button.' },
-  talk: { keyboard: 'Press <b>F</b> to talk.', gamepad: 'Press <b>X</b> to talk.', touch: 'Tap <b>Talk</b>.' },
-  assist: { keyboard: 'Press <b>Q</b> to toss a tart at a Grumbling.', gamepad: 'Press <b>Y</b> to toss a tart at a Grumbling.', touch: 'Tap <b>Tart</b> to toss a tart at a Grumbling.' },
-  book: { keyboard: 'Press <b>Tab</b> to open your Sprite Book.', gamepad: 'Press <b>Back</b> to open your Sprite Book.', touch: 'Tap 📖 to open your Sprite Book.' },
-  jump: { keyboard: 'Press <b>Space</b> to jump.', gamepad: 'Press <b>A</b> to jump.', touch: 'Tap <b>Jump</b>.' },
+  notice: { key: 'Walk up to it and press <b>{interact}</b> to Notice it.', touch: 'Walk up to it and tap <b>Notice</b>.' },
+  hum: { keyboard: 'Hold <b>{hum}</b> (or the left mouse button) to hum.', gamepad: 'Hold <b>{hum}</b> to hum.', touch: 'Hold the big <b>Hum</b> button.' },
+  talk: { key: 'Press <b>{interact}</b> to talk.', touch: 'Tap <b>Talk</b>.' },
+  assist: { key: 'Press <b>{assist}</b> to toss a tart at a Grumbling.', touch: 'Tap <b>Tart</b> to toss a tart at a Grumbling.' },
+  book: { key: 'Press <b>{book}</b> to open your Sprite Book.', touch: 'Tap 📖 to open your Sprite Book.' },
+  jump: { key: 'Press <b>{jump}</b> to jump.', touch: 'Tap <b>Jump</b>.' },
 };
 
 export function hint(name, life = 5) {
   const h = HINTS[name];
-  const text = typeof h === 'string' ? h : h?.[G.input.device] || h?.keyboard || name;
+  const d = G.input.device;
+  const text = (h?.[d] || (d !== 'touch' && h?.key) || h?.keyboard || h?.key || name).replace(/\{(\w+)\}/g, (_, a) => G.input.label(a));
   G.ui.toast('💡 ' + text, life);
 }
 

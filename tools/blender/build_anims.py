@@ -236,12 +236,46 @@ def pat(t):
     return p, (0, 0, 0)
 
 
+def turn(t):
+    """Turning on the spot: two small shuffle steps, shoulders leading (the runtime turns the root)."""
+    a = TAU * t
+    p = base(arm_down=72, arm_fwd=4, elbow=16)
+    for s, g in (('L', 1), ('R', -1)):
+        ph = a if s == 'L' else a + math.pi
+        lift = max(0.0, S(ph))
+        p['thigh_' + s] = arot(('x', -18 * lift))
+        p['shin_' + s] = arot(('x', 6 + 34 * lift))
+        p['foot_' + s] = arot(('x', -6 - 6 * lift))
+        p['upperarm_' + s] = arot(('y', 72 * g), ('x', -8 * S(ph + math.pi)))
+    p['chest'] = arot(('z', 7), ('x', 2))
+    p['head'] = arot(('z', 9))
+    p['hips'] = arot(('y', 2 * S(a)))
+    return p, (0, 0, -0.008 + 0.012 * abs(S(a)))
+
+
+def erhu(t):
+    """Playing the erhu, seated (an upper-body overlay on 'sit'): the left hand high on the neck, fingers
+    stepping; the right arm draws the bow across, one stroke out and one back per cycle."""
+    a = TAU * t
+    bow = S(a)
+    p = {}
+    p['upperarm_L'] = arot(('y', 52), ('x', -32))
+    p['forearm_L'] = arot(('z', -88 + 4 * S(4 * a)))
+    p['hand_L'] = arot(('x', -8 * S(4 * a)))
+    p['upperarm_R'] = arot(('y', -60 + 16 * bow), ('x', -24))
+    p['forearm_R'] = arot(('z', 58 - 32 * bow))
+    p['hand_R'] = arot(('y', -12 * bow))
+    p['chest'] = arot(('x', 6), ('z', 4 * bow))
+    p['head'] = arot(('x', 10), ('y', 7 * S(a + 0.5)), ('z', -6))
+    return p, (0, 0, 0)
+
+
 CLIPS = [
     ('idle', 72, idle, True), ('walk', 24, walk, True), ('run', 16, run, True), ('air', 24, air, True),
     ('land', 10, land, False), ('hum', 40, hum, True), ('throw', 18, throw, False), ('talk', 48, talk, True),
     ('wave', 30, wave, True), ('sit', 72, sit, True), ('overwhelmed', 72, overwhelmed, True),
     ('celebrate', 24, celebrate, True), ('shy', 60, shy, True), ('puppet', 40, puppet, True),
-    ('stir', 36, stir, True), ('pat', 40, pat, True),
+    ('stir', 36, stir, True), ('pat', 40, pat, True), ('turn', 12, turn, True), ('erhu', 48, erhu, True),
 ]
 
 

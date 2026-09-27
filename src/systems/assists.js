@@ -91,7 +91,7 @@ function echo(target) {
   }
   G.audio.play('honk');
   G.events.emit('assist', { kind: 'echo', target });
-  G.ui.bubble(target.obj, `🪿 ${NEEDS[target.species] || 'IT JUST WANTS A HUG. HONK.'}`, 4.5, 0.9);
+  G.ui.bubble(target.obj, `🪿 ${target.echoLine?.() || NEEDS[target.species] || 'IT JUST WANTS A HUG. HONK.'}`, 4.5, 0.9);
   const was = target.rate.bind(target);
   target.rate = () => was() * 2;
   setTimeout(() => (target.rate = was), 12000);
