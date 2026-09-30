@@ -102,12 +102,13 @@ async function boot() {
 
   const zoneId = ZONES[params.get('zone')] ? params.get('zone') : ZONES[save.zone] ? save.zone : 'train';
   const [, h] = await Promise.all([loadCreatures(), Humanoid.load('xiaopei'), ZONES[zoneId]()]);
-  status.textContent = 'Tucking Doudou into the hood…';
+  status.textContent = 'Tucking Bean into the hood…';
   const doudou = makeCreature('doudou');
   G.player = new Player(h, doudou);
   G.player.doudou.userData.eyes = doudou.userData.eyes;
   G.scene.add(G.player.root);
   G.cam = new FollowCamera(G.camera);
+  if (import.meta.env.DEV) import('./dev/floorcheck.js').then((m) => (G.devCheck = m.floorCheck));
   await enterZone(zoneId, params.get('spawn') || save.spawn || 'SPAWN_start');
   status.textContent = 'Ready when you are.';
   G.collection.refreshHud();
@@ -200,7 +201,7 @@ function frame(now) {
   input.update(dt);
   // global shortcuts
   if (input.consume('unlocked') && !G.menus.open && !G.paused && !G.ui.dialogueOpen) G.menus.togglePause();
-  if (input.consume('pause') && !G.menus.open) G.menus.togglePause();
+  if (!G.menus.open && input.consume('pause')) G.menus.togglePause(); // an open menu handles Esc itself (it closes it)
   if (input.pressed('book') && !G.menus.open && !G.frozen) {
     input.consume('book');
     G.menus.toggleBook();
@@ -220,6 +221,7 @@ function frame(now) {
     for (const fn of [...G.updaters]) fn(dt);
     G.fx.sparkles.update(dt);
     G.ui.update(dt);
+    if (import.meta.env.DEV) G.devCheck?.(dt);
   }
   G.audio.duck = G.ui.dialogueOpen ? 0.55 : 1;
   G.audio.update();

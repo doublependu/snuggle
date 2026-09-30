@@ -82,10 +82,11 @@ def base_platform(w, d, h, steps_front=True, color=STONE):
         for i in range(n):
             sh = h * (i + 1) / (n + 1)
             out.append(box('step%d' % i, (0, -d / 2 - 0.3 * (n - i) + 0.15, sh / 2), (1.8, 0.32, sh), 'stone', C(STONE_D)))
-        # collision ramp over the steps
+        # collision ramp over the steps, rising toward the platform (+Y). It used to tilt the other way: a
+        # knee-high wall at the foot of the steps that you could only jump over.
         L = 0.32 * n + 0.1
         ang = math.degrees(math.atan2(h, L))
-        cols.append(col_box('ramp', (0, -d / 2 - L / 2, h / 2 - 0.05), (1.8, math.hypot(L, h), 0.1), rot=(-ang, 0, 0)))
+        cols.append(col_box('ramp', (0, -d / 2 - L / 2, h / 2 - 0.05), (1.8, math.hypot(L, h), 0.1), rot=(ang, 0, 0)))
     return out, cols
 
 

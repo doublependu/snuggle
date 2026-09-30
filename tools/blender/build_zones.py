@@ -149,7 +149,7 @@ def train():
         for sy in (-1, 1):
             V.append(box('rack%d%d' % (i, sy), (cx, sy * 1.15, 2.02), (bay - 0.6, 0.55, 0.03), 'wood', brass))
             V.append(tube('rackbar%d%d' % (i, sy), (cx - bay / 2 + 0.3, sy * 0.9, 2.04), (cx + bay / 2 - 0.3, sy * 0.9, 2.04), 0.02, 0.02, 'wood', brass, segs=5, rings=1))
-    # a few bags on the racks, Xiao Pei's cardboard suitcase near her seat
+    # a few bags on the racks, Pip's cardboard suitcase near her seat
     for i, (xx, sy, colr) in enumerate(((-5.2, 1, '#8a5a8a'), (-0.6, -1, '#5f8a5a'), (3.9, 1, '#b5483a'), (6.2, -1, '#3e6f8a'))):
         V.append(superquad('bag%d' % i, (xx, sy * 1.15, 2.2), (0.3, 0.2, 0.15), 'cloth', C(colr), n=3, res=2, smooth=True))
     V.append(box('suitcase', (-5.75, 0.55, 0.22), (0.5, 0.18, 0.4), 'paper', C('#c49a64')))

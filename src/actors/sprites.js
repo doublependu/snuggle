@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Charm Sprite followers: small glowing versions of soothed Grumblings that trail Xiao Pei.
+// Charm Sprite followers: small glowing versions of soothed Grumblings that trail Pip.
 // At most MAX are visible (the rest are "in her pockets") to keep phones happy.
 import { Group, Vector3 } from 'three';
 import { G } from '../game.js';

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Xiao Pei: capsule character controller against the zone BVH, animation state and Doudou riding in
+// Pip: capsule character controller against the zone BVH, animation state and Bean riding in
 // her hood (her braid swings on the Humanoid's spring chains).
 import { Line3, MathUtils, Vector3 } from 'three';
 import { G } from '../game.js';
@@ -16,7 +16,7 @@ const angleTo = (from, to) => MathUtils.euclideanModulo(to - from + Math.PI, Mat
 
 // Walk or run for a speed, from the character's measured gait: the walk clip up to about 1.9x its natural
 // speed (a brisk stroll), then the run (with a little hysteresis so it doesn't flicker between them), each
-// played at the speed that keeps the planted foot still. Used by Xiao Pei, the NPCs and her friends.
+// played at the speed that keeps the planted foot still. Used by Pip, the NPCs and her friends.
 export function gaitFor(h, speed, wasRun = false) {
   const walk = h.gait('walk'),
     run = h.gait('run');
@@ -25,7 +25,7 @@ export function gaitFor(h, speed, wasRun = false) {
   return ['run', MathUtils.clamp(speed / run.speed, 0.7, 3.4)];
 }
 
-// Put Doudou in Xiao Pei's hood. Newer models carry a seat_doudou bone (where his base sits);
+// Put Bean in Pip's hood. Newer models carry a seat_doudou bone (where his base sits);
 // older ones fall back to a fixed offset. Call while the skeleton is still in its bind pose.
 export function seatDoudou(humanoid, doudou) {
   const root = humanoid.root;
@@ -66,7 +66,7 @@ export class Player {
     this.stepWas = null;
     this.moveScale = 1;
     this.root.name = 'xiaopei';
-    // Doudou sleeps in the hood
+    // Bean sleeps in the hood
     this.doudou = doudou;
     if (doudou) seatDoudou(humanoid, doudou);
     // her face follows the dialogue like the NPCs'
@@ -79,12 +79,22 @@ export class Player {
     G.events.on('said', () => humanoid.face?.set('neutral'));
   }
 
-  teleport(p, facing = this.facing) {
+  // Put her at p, feet on the floor under it: story spots come from markers at ground level, so one on a raised
+  // floor (the pavilion's platform) would otherwise leave her inside it. snap=false keeps p exactly (seats).
+  teleport(p, facing = this.facing, snap = true) {
     this.position.copy(p);
-    this.safe.copy(p);
+    const y = snap ? G.collision?.floorY(p) : null;
+    if (y != null) this.position.y = y;
+    this.safe.copy(this.position);
     this.velocity.set(0, 0, 0);
     this.facing = facing;
     this.root.rotation.y = facing;
+  }
+
+  // Sprinting (faster than her normal run): shy Grumblings (sparrows, grey ones) startle at it. Only sprinting,
+  // because on a keyboard her normal pace is a run; there is no key for a gentler walk.
+  get rushing() {
+    return this.speed > 3.6;
   }
 
   setState(s) {
@@ -93,9 +103,9 @@ export class Player {
   }
 
   // Sit on a seat: front = centre of the seat's front edge, seat = seat-top height. stand() puts her back
-  // on her feet (by default a step in front of the seat, clear of the bench's collider).
+  // on her feet, on the floor (by default a step in front of the seat, clear of the bench's collider).
   sitOn(front, facing, seat = 0.45) {
-    this.teleport(this.h.seatRoot(front, facing, seat, _p), facing);
+    this.teleport(this.h.seatRoot(front, facing, seat, _p), facing, false);
     this.seatFront = front.clone();
     this.setState('sit');
     this.h.overlayPlay(null);

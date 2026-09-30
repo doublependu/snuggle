@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Composed music: a small step sequencer playing the scores in content/music.js (all variations on Xiao
-// Pei's mother's lullaby, one per place and mood). Loaded after Begin, so it costs nothing before the
+// Composed music: a small step sequencer playing the scores in content/music.js (all variations on Pip
+//'s mother's lullaby, one per place and mood). Loaded after Begin, so it costs nothing before the
 // first interaction, and synthesized like every other sound (no audio files). It runs on the lullaby's
 // beat clock (core/audio.js), so the soothing ring and the on-beat bonus still line up with the music.
 // Tracks crossfade; the music ducks under dialogue and steps back while she hums (the lullaby is the star).

@@ -137,6 +137,7 @@ export async function create() {
     const id = m.name;
     if (G.save.candies[id]) continue;
     const c = candy();
+    c.name = 'candy';
     c.position.copy(m.position);
     z.group.add(c);
     const hidden = !!m.data.hidden;
@@ -191,7 +192,7 @@ export async function create() {
     const key = 'kind_' + m.name;
     const o = makeCreature(['cloud', 'pompom', 'sock'][Number(m.name.slice(-1)) % 3], { glow: '#ffe7c0' });
     o.scale.setScalar(0.4);
-    o.position.copy(m.position).setY(m.position.y + 0.05);
+    o.position.copy(m.position).setY((z.collision.floorY(m.position) ?? m.position.y) + 0.05); // two of them are on a dorm's porch
     if (o.userData.eyes) o.userData.eyes.scale.y = 0.15;
     z.group.add(o);
     const blanket = new Mesh(o.userData.body.children[0]?.geometry || undefined, materialFor('cloth', { color: 0xe0a53a, vertexColors: false }));
@@ -200,7 +201,7 @@ export async function create() {
     o.add(blanket);
     z.updaters.push(() => o.scale.set(0.4, 0.4 * (1 + Math.sin(G.time * 2 + m.position.x) * 0.05), 0.4));
     z.addInteractable({
-      position: m.position,
+      position: o.position,
       radius: 1.8,
       label: 'Tuck in the sleepy sprite',
       enabled: () => !G.save.story[key],
@@ -208,7 +209,7 @@ export async function create() {
         G.save.story[key] = true;
         blanket.visible = true;
         G.ui.bubble(o, 'z z z… ♡', 2, 0.6);
-        G.collection.cozy(4, 'Tucked someone in', m.position.clone().setY(1.2));
+        G.collection.cozy(4, 'Tucked someone in', o.position.clone().setY(o.position.y + 1.2));
       },
     });
   }
@@ -229,7 +230,7 @@ export async function create() {
   const chat = {
     s1: ['Welcome to Mistbloom! The courtyard sprites never stop playing tag.', 'Master Fang hides lemon candies everywhere. Everywhere!'],
     s2: ['The pagoda on the hill has the best view. There might be a candy up there too.', 'Have you been to the overlook? You can see the Quiet District across the bay.'],
-    classmate: ['Master Fang’s lessons are short but they stick with you.', 'Wei Bao is really nice once you get to know Captain Honk.'],
+    classmate: ['Master Fang’s lessons are short but they stick with you.', 'Bo is really nice once you get to know Captain Honk.'],
     player1: ['We have even teams… oh. Is that pom-pom still sitting alone by the goal?', 'Nobody told it the game started, I think.'],
     player2: ['Go team! Um, which team am I on again?'],
     player3: ['That little pom-pom looks so sad. Maybe it just wants someone to ask it to play.'],
@@ -244,7 +245,7 @@ export async function create() {
           G.save.tarts--;
           G.save.story.kind_share = true;
           G.collection.cozy(8, 'Shared a snack', n.position.clone().setY(1.6));
-          return talk([['student', 'Mmm! Tangtang made this, right? You’re the best!']]);
+          return talk([['student', 'Mmm! Sunny made this, right? You’re the best!']]);
         }
       }
       await talk([['student', lines[i++ % lines.length]]]);

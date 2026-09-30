@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Chapter 3: The Quiet District. Grumblings across the city are getting grey and heavy, and they don't want
 // to be hugged anymore; they're all drifting toward the Quiet District, an old neighbourhood of shuttered
-// shops across the harbour. Wei Bao's Echo Friend: "Nobody remembers us. So we're going to where nobody
+// shops across the harbour. Bo's Echo Friend: "Nobody remembers us. So we're going to where nobody
 // remembers anything." Master Fang goes very still. Across the water, the friends keep the grey
 // Grumblings company and ask their Charm Sprites what the district remembers. That evening, Master Fang
 // tells them the story of the fog, fifty years ago.
@@ -21,7 +21,7 @@ const memCount = () => MEMORY_IDS.filter((id) => flag('mem_' + id)).length;
 export function chapter3Objective() {
   const f = (k) => flag(k);
   if (!f('ch3_greys')) return 'Something is wrong in the courtyard…';
-  if (!f('ch3_arrive')) return 'Meet Wei Bao at the gate: the ferry to the Quiet District';
+  if (!f('ch3_arrive')) return 'Meet Bo at the gate: the ferry to the Quiet District';
   if (!f('ch3_return')) {
     const n = memCount();
     if (n < MEMORY_IDS.length) return `Ask your Charm Sprites what the Quiet District remembers (${n}/${MEMORY_IDS.length})`;
@@ -107,7 +107,7 @@ export const MEMORIES = {
     look: 1.4,
     lines: [
       [null, 'The Grey Grumbling lets out a long, slow sigh… and the fog in front of the door thins, just a little.'],
-      ['Grandmother', 'Qiuyue! Your tea is ready. Five more minutes, then home, all right?'],
+      ['Grandmother', 'Autumn! Your tea is ready. Five more minutes, then home, all right?'],
       ['A little girl', 'Five more minutes, Grandma… I don’t want to go yet. It’s so warm in here.'],
       ['Grandmother', 'Then stay. There is always room at this table. Always.'],
     ],
@@ -116,8 +116,8 @@ export const MEMORIES = {
       const p = G.player;
       p.doudou.userData.awake = true;
       await talk([
-        ['xiaopei', 'Qiuyue… isn’t that Master Fang’s name?', { face: 'surprised' }],
-        [null, 'In Xiao Pei’s hood, Doudou is wide awake, staring at the warm door in the fog. He doesn’t say a word.'],
+        ['xiaopei', 'Autumn… isn’t that Master Fang’s name?', { face: 'surprised' }],
+        [null, 'In Pip’s hood, Bean is wide awake, staring at the warm door in the fog. He doesn’t say a word.'],
         ['tangtang', 'It’s getting dark. Master Fang said to be home before the lanterns are lit!'],
         ['weibao', '…let’s go home. She’ll want to hear all of this.'],
       ]);
@@ -135,13 +135,7 @@ export function placeCast3(z) {
   const fang = npc('fang'),
     tt = npc('tangtang'),
     wb = npc('weibao');
-  const at = (n, pos, facing) => {
-    if (!n) return;
-    n.walkTarget = null;
-    n.root.position.copy(pos);
-    n.facing = n.homeFacing = facing;
-    n.root.rotation.y = facing;
-  };
+  const at = (n, pos, facing) => n?.place(pos, facing, z.collision); // the zone may still be loading
   const stand = (n) => {
     if (!n) return;
     n.base = 'idle';
@@ -152,7 +146,7 @@ export function placeCast3(z) {
   const gate = z.marker('SPAWN_gate').position;
   const pav = z.marker('POINT_fang_lesson');
   if (flag('ch3_return')) {
-    // dusk: Master Fang by the pavilion; Wei Bao on his lesson bench until the story, then at the gate
+    // dusk: Master Fang by the pavilion; Bo on his lesson bench until the story, then at the gate
     at(fang, pav.position, pav.facing);
     if (flag('ch3Done')) {
       stand(wb);
@@ -351,7 +345,7 @@ function wireFriends(z) {
       talk([['honk', pick([
         'THE GREY ONES DO NOT WANT A HUG. THEY WANT SOMEONE TO STAY. STAYING IS HARDER. HONK.',
         'ASK YOUR CHARM SPRITES. THEY REMEMBER WHAT THIS PLACE FORGOT. HONK.',
-        'WEI BAO USED TO FEEL GREY SOMETIMES. BEFORE HE HAD FRIENDS. HONK.',
+        'BO USED TO FEEL GREY SOMETIMES. BEFORE HE HAD FRIENDS. HONK.',
       ])]]);
 }
 
@@ -373,15 +367,13 @@ async function fangStory(z) {
     if (Math.random() < 0.3) G.fx.sparkles.emit(fire.clone().setY(fire.y + 0.55), 1, '#ffb05a', { speed: 0.25, up: 0.9, size: 0.1, life: 1.1 });
     G.fx.glows.set(glow, fire.clone().setY(fire.y + 0.6), null, 1.3 + Math.sin(G.time * 9) * 0.15);
   });
-  fang.root.position.copy(pav.position);
-  fang.facing = fang.homeFacing = pav.facing;
-  fang.root.rotation.y = fang.facing;
+  fang.place(pav.position, pav.facing, z.collision);
   refreshObjective3();
   await until(() => near(seat.position, 3.6) && !G.frozen);
   G.frozen = true;
   p.sitOn(seat.position, seat.facing, seat.data.seat ?? 0.89);
   if (tt) {
-    // Tangtang sits beside her on the lesson bench
+    // Sunny sits beside her on the lesson bench
     tt.walkTarget = null;
     tt.follow(null);
     const right = new Vector3(Math.cos(seat.facing), 0, -Math.sin(seat.facing));
@@ -418,7 +410,7 @@ async function fangStory(z) {
   G.audio.play('yawn');
   shot('CAM_lesson', p.position, 1.0, 1.0);
   await talk([
-    [null, 'In Xiao Pei’s hood, Doudou is awake again, very quiet, looking at Master Fang.'],
+    [null, 'In Pip’s hood, Bean is awake again, very quiet, looking at Master Fang.'],
     [null, 'Master Fang looks back at him for a long moment. Then she takes a lemon candy from her pocket and gives it to him, without a word.'],
   ]);
   G.collection.cozy(10, 'A story by the fire', p.position.clone().setY(p.position.y + 1.6));
@@ -429,7 +421,7 @@ async function fangStory(z) {
   G.cam.clearShot();
   G.frozen = true;
   await G.ui.card('Chapter 3 complete', 'The Quiet District', 3);
-  await G.ui.card('Chapter 4: Doudou’s Secret', 'Coming soon — keep the grey Grumblings company, and check on the neighbours', 3.6);
+  await G.ui.card('Chapter 4: Bean’s Secret', 'Coming soon — keep the grey Grumblings company, and check on the neighbours', 3.6);
   p.stand(seat.position.clone().add(new Vector3(0, 0, 1.6)));
   G.cam.snapBehind(p);
   G.frozen = false;

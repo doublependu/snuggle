@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-only
-"""Master Fang Qiuyue (ref/fangqiuye.png), built by chibi.py with the character kit.
+"""Master Fang (Autumn Fang) (ref/fangqiuye.png), built by chibi.py with the character kit.
 
 Tiny and round: a tan tweed flat cap with an orange knit band over white curly hair, round wire glasses, small
 dark dot eyes, rosy cheeks and smile lines. Her body starts from the base mesh (tools/blender/base/hero_male.glb): its

@@ -28,7 +28,7 @@ async function trainIntro(z) {
   G.ui.card('Prologue', 'The Rainy Train', 2.6);
   await wait(3.4);
   await talk([
-    [null, 'Xiao Pei is on her way to live with her aunt in Lantern Bay. Everything she owns fits in one cardboard suitcase.'],
+    [null, 'Pip is on her way to live with her aunt in Lantern Bay. Everything she owns fits in one cardboard suitcase.'],
     ['xiaopei', 'Auntie Mei says the harbour lanterns glow even in the rain… I hope she likes me.', { face: 'worried' }],
   ]);
   G.cam.clearShot();
@@ -89,7 +89,7 @@ async function trainCloud(z, cloud) {
   G.updaters.delete(beatWatch);
 }
 
-// The cloud falls asleep in her lap, Doudou wakes up in her hood, and the train pulls in.
+// The cloud falls asleep in her lap, Bean wakes up in her hood, and the train pulls in.
 async function trainLap(z, justSoothed) {
   const p = G.player;
   G.frozen = true;
@@ -158,13 +158,13 @@ export async function prologueStation(z) {
   shot('CAM_tangtang', tt.position, 1.0, 1);
   const a = await ask('tangtang', 'Aha! Cardboard suitcase, cloud on your shoulder — you must be the new student. Probably! I made a sign.', ['Hi… I think I am?', "I'm just visiting my aunt…"]);
   await talk([
-    ['tangtang', a === 0 ? "Great! I'm Lin Tangtang, second-year, best baker at Mistbloom. You're a sorcerer, by the way." : "Visiting your aunt AND starting at Mistbloom. You're a sorcerer, by the way. I'm Lin Tangtang, second-year, best baker around."],
+    ['tangtang', a === 0 ? "Great! I'm Sunny Lin, second-year, best baker at Mistbloom. You're a sorcerer, by the way." : "Visiting your aunt AND starting at Mistbloom. You're a sorcerer, by the way. I'm Sunny Lin, second-year, best baker around."],
     ['tangtang', 'Also you have a cloud on you. And a bun in your hood. Welcome to Lantern Bay!'],
     ['xiaopei', "A sorcerer? Me? I just hummed at it…", { face: 'surprised' }],
     ['tangtang', 'Exactly! Soothing a Grumbling on your first try? Master Fang is going to adore you. Here — custard tarts. Sharing snacks makes Cozy Energy.'],
   ]);
   G.collection.addTarts(3);
-  G.ui.toast('🥧 Got 3 of Tangtang’s custard tarts! Toss one at an upset Grumbling to cheer it up.', 4.5);
+  G.ui.toast('🥧 Got 3 of Sunny’s custard tarts! Toss one at an upset Grumbling to cheer it up.', 4.5);
   await talk([
     ['tangtang', "Go on, share one with your cloud. Kindness is the whole trick, you'll see."],
   ]);
@@ -186,15 +186,20 @@ export async function prologueStation(z) {
   G.cam.clearShot();
   G.frozen = false;
   hint('book', 5);
-  objective('Follow Tangtang up the hill to Mistbloom Academy');
+  objective('Follow Sunny up the hill to Mistbloom Academy');
   flag('prologueDone', true);
   writeSave(G.save);
-  // Tangtang walks the path ahead, waiting for Xiao Pei at each bend
+  // Sunny walks the path ahead, waiting for Pip at each bend
   const pts = z.markersBy('POINT_path').sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
   tt.onTalk = () => talk([['tangtang', pick(['This way! The Academy is right at the top.', 'Mind the steps, they get mossy in the rain.', 'Did you know Grumblings love humming? Of course you did.'])]]);
   for (const m of pts) {
     await tt.walkTo(m.position, 2.0);
     await until(() => tt.position.distanceTo(p.position) < 7);
+  }
+  // the top of the path: she stops here, so say so (following her any further would mean standing still)
+  if (G.zone?.id === 'station') {
+    G.ui.bubble(tt.root, 'Here we are! Mistbloom is just up there. Go on, I’ll catch up!', 4, 1.5);
+    objective('Walk up the hill to Mistbloom Academy');
   }
 }
 

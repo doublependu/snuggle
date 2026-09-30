@@ -84,7 +84,7 @@ export const TESTS = [
       h.assert(await h.eval(() => window.__G.zone.cloud === null), 'the soothed cloud respawned');
       await h.begin();
       await h.until(() => window.__G.ui.dialogueOpen && window.__G.player.state === 'sit', { timeout: 20000 });
-      // Xiao Pei looks round at the auntie while she talks
+      // Pip looks round at the auntie while she talks
       await h.until(() => window.__G.player.speaker?.id === 'auntie', { timeout: 10000, tick: () => h.skipDialogue() });
       await h.page.waitForTimeout(3000);
       await h.headsUpright('while the auntie talks');
@@ -328,7 +328,7 @@ export const TESTS = [
     },
   },
 
-  // Friends following Xiao Pei through the academy: they keep up, turn corners and never get lost.
+  // Friends following Pip through the academy: they keep up, turn corners and never get lost.
   {
     name: 'followers-academy',
     async run(h) {
@@ -370,7 +370,7 @@ export const TESTS = [
   },
 
   // The playtest bug (plan 3): the look-at piled its turn onto the neck every frame, since no clip moves the
-  // neck and the mixer never reset it. Xiao Pei's head spun while Tangtang talked; Tangtang's folded into
+  // neck and the mixer never reset it. Pip's head spun while Sunny talked; Sunny's folded into
   // her chest and stayed there. Talk from her side, walk away (heads come back), then walk with friends.
   {
     name: 'look-no-drift',
@@ -378,7 +378,7 @@ export const TESTS = [
       await h.open('?zone=academy&spawn=SPAWN_gate', base({ zone: 'academy', story: { prologueTrain: true, prologueDone: true, ch1_welcome: true, ch1_lesson: true } }));
       await h.begin();
       await h.watchHeads();
-      // Xiao Pei 1.4 m to Tangtang's side, turned 70° away from her, while Tangtang talks
+      // Pip 1.4 m to Sunny's side, turned 70° away from her, while Sunny talks
       await h.eval(() => {
         const G = window.__G;
         const t = G.npcs.get('tangtang');
@@ -393,8 +393,8 @@ export const TESTS = [
       await h.page.waitForTimeout(15000);
       const talk = await h.worstHeads();
       const bad = Object.entries(talk).filter(([, w]) => w.neck > 25 || w.tilt > 50);
-      h.assert(!bad.length, 'heads drifted while Tangtang talked: ' + JSON.stringify(Object.fromEntries(bad)));
-      h.assert(talk.xiaopei?.neck >= 5, 'Xiao Pei never looked at Tangtang: ' + JSON.stringify(talk.xiaopei));
+      h.assert(!bad.length, 'heads drifted while Sunny talked: ' + JSON.stringify(Object.fromEntries(bad)));
+      h.assert(talk.xiaopei?.neck >= 5, 'Pip never looked at Sunny: ' + JSON.stringify(talk.xiaopei));
       await h.page.screenshot({ path: `${h.OUT}/look-tangtang.png` });
       // end the line and walk off: both necks come back to their pose
       await h.skipDialogue();
@@ -568,7 +568,7 @@ export const TESTS = [
   },
 
 
-  // All of Chapter 2: Wei Bao at the Academy gate -> the market -> the tutorial flock -> the other two
+  // All of Chapter 2: Bo at the Academy gate -> the market -> the tutorial flock -> the other two
   // flocks (one with a combo) -> dumplings -> the walk home, when the lights go out across the bay.
   {
     name: 'chapter2-full',
@@ -576,7 +576,7 @@ export const TESTS = [
       await h.open('?zone=academy&spawn=SPAWN_gate', base({ zone: 'academy', tarts: 2, cozy: 40, story: { ...CH1_DONE } }));
       await h.begin();
       const obj = await h.eval(() => window.__G.ui.objective.textContent);
-      h.assert(/Wei Bao/.test(obj), 'academy objective: ' + obj);
+      h.assert(/\bBo\b/.test(obj), 'academy objective: ' + obj);
       await h.eval(() => {
         const G = window.__G;
         const wb = G.npcs.get('weibao');
@@ -639,7 +639,7 @@ export const TESTS = [
   },
 
   // The station and all of Chapter 1, as a flow test (Grumblings are soothed directly; the soothing
-  // itself is covered by the train and market tests): meet Tangtang, climb to the Academy, the welcome,
+  // itself is covered by the train and market tests): meet Sunny, climb to the Academy, the welcome,
   // the lesson, the missions, baking, the pom-pom, and the overlook.
   {
     name: 'chapter1-full',
@@ -648,7 +648,7 @@ export const TESTS = [
       await h.begin();
       const to = (js, arg) => h.eval(js, arg);
       const skipUntil = (pred, timeout = 60000) => h.until(pred, { timeout, tick: () => h.skipDialogue() });
-      // the platform: say hello to Tangtang (both questions answered), then up the hill
+      // the platform: say hello to Sunny (both questions answered), then up the hill
       await skipUntil(() => !window.__G.frozen && /Say hello/.test(window.__G.ui.objective.textContent));
       await to(() => {
         const G = window.__G;
@@ -658,7 +658,7 @@ export const TESTS = [
       await h.until(() => window.__G.interact.current?.label === 'Talk', { timeout: 5000 });
       await h.page.keyboard.press('KeyF');
       await skipUntil(() => window.__G.save.story.prologueDone && !window.__G.frozen);
-      await h.headsUpright('after meeting Tangtang');
+      await h.headsUpright('after meeting Sunny');
       await to(() => {
         const G = window.__G;
         const b = G.zone.box('TRIGGER_academy');
@@ -672,18 +672,22 @@ export const TESTS = [
         G.player.teleport(G.npcs.get('fang').position.clone().add({ x: 0, y: 0, z: 2.5 }), Math.PI);
       });
       await skipUntil(() => window.__G.save.story.ch1_welcome && !window.__G.frozen);
+      const w1 = await h.walk('KeyW', 1000);
+      h.assert(w1.moved > 0.5 && w1.under < 0.05, 'stuck after the welcome: ' + JSON.stringify(w1));
       // the lesson (and Captain Honk)
       await to(() => {
         const G = window.__G;
         G.player.teleport(G.zone.marker('POINT_lessonseat').position.clone().add({ x: 0, y: 0, z: 2 }), Math.PI);
       });
       await skipUntil(() => window.__G.save.story.ch1_lesson && !window.__G.frozen);
+      const w2 = await h.walk('KeyW', 1000);
+      h.assert(w2.moved > 0.5 && w2.under < 0.05, 'stuck after the lesson: ' + JSON.stringify(w2));
       // the lost sock and the homework
       for (const sp of ['sock', 'homework']) {
         await to((sp) => [...window.__G.grumblings].find((g) => g.species === sp)?.wrap(3), sp);
         await skipUntil(`window.__G.save.story.${sp}Done && !window.__G.frozen`);
       }
-      // baking with Tangtang
+      // baking with Sunny
       await to(() => {
         const G = window.__G;
         G.player.teleport(G.npcs.get('tangtang').position.clone().add({ x: 1.5, y: 0, z: 0 }), -Math.PI / 2);
@@ -693,7 +697,7 @@ export const TESTS = [
       await h.until(() => document.querySelector('.cook'), { timeout: 20000, tick: () => h.skipDialogue() });
       await h.until(() => !document.querySelector('.cook'), { timeout: 30000, every: 500, tick: () => h.page.keyboard.press('KeyE') });
       await skipUntil(() => window.__G.save.story.cookDone && !window.__G.frozen);
-      await h.headsUpright('after baking with Tangtang');
+      await h.headsUpright('after baking with Sunny');
       // the lonely pom-pom
       await to(() => [...window.__G.grumblings].find((g) => g.species === 'pompom')?.wrap(3));
       await skipUntil(() => window.__G.save.story.pompomDone && !window.__G.frozen);
@@ -704,10 +708,183 @@ export const TESTS = [
       });
       await skipUntil(() => window.__G.save.story.ch1Done && !window.__G.frozen, 90000);
       const obj = await h.eval(() => window.__G.ui.objective.textContent);
-      h.assert(/Wei Bao/.test(obj), 'objective after Chapter 1: ' + obj);
+      h.assert(/\bBo\b/.test(obj), 'objective after Chapter 1: ' + obj);
       await h.headsUpright('after Chapter 1');
     },
   },
+
+  // After the first lesson she stands up on the pavilion floor, and walks off down its steps. (She used to stand
+  // up at the seat marker's height, ground level: inside the pavilion's stone platform, sunk to the waist and
+  // walled in.) The same bench ends Chapter 3, with Master Fang's story.
+  ...[
+    ['lesson-stand', () => ({ train_intro: true, prologueTrain: true, prologueDone: true, ch1_welcome: true }), 'ch1_lesson'],
+    ['story-stand', () => ({ ...CH3_ARRIVED, mem_notice: true, mem_post: true, mem_sweets: true, mem_teahouse: true, mem_thread: true, mem_kitchen: true, ch3_return: true }), 'ch3Done'],
+  ].map(([name, story, done]) => ({
+    name,
+    async run(h) {
+      await h.open('?zone=academy', base({ zone: 'academy', spawn: 'SPAWN_gate', cozy: 40, sprites: { ...CH2_SPRITES, grey: 1 }, story: story() }));
+      await h.begin();
+      await h.until(() => !window.__G.frozen, { timeout: 20000, tick: () => h.skipDialogue() });
+      // up the pavilion steps with real keys
+      await h.eval(() => {
+        const G = window.__G;
+        G.player.teleport(G.zone.marker('POINT_lessonseat').position.clone().add({ x: 0, y: 0, z: 6 }), Math.PI);
+        G.cam.snapBehind(G.player);
+      });
+      await h.page.keyboard.down('KeyW');
+      await h.until(() => window.__G.frozen, { timeout: 10000 });
+      await h.page.keyboard.up('KeyW');
+      await h.until(`window.__G.save.story.${done} && !window.__G.frozen`, { timeout: 150000, tick: () => h.skipDialogue() });
+      const f = await h.feet();
+      h.assert(Math.abs(f.y - 0.45) < 0.03 && f.under < 0.03, 'not on the pavilion floor: ' + JSON.stringify(f));
+      const w = await h.walk('KeyW', 2500);
+      h.assert(w.moved > 2 && w.y < 0.1, 'could not walk off the pavilion: ' + JSON.stringify(w));
+    },
+  })),
+
+  // Shy Grumblings and the keyboard: holding W is her normal run (there's no walk key), so walking up to a flock
+  // must not scatter it; only sprinting at it does. (Both used to scatter it: anything over 2.6 m/s.)
+  {
+    name: 'shy-walk',
+    async run(h) {
+      await h.open('?zone=market', base({ zone: 'market', story: { ...CH1_DONE, ch2_start: true, ch2_tutorial: true } }));
+      await h.begin();
+      await h.until(() => !window.__G.frozen && window.__G.zone.flocks?.[0]?.sparrows.length, { timeout: 20000, tick: () => h.skipDialogue() });
+      // from 9 m away, facing the first flock
+      const approach = () =>
+        h.eval(() => {
+          const G = window.__G;
+          const g = G.zone.flocks[0].sparrows[0];
+          G.player.teleport(g.position.clone().add({ x: 0, y: 0, z: -9 }), 0);
+          G.cam.snapBehind(G.player);
+        });
+      const mode = () => h.eval(() => window.__G.zone.flocks[0].sparrows.map((g) => g.behaviour.mode));
+      for (const sprint of [false, true]) {
+        await approach();
+        await h.page.waitForTimeout(300);
+        if (sprint) await h.page.keyboard.down('ShiftLeft');
+        await h.page.keyboard.down('KeyW');
+        await h.until(() => {
+          const G = window.__G;
+          return G.zone.flocks[0].sparrows.some((g) => g.position.distanceTo(G.player.position) < 2.5 || g.behaviour.mode === 'scatter');
+        }, { timeout: 8000, every: 50 });
+        await h.page.keyboard.up('KeyW');
+        await h.page.keyboard.up('ShiftLeft');
+        const m = await mode();
+        if (sprint) h.assert(m.includes('scatter'), 'sprinting at the flock did not scatter it: ' + m);
+        else h.assert(!m.includes('scatter'), 'walking (W) up to the flock scattered it: ' + m);
+        await h.page.waitForTimeout(6000); // let them settle back
+      }
+    },
+  },
+
+  // Menus opened and closed with the keyboard: Esc opens and closes the pause menu, Tab the Sprite Book. Closing
+  // the last menu with a key used to throw in Menus.update (the menu stack was already empty).
+  {
+    name: 'menus-keyboard',
+    async run(h) {
+      await h.open('?zone=academy', base({ zone: 'academy', spawn: 'SPAWN_gate', sprites: { cloud: 1 }, story: { ...CH1_DONE } }));
+      await h.begin();
+      await h.until(() => !window.__G.frozen, { timeout: 20000, tick: () => h.skipDialogue() });
+      const open = () => h.eval(() => window.__G.menus.stack.map((m) => m.id));
+      for (const [key, id] of [['Escape', 'menu-pause'], ['Tab', 'menu-book']]) {
+        await h.page.keyboard.press(key);
+        await h.page.waitForTimeout(300);
+        h.assert((await open()).join() === id, `${key} opened ${await open()}`);
+        await h.page.keyboard.press(key);
+        await h.page.waitForTimeout(300);
+        h.assert((await open()).length === 0, `${key} left ${await open()} open`);
+        h.assert(!(await h.eval(() => window.__G.paused)), `still paused after closing with ${key}`);
+      }
+    },
+  },
+
+  // Every building with front steps can be walked up (the steps' collision ramps used to tilt the wrong way: a
+  // knee-high wall at the foot of the steps that you could only jump over).
+  ...['academy'].map((zone) => ({
+    name: 'steps-' + zone,
+    async run(h) {
+      await h.open('?zone=' + zone, base({ zone, spawn: 'SPAWN_gate', story: { ...CH1_DONE } }));
+      await h.begin();
+      await h.until(() => !window.__G.frozen, { timeout: 20000, tick: () => h.skipDialogue() });
+      // the kit pieces with base platforms, and how high their floor is
+      const pieces = await h.eval(() =>
+        window.__G.zone.markersBy('PLACE_')
+          .map((m) => ({ name: m.name, piece: m.name.slice(6).replace(/[._]?\d+$/, ''), x: m.position.x, z: m.position.z, facing: m.facing, y: m.position.y }))
+          .filter((m) => ['hall', 'hall_open', 'hall_small', 'library', 'pagoda', 'pavilion'].includes(m.piece)),
+      );
+      h.assert(pieces.length, 'no buildings with steps in ' + zone);
+      const bad = [];
+      for (const pc of pieces) {
+        // 4 m in front of the steps (fronts face the marker's facing), walking toward the building
+        const r = await h.eval((pc) => {
+          const G = window.__G;
+          // the platform's floor just inside its front edge (half depth, from build_kit.py), and a start 1.1 m
+          // before the foot of the steps
+          const half = { hall: 3.35, hall_open: 3.35, hall_small: 2.7, library: 3, pagoda: 2.3, pavilion: 2.3 }[pc.piece];
+          const top = G.collision.groundY(pc.x + Math.sin(pc.facing) * (half - 0.4), pc.z + Math.cos(pc.facing) * (half - 0.4), pc.y + 2);
+          const d = { hall: 5.5, hall_open: 5.5, hall_small: 4.9, library: 5.2, pagoda: 4.4, pavilion: 4.3 }[pc.piece];
+          const p = { x: pc.x + Math.sin(pc.facing) * d, y: pc.y, z: pc.z + Math.cos(pc.facing) * d };
+          G.player.teleport(G.player.position.clone().set(p.x, p.y + 0.2, p.z), pc.facing + Math.PI);
+          G.cam.snapBehind(G.player);
+          return { top };
+        }, pc);
+        await h.page.keyboard.down('KeyW');
+        await h.until(`window.__G.player.position.y > ${r.top - 0.1}`, { timeout: 6000, every: 100 }).catch(() => {});
+        await h.page.keyboard.up('KeyW');
+        const y = await h.eval(() => window.__G.player.position.y);
+        if (y < r.top - 0.15) bad.push(`${pc.name}: at ${y.toFixed(2)}, floor ${r.top.toFixed(2)}`);
+      }
+      h.assert(!bad.length, "couldn't walk up the steps: " + bad.join('; '));
+    },
+  })),
+
+  // Feet under a floor (put there directly, not by a teleport): one step later she is standing on it.
+  {
+    name: 'floor-pushout',
+    async run(h) {
+      await h.open('?zone=academy', base({ zone: 'academy', spawn: 'SPAWN_gate', story: { ...CH1_DONE } }));
+      await h.begin();
+      const f = await h.eval(() => {
+        const G = window.__G;
+        const p = G.player;
+        p.position.copy(G.zone.marker('POINT_lessonseat').position).add({ x: 0, y: 0, z: 1.6 }); // 0.45 m under the pavilion floor
+        p.velocity.set(0, 0, 0);
+        p.update(1 / 60);
+        return { y: p.position.y, onGround: p.onGround };
+      });
+      h.assert(Math.abs(f.y - 0.45) < 0.03 && f.onGround, 'still under the floor: ' + JSON.stringify(f));
+    },
+  },
+
+  // Everyone stands on the floor in every zone and story state: Pip and the standing NPCs (the dev build's
+  // floor check warns "[floor]" otherwise, which fails the test), and the sleepy sprites by the dorms (two of them
+  // were inside a dorm's stone porch). Master Fang used to stand in the pavilion's steps.
+  ...[
+    ['train', 'train', () => ({})],
+    ['station', 'station', () => ({ train_intro: true, prologueTrain: true })],
+    ['academy-lesson', 'academy', () => ({ train_intro: true, prologueTrain: true, prologueDone: true, ch1_welcome: true })],
+    ['academy-evening', 'academy', () => ({ ...CH1_DONE })],
+    ['academy-morning', 'academy', () => ({ ...CH1_DONE, ch2_start: true, ch2Done: true, ch3_start: true })],
+    ['market', 'market', () => ({ ...CH1_DONE, ch2_start: true, ch2_tutorial: true })],
+    ['quiet', 'quiet', () => CH3_ARRIVED],
+  ].map(([name, zone, story]) => ({
+    name: 'floor-' + name,
+    async run(h) {
+      await h.open('?zone=' + zone, base({ zone, spawn: zone === 'quiet' ? 'SPAWN_ferry' : zone === 'academy' ? 'SPAWN_gate' : 'SPAWN_start', sprites: CH2_SPRITES, story: story() }));
+      await h.begin();
+      await h.eval(() => window.__G.zone.streamed);
+      await h.page.waitForTimeout(2500); // the floor check runs twice a second
+      const f = await h.feet();
+      h.assert(f.under < 0.05, 'Pip is inside the floor: ' + JSON.stringify(f));
+      const sleepy = await h.eval(() =>
+        [...window.__G.interactables]
+          .filter((i) => i.label === 'Tuck in the sleepy sprite')
+          .map((i) => +(i.position.y - 0.05 - window.__G.collision.floorY(i.position, 0.8, 0.3)).toFixed(3)),
+      );
+      h.assert(sleepy.every((d) => Math.abs(d) < 0.03), 'sleepy sprites off the floor: ' + sleepy);
+    },
+  })),
 
   // Chapter 3: a grey Grumbling won't be hugged. Humming at it is refused (no thread, no progress, no Notice
   // prompt); staying close fills the company ring until it's ready; then the thread wraps it into a sprite.
@@ -798,7 +975,7 @@ export const TESTS = [
       await h.page.keyboard.up('KeyE');
       await skipUntil(() => window.__G.save.story.ch3_greys && !window.__G.frozen);
       await h.headsUpright('after the grey morning');
-      // Wei Bao at the gate: the ferry
+      // Bo at the gate: the ferry
       await h.until(() => !window.__G.npcs.get('weibao').walkTarget, { timeout: 30000 });
       await h.eval(() => {
         const G = window.__G;
@@ -856,11 +1033,13 @@ export const TESTS = [
       await skipUntil(() => window.__G.save.story.ch3Done && !window.__G.frozen, 120000);
       const obj = await h.eval(() => window.__G.ui.objective.textContent);
       h.assert(/Free roam/.test(obj), 'objective after Chapter 3: ' + obj);
+      const w = await h.walk('KeyW', 1000);
+      h.assert(w.moved > 0.5 && w.under < 0.05, 'stuck after the story: ' + JSON.stringify(w));
     },
   },
 
-  // Feel: the walk and run clips play at the speed that keeps a planted foot planted (Humanoid.gait), for Xiao
-  // Pei walking, running and sprinting and for a friend walking somewhere. Stepped by hand at 1/480 s (the
+  // Feel: the walk and run clips play at the speed that keeps a planted foot planted (Humanoid.gait), for Pip
+  // walking, running and sprinting and for a friend walking somewhere. Stepped by hand at 1/480 s (the
   // headless browser renders ~15 fps, too few frames land in a footfall): how far a foot drifts while it is
   // down, as a share of how far the body moved. Plus turning on the spot, and turning to face a speaker.
   {
@@ -936,7 +1115,7 @@ export const TESTS = [
       });
       h.assert(r.walk < 0.05 && r.run < 0.18 && r.sprint < 0.3 && r.friend < 0.08, 'feet slide: ' + JSON.stringify(r));
       h.assert(r.turned && r.turnMoved < 0.05 && r.turnAngle > 2.8, 'no turn on the spot: ' + JSON.stringify(r));
-      // facing whoever talks to her: Tangtang behind her says something, and Xiao Pei turns round
+      // facing whoever talks to her: Sunny behind her says something, and Pip turns round
       await h.eval(() => {
         const G = window.__G;
         const tt = G.npcs.get('tangtang');
@@ -953,7 +1132,7 @@ export const TESTS = [
         G.ui.advance = true;
         return Math.abs(Math.atan2(Math.sin(want - p.facing), Math.cos(want - p.facing)));
       });
-      h.assert(face < 0.35, 'she did not turn to Tangtang: ' + face.toFixed(2));
+      h.assert(face < 0.35, 'she did not turn to Sunny: ' + face.toFixed(2));
       console.log('    slip: ' + JSON.stringify(r, (k, v) => (typeof v === 'number' ? +v.toFixed(3) : v)));
     },
   },
@@ -1033,7 +1212,7 @@ async function remember(h, id, pick) {
 
 const CH1_DONE = { prologueTrain: true, prologueDone: true, ch1_welcome: true, ch1_lesson: true, sockDone: true, homeworkDone: true, cookDone: true, pompomDone: true, ch1Done: true, weibaoFriend: true };
 
-// Walk Xiao Pei up to a flock's seat and choose "Sit with them".
+// Walk Pip up to a flock's seat and choose "Sit with them".
 async function sitAt(h, id) {
   await h.eval((id) => {
     const G = window.__G;

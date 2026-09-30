@@ -3,7 +3,7 @@
 // Chapter 2+ species are defined so the book can show silhouettes; their behaviours arrive with those chapters.
 export const SPECIES = {
   doudou: {
-    name: 'Doudou',
+    name: 'Bean',
     feeling: 'Five more minutes.',
     about: 'A steamed-bun Grumbling who naps in your hood. Wakes up only for dumplings and emergencies.',
     glow: '#ffe2b0',

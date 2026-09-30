@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Tangtang's kitchen mini-game: three timing steps (knead, fill, bake). Press Hum / Interact / tap
+// Sunny's kitchen mini-game: three timing steps (knead, fill, bake). Press Hum / Interact / tap
 // when the marker is in the green zone. Returns the score (0-6: 1 per good step, 2 per perfect).
 import { G } from '../game.js';
 
@@ -24,7 +24,7 @@ export function cookingGame() {
       clicked = false;
     const render = () => {
       const s = STEPS[step];
-      el.innerHTML = `<h3>🥧 Custard tarts with Tangtang</h3><div>${step + 1}/3 · <b>${s.label}</b></div>
+      el.innerHTML = `<h3>🥧 Custard tarts with Sunny</h3><div>${step + 1}/3 · <b>${s.label}</b></div>
         <div class="meter"><div class="zone" style="left:${s.zone[0] * 100}%;width:${(s.zone[1] - s.zone[0]) * 100}%"></div>
         <div class="zone perfect" style="left:${s.perfect[0] * 100}%;width:${(s.perfect[1] - s.perfect[0]) * 100}%"></div><div class="mark"></div></div>
         <div class="res" style="min-height:1.4em;font-weight:800"></div><div class="small">Press Hum / Interact or tap when the marker is in the green.</div>`;

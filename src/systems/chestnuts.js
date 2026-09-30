@@ -2,7 +2,7 @@
 // Chestnut roasting at the night market (Chapter 2). Five chestnuts toast in the wok at their own pace;
 // stir on the lullaby's beat (Hum) to keep them toasting evenly, and take each one out (tap it, or press
 // 1-5, or d-pad + Interact) when it turns golden. Can't be lost: even a burnt chestnut is still a snack.
-// The bags of chestnuts are a shareable snack, like Tangtang's tarts (systems/assists.js).
+// The bags of chestnuts are a shareable snack, like Sunny's tarts (systems/assists.js).
 import { G, flag } from '../game.js';
 import { ask, talk, shot } from '../story/helpers.js';
 import { writeSave } from '../core/save.js';

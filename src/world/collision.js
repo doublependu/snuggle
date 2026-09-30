@@ -154,6 +154,24 @@ export class Collision {
       this.bvh.shapecast({
         intersectsBounds: (box) => box.intersectsBox(_box),
         intersectsTriangle: (tri) => {
+          // A floor the capsule's centre line passes through (its feet are under it: a script put it there, or
+          // a very long frame): stand on it. The closest-point test below only looks at the line's ends and
+          // the triangle's edges, so it would push the capsule further down, and the walls around a raised
+          // floor would then hold it in from the inside.
+          tri.getNormal(_dir);
+          if (_dir.y > this.walkableY) {
+            const below = _dir.dot(_tri.subVectors(_seg.start, tri.a));
+            const above = _dir.dot(_cap.subVectors(_seg.end, tri.a));
+            if (below < 0 && above > 0) {
+              _tri.lerpVectors(_seg.start, _seg.end, below / (below - above));
+              if (tri.containsPoint(_tri)) {
+                _seg.start.addScaledVector(_dir, radius - below);
+                _seg.end.addScaledVector(_dir, radius - below);
+                grounded = moved = true;
+                return;
+              }
+            }
+          }
           const d = tri.closestPointToSegment(_seg, _tri, _cap);
           if (d < radius) {
             const depth = radius - d;
@@ -186,6 +204,14 @@ export class Collision {
   groundY(x, z, fromY = 50) {
     const d = this.raycast(new Vector3(x, fromY, z), new Vector3(0, -1, 0), 200);
     return d === Infinity ? null : fromY - d;
+  }
+
+  // The floor under a point: the first surface looking down from `up` above it, if that is no more than `down`
+  // below the point (else null: over water, or at a drop). Markers sit at ground level, so a spot on a raised
+  // floor (the pavilion's platform, a porch) is below it; `up` stays under a character's height and a counter.
+  floorY(p, up = 0.8, down = 0.3) {
+    const y = this.groundY(p.x, p.z, p.y + up);
+    return y !== null && y >= p.y - down ? y : null;
   }
 
   hasLineOfSight(a, b) {

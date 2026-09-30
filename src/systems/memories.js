@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Charm Sprite memories (Chapter 3). Every Charm Sprite remembers the feeling it was born from, and in the
 // Quiet District, where nobody remembers anything, that makes them the investigators. A faint glow marks a
-// memory spot (POINT_mem_<id>); Xiao Pei says what she notices, and you choose which Charm Sprite remembers
+// memory spot (POINT_mem_<id>); Pip says what she notices, and you choose which Charm Sprite remembers
 // it. The right one flies over and the memory plays: a pocket of colour blooms around the spot, golden
 // figures from fifty years ago act it out, and afterwards the pocket stays in colour. A wrong guess just
 // gets a friendly line: there is nothing to lose. Loaded only with the zones that use it.

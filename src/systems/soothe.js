@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The Lullaby Thread: hold Hum near a Grumbling to wrap it in glowing yarn. Re-pressing Hum on the
 // lullaby's beat gives a bonus; tantrum hits snap the thread and cost Calm. Calm at zero means a short
-// sit-down (Doudou: "five more minutes") — never a game over.
+// sit-down (Bean: "five more minutes") — never a game over.
 import { Vector3 } from 'three';
 import { G } from '../game.js';
 import { Ribbon } from '../render/vfx.js';
@@ -67,7 +67,7 @@ export class Soothe {
     G.audio.setHumming(false);
     g?.snap(0.35);
     if (p.doudou) p.doudou.userData.awake = true;
-    G.ui.bubble(p.root, 'Doudou: “Five more minutes…”', 2.6, 1.55);
+    G.ui.bubble(p.root, 'Bean: “Five more minutes…”', 2.6, 1.55);
     G.audio.play('yawn');
     await new Promise((r) => setTimeout(r, 2800));
     if (p.doudou) p.doudou.userData.awake = false;

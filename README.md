@@ -4,7 +4,7 @@ A cozy take on the cursed-energy genre.
 
 In the misty harbour city of Lantern Bay, curses born from small worries come out *fluffy*. They're called
 **Grumblings**, and at Mistbloom Academy of Gentle Sorcery you don't fight them — you **soothe** them.
-Play as Xiao Pei, hum her mother's lullaby, wrap Grumblings in glowing yarn, and collect the Charm Sprites
+Play as Pip, hum her mother's lullaby, wrap Grumblings in glowing yarn, and collect the Charm Sprites
 they become. The story is in [`ai/snuggle_sorcery_story.md`](ai/snuggle_sorcery_story.md).
 
 A static, single-player three.js web game: no backend, no accounts, progress saved in your browser.
@@ -42,6 +42,24 @@ URL=<your URL> npm run perf   # time to interaction from Cloudflare's edge, thro
   `wrangler.jsonc`. **Deploy on every push:** connect the GitHub repo under Workers Builds in the dashboard
   (build command `npm run build`, deploy command `npx wrangler deploy`).
 
+### Autoplayer (a new player, automated)
+
+```bash
+npm run playtest                     # play the whole story so far, from a fresh game, in real time
+npm run playtest -- --record         # ...and record it as one uncut video with sound (needs ffmpeg)
+npm run playtest -- --from market    # start partway (station, ch1, lesson, ch2, market, ch3, quiet, dusk)
+node tools/playtest/review.mjs tools/playtest/out/<run>   # contact sheets, event frames, freeze and loudness checks
+```
+
+[`tools/playtest`](tools/playtest) plays like a first-timer. It reads the objective, the tips and every line of
+dialogue, looks for what it's told to find, and plays with real keyboard and mouse input. It decides only from
+what's on screen: `eyes.js` is the one part that touches the game, and it reports only what's in view, described
+by how it looks ("an old lady with round glasses"). It never reads story flags, markers or triggers, and never
+teleports. Each run writes a log of what it thought and did, a summary (time per chapter and objective, and where
+it got stuck or confused), and with `--record` a 1280×720 MP4. The MP4 has the game's sound, chapter markers, and
+its thoughts as a subtitle track (off by default). It runs headless on the GPU if Chrome can use one (add
+`--swiftshader` for software rendering); `HEADED=1` shows the window.
+
 Handy URL parameters while developing: `?zone=train|station|academy|market|quiet|test`, `?spawn=SPAWN_gate`,
 `?quality=low|medium|high`, `?debug`, `?viewer` (every character, clip and face; add `&look` to have
 them look at the camera), `?zone=test&night` (the greybox under lantern light), `?zone=test&quiet` (the
@@ -70,17 +88,17 @@ Keys and gamepad buttons can be changed in **Pause > Controls > Change controls*
 size for the dialogue, prompts and menus.
 
 **Soothing:** Notice a Grumbling, then hold Hum to wrap it in the Lullaby Thread. Dodge its tantrums (rain,
-paper balls, darting socks, sighs) — a hit snaps the thread and costs Calm. Run out of Calm and Xiao Pei just
+paper balls, darting socks, sighs) — a hit snaps the thread and costs Calm. Run out of Calm and Pip just
 sits down for "five more minutes"; there is no game over. Fully wrapped Grumblings fall asleep and become
 **Charm Sprites**, each with a helper ability (Umbrella, Sniff, Read, Cheer, Guide). **Cozy Energy** comes from
-kind acts — sharing snacks, tucking in sleepy sprites, helping classmates, baking with Tangtang, bringing lost
+kind acts — sharing snacks, tucking in sleepy sprites, helping classmates, baking with Sunny, bringing lost
 children home.
 
 **The night market (Chapter 2):** the Wistful Sparrows ("I want that, but I can't afford it") won't settle for
 humming alone. Sit with a flock, point out one of the free good things nearby — roasting chestnuts, lanterns
 on the water, the musician's song, the moon — and hum: the thread reaches every perched sparrow at once.
-Each sparrow loves one good thing best (Wei Bao's Echo Friend tells you which). Team up before humming: a snack
-from Tangtang gives a **Sweet Lullaby**, Echo Friend an **Echo Lullaby**, both together **Everyone Together**.
+Each sparrow loves one good thing best (Bo's Echo Friend tells you which). Team up before humming: a snack
+from Sunny gives a **Sweet Lullaby**, Echo Friend an **Echo Lullaby**, both together **Everyone Together**.
 Between flocks: roast chestnuts on the beat, float lanterns from the pier, and guide lost children home.
 
 **The Quiet District (Chapter 3):** the Grumblings are turning grey and heavy, and they don't want to be hugged:
@@ -93,7 +111,20 @@ lifts a shutter. And check on the neighbours who never left.
 
 **This build:** the Prologue (the Rainy Train, Lantern Bay station), Chapter 1 (Mistbloom Academy), Chapter 2
 (the Night Market Mix-Up) and Chapter 3 (the Quiet District). Later chapters are planned in
-[`ai/plan_0.md`](ai/plan_0.md); what was built and what's next is in [`ai/next_4.md`](ai/next_4.md).
+[`ai/plan_0.md`](ai/plan_0.md); what was built and what's next is in [`ai/next_5.md`](ai/next_5.md), and a new player's playtest in [`ai/playtest_5.md`](ai/playtest_5.md).
+
+## Characters
+
+| Name | Who | Technique | Id in the code and saves | Built by |
+|---|---|---|---|---|
+| **Pip** (you) | An eleven-year-old first-year with a cardboard suitcase, off to live with her aunt | Lullaby Thread | `xiaopei` | `tools/blender/char_xiaopei.py` |
+| **Bean** | A sleepy, bun-shaped Grumbling ("five more minutes") who naps in Pip's hood | | `doudou` | `tools/blender/build_creatures.py` |
+| **Sunny Lin** | A bubbly second-year and the Academy's best baker | Sugarcraft | `tangtang` | `tools/blender/char_tangtang.py` |
+| **Bo** and **Captain Honk** | A shy boy, and the felt goose puppet who does his talking | Echo Friend | `weibao` | `tools/blender/char_weibao.py` |
+| **Master Fang** (Autumn Fang) | The Academy's gentle old master, who calmed the great fog fifty years ago | Domain of Comfort | `fang` | `tools/blender/char_fang.py` |
+
+The names were chosen to be easy to say in English (plan 5). Ids, model files and saves keep the earlier names
+(Xiao Pei, Lin Tangtang, Wei Bao, Doudou), so existing saves still work.
 
 ## How it's made
 
@@ -110,11 +141,11 @@ lifts a shutter. And check on the neighbours who never left.
   thickens near the ground and toward the fog wall. Characters and Charm Sprites keep their colour.
 - **All sound is synthesized** with WebAudio (the lullaby, rain, the train, Captain Honk, the night market's
   crowd and its street musician). The **music** is composed as note data ([`src/content/music.js`](src/content/music.js)):
-  every track is a variation on Xiao Pei's mother's lullaby, played by a small step sequencer
+  every track is a variation on Pip's mother's lullaby, played by a small step sequencer
   ([`src/core/music.js`](src/core/music.js)) on the lullaby's beat clock, so soothing stays in time with it. It
   loads after Begin, and each place has its own ambience mix (`G.audio.mix`).
 - **Feel:** walk and run clips play at the speed that keeps a planted foot planted (measured once per
-  character from the clip, `Humanoid.gait`), footsteps and little puffs land where the feet do, Xiao Pei
+  character from the clip, `Humanoid.gait`), footsteps and little puffs land where the feet do, Pip
   pivots on the spot before walking off the other way, and turns to face whoever is talking to her.
 - **Repeat visits:** production builds register a service worker after Begin that caches the whole game, so a
   returning player starts from the cache (even offline).

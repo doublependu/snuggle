@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: GPL-3.0-only
-"""Xiao Pei (ref/xiaopei_1.png), built by chibi.py with the character kit (kit.py).
+"""Pip (ref/xiaopei_1.png), built by chibi.py with the character kit (kit.py).
 
 Head, hair and braid are sculpted with signed distance fields: a round head with a painted face, blunt bangs,
 and a thick three-strand braid swinging off her right side. Her body starts from the base mesh
 (tools/blender/base/hero_male.glb, hero_base.py), warped onto her A-pose skeleton and reshaped toward the ref photo: its
 shirt becomes the oversized mustard jacket, its bracers the rolled cuffs, its rolled trousers her baggy
-gathered ones. The jacket's closed hem, the hood (Doudou sleeps in it), her shirt collar, the high-tops,
+gathered ones. The jacket's closed hem, the hood (Bean sleeps in it), her shirt collar, the high-tops,
 the yarn skein on its strap and the laces are sculpted on top.
 """
 import math
@@ -156,7 +156,7 @@ def outfit():
 
 
 def hood_field():
-    """The jacket's hood, down, bunched behind the collar: Doudou sleeps in it (seat_doudou)."""
+    """The jacket's hood, down, bunched behind the collar: Bean sleeps in it (seat_doudou)."""
     f = Field((-0.16, 0.0, 0.62), (0.16, 0.24, 0.84), vs=0.0025)
     f.add(Ellipsoid((0, 0.128, 0.728), (0.105, 0.062, 0.068)))
     f.add(Scaled(Torus((0, 0.12, 0.752), 0.082, 0.02), (1.0, 0.8, 1.0), (0, 0.12, 0.752)), k=0.02)

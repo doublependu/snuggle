@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Friend assists (Q / Y / Assist button):
-//  - A snack: Sugarcraft Tart (Tangtang's pastries, from the kitchen) or a bag of roasted chestnuts (the
+//  - A snack: Sugarcraft Tart (Sunny's pastries, from the kitchen) or a bag of roasted chestnuts (the
 //    night market): lobbed at the nearest Grumbling, calms everything around the landing spot and pauses
 //    their tantrums.
-//  - Echo Friend (Wei Bao, costs Cozy Energy): Captain Honk voices what the Grumbling needs, and
+//  - Echo Friend (Bo, costs Cozy Energy): Captain Honk voices what the Grumbling needs, and
 //    soothing it goes twice as fast for a while.
 // Pressing Assist again right after a snack uses Echo Friend, so both friends can team up (the sparrow
 // flocks' combos in systems/perch.js listen for the 'assist' event).
@@ -42,7 +42,7 @@ export function useAssist() {
   if (target && snack && !(recent && G.save.story.weibaoFriend)) return throwTart(target);
   if (G.save.story.weibaoFriend && target) return echo(target);
   if (!target) G.ui.toast('Assists work on a nearby Grumbling.', 1.8);
-  else G.ui.toast('No snacks left. Bake with Tangtang, or roast chestnuts at the night market!', 2.4);
+  else G.ui.toast('No snacks left. Bake with Sunny, or roast chestnuts at the night market!', 2.4);
 }
 
 function throwTart(target) {

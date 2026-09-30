@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Sitting with a Wistful Sparrow flock (Chapter 2). The trick, Xiao Pei discovers, isn't buying them
+// Sitting with a Wistful Sparrow flock (Chapter 2). The trick, Pip discovers, isn't buying them
 // things: it's sitting with them and pointing out all the free good things. Sit on the flock's seat and
 // its sparrows hop over and perch around her; pick one of the free good things nearby (a chip on
 // screen: tap / click it, press 1-3, or d-pad left / right) and hold Hum: the Lullaby Thread runs toward
 // that good thing and fans out to every perched sparrow at once. Each sparrow loves one good thing best.
-// Team-up combos: a snack (Tangtang) or Echo Friend (Wei Bao) just before humming.
+// Team-up combos: a snack (Sunny) or Echo Friend (Bo) just before humming.
 import { Vector3 } from 'three';
 import { G } from '../game.js';
 import { Ribbon } from '../render/vfx.js';

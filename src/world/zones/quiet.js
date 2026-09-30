@@ -83,7 +83,7 @@ export async function create() {
   };
   for (const id of Object.keys(shutters)) if (flag('mem_' + id)) lift(id, true);
 
-  // ---- the cast: Tangtang and Wei Bao came on the ferry; the ferryman and the neighbours stream in
+  // ---- the cast: Sunny and Bo came on the ferry; the ferryman and the neighbours stream in
   await z.populateNPCs(undefined, { essential: ['tangtang', 'weibao'] });
   for (const id of ['tangtang', 'weibao']) z.whenNPC(id, (n) => (n.blobRadius = 0.32));
   z.whenNPC('ferryman', (n) => {

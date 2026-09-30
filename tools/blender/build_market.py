@@ -12,7 +12,7 @@ Kit pieces follow build_kit.py (an empty named after the piece, one 'mixed' mesh
 faces -Y). Every lantern is also written as a LIGHT_* marker (props: color, radius, intensity, glow): the
 runtime paints them into the lamp map (src/render/lamps.js) and draws a glow sprite for each.
 New markers here: SEAT_<id> (centre of a seat's front edge; prop seat = seat-top height), GOOD_<flock>_<kind>
-(the free good things Xiao Pei points out to a sparrow flock), GRUMB_sparrow_<n> (prop flock).
+(the free good things Pip points out to a sparrow flock), GRUMB_sparrow_<n> (prop flock).
 """
 import os, sys, importlib, math, random
 
@@ -153,7 +153,7 @@ def mstall_fish(x, name='mstall_fish'):
 
 
 def mdumpling(x, name='mdumpling', w=3.2, d=2.0):
-    """Tangtang's favourite: a small roofed stall with bamboo steamer stacks (the steam is a runtime effect)."""
+    """Sunny's favourite: a small roofed stall with bamboo steamer stacks (the steam is a runtime effect)."""
     V, K = [], []
     V.append(box('counter', (0, 0.1, 0.47), (w, 0.8, 0.94), 'wood', C(TIMBER), bevel=0.02))
     V.append(box('top', (0, 0.05, 0.96), (w + 0.1, 0.95, 0.05), 'wood', C('#a8744a')))

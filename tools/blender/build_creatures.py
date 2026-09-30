@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-only
-"""Doudou and the Grumblings: faceted paper-craft creatures (ref/doudou_1.png), unrigged.
+"""Bean and the Grumblings: faceted paper-craft creatures (ref/doudou_1.png), unrigged.
 Each creature is an empty named after its species with two children: <id>_body and <id>_eyes
 (eyes separate so the runtime can blink / squint them). Exports assets-src/export/creatures.glb.
 Origins sit at the creature's base centre; +Z (glTF +Y) up, facing -Y (glTF +Z)."""

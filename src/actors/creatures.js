@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Creature meshes (Doudou, Grumblings) from creatures.glb. Each species is an Object3D with
+// Creature meshes (Bean, Grumblings) from creatures.glb. Each species is an Object3D with
 // <id>_body and <id>_eyes children, and some have moving parts: <id>_wingL / _wingR (the sparrow, flapped by
 // its behaviour) and <id>_<part> (the cloud's puffs, the sock's toe, the homework's page corner, the
 // pom-pom's tuft; see animateParts). Clones share geometry.

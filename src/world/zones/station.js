@@ -25,7 +25,7 @@ export async function create() {
     const off = new Vector3(0.45, 2.15, 0).applyQuaternion(m.quaternion);
     G.fx.glows.add(m.position.clone().add(off), '#ff9a5a', 1.3);
   }
-  // Tangtang's hand-painted welcome sign
+  // Sunny's hand-painted welcome sign
   const sign = z.marker('POINT_sign');
   if (sign) z.group.add(welcomeSign(sign.position, sign.facing));
   // townsfolk chatter

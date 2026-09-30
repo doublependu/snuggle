@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Friends who walk with Xiao Pei: seek a slot beside / behind her with arrival, stay on the ground,
+// Friends who walk with Pip: seek a slot beside / behind her with arrival, stay on the ground,
 // slide along walls (capsule vs the zone BVH), and teleport back (out of view) if they fall far behind or
 // get stuck. Attached to an NPC with npc.follow(slot); scripts can still take over with npc.walkTo().
 import { Line3, MathUtils, Vector3 } from 'three';
@@ -12,7 +12,7 @@ const _seg = new Line3();
 const _fwd = new Vector3();
 
 export class Follower {
-  // slot: offset in Xiao Pei's frame (x = her right, z = behind her), in metres
+  // slot: offset in Pip's frame (x = her right, z = behind her), in metres
   constructor(npc, slot = { x: 1.3, z: 0.5 }) {
     this.npc = npc;
     this.slot = slot;

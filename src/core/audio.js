@@ -3,7 +3,7 @@
 // beat clock (see systems/soothe.js), so humming, the HUD ring and the melody stay in sync.
 const BPM = 84;
 export const BEAT = 60 / BPM;
-// Xiao Pei's mother's lullaby: 16 beats, D major pentatonic (MIDI numbers, 0 = rest)
+// Pip's mother's lullaby: 16 beats, D major pentatonic (MIDI numbers, 0 = rest)
 const LULLABY = [69, 66, 64, 62, 64, 66, 69, 0, 71, 69, 66, 64, 62, 64, 62, 0];
 const PAD_CHORDS = [
   [50, 57, 62, 66],

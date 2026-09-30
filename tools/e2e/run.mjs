@@ -39,7 +39,8 @@ for (const t of tests) {
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+  // console errors fail a test, and so do the dev build's "[floor]" warnings (someone inside a floor: src/dev/floorcheck.js)
+  page.on('console', (m) => (m.type() === 'error' || (m.type() === 'warning' && m.text().startsWith('[floor]'))) && errors.push(m.text()));
   const h = helpers(page, t);
   try {
     await t.run(h);
@@ -123,6 +124,23 @@ function helpers(page, t) {
         return { ok: !!top && (top === el || el.contains(top)), top: top ? top.className || top.tagName : null };
       }, selector);
     },
+    // Hold a key for ms (real input): how far she went, and her feet against the floor afterwards.
+    async walk(key, ms) {
+      const a = await page.evaluate(() => window.__G.player.position.toArray());
+      await page.keyboard.down(key);
+      await page.waitForTimeout(ms);
+      await page.keyboard.up(key);
+      await page.waitForTimeout(300);
+      return { moved: await page.evaluate((a) => Math.hypot(window.__G.player.position.x - a[0], window.__G.player.position.z - a[2]), a), ...(await h.feet()) };
+    },
+    // Her feet against the floor under her: under > 0 means she is inside a floor.
+    feet: () =>
+      page.evaluate(() => {
+        const G = window.__G;
+        const p = G.player.position;
+        const floor = G.collision.floorY(p, 0.8, 0.3);
+        return { y: +p.y.toFixed(3), floor: floor === null ? null : +floor.toFixed(3), under: floor === null ? 0 : +(floor - p.y).toFixed(3) };
+      }),
     assert(cond, msg) {
       if (!cond) throw new Error(msg);
     },

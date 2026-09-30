@@ -13,6 +13,7 @@
     "budget": "node tools/budget.mjs",
     "perf": "node tools/perf/load-test.mjs",
     "e2e": "node tools/e2e/run.mjs",
+    "playtest": "node tools/playtest/play.mjs",
     "deploy": "npm run build && npm run budget && wrangler deploy",
     "cf:dev": "npm run build && wrangler dev",
     "cf:check": "node tools/deploy-check.mjs"

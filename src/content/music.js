@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The scores (played by core/music.js). Every track is a variation on Xiao Pei's mother's lullaby
+// The scores (played by core/music.js). Every track is a variation on Pip's mother's lullaby
 // (D major pentatonic: A F# E D E F# A . B A F# E D E D .), at the lullaby's own tempo (84 bpm).
 // Notation: one token per step ('steps' per beat, 2 = eighth notes), '.' a rest, '-' holds the note.
 // A layer with from: n only plays once n memories of the Quiet District are restored (Chapter 3).

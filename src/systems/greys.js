@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Grey Grumblings (Chapter 3): "Nobody remembers us." Heavy and quiet, they drift toward the heart of the
 // Quiet District and don't want to be hugged: humming at one makes it turn away (the thread won't catch),
-// and running at it makes it slide off. Keep it company instead: walk up and stay close without humming.
+// and sprinting at it makes it slide off. Keep it company instead: walk up and stay close without humming.
 // Sitting nearby is faster, friends standing by count too, and a restored memory close to it halves the
 // time. The company ring fills, colour seeps back into it, it looks up at her... and then it lets the
 // Lullaby Thread wrap it like any other Grumbling. Loaded only with the zones that use it.
@@ -75,7 +75,7 @@ registerBehaviour('heavy', (g) => {
         return;
       }
       const humAt = p.humming && G.soothe.target === g;
-      const running = p.speed > 2.6 && dist < 4;
+      const running = p.rushing && dist < 4;
       // scripted greys only drift along their path, and never let anyone near
       if (path) {
         if (humAt) {
@@ -106,7 +106,7 @@ registerBehaviour('heavy', (g) => {
           G.events.emit('grey-refused', g);
         }
       } else if (running && slideT <= 0) {
-        // running at it: it slides away, heavy as a sack of rice
+        // sprinting at it: it slides away, heavy as a sack of rice
         slideT = 1.1;
         slide.subVectors(o, p.position).setY(0).normalize().multiplyScalar(2.2);
         g.company = Math.max(0, g.company - 0.25);

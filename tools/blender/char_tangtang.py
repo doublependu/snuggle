@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
-"""Lin Tangtang (ref/lintangtang.png, the middle variant), built by chibi.py with the character kit.
+"""Sunny Lin (ref/lintangtang.png, the middle variant), built by chibi.py with the character kit.
 
-A second-year, a head taller than Xiao Pei: a teal beret with a tan band over a dark bob with thin side
+A second-year, a head taller than Pip: a teal beret with a tan band over a dark bob with thin side
 plaits, confident eyes. Her body starts from the base mesh (tools/blender/base/hero_male.glb): its shirt becomes her teal
 chambray shirt (sleeves rolled to the forearm, a cream apron bib showing at the front), its bracers and hands
 her dark gloves, its belt her leather belt, its trousers her very baggy cream ones and its boots her boots

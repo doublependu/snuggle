@@ -153,6 +153,9 @@ __pycache__/
 # e2e screenshots
 tools/e2e/out/
 
+# autoplayer runs: logs, frames and recordings (tools/playtest)
+tools/playtest/out/
+
 
 # python and modelling
 __pycache__

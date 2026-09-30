@@ -413,7 +413,7 @@ const BEHAVIOURS = {
   },
 
   // Wistful Sparrow (Chapter 2): pecks at its stall and knocks the goods over, scatters to the rooftops if
-  // you run at it, and barely calms from humming alone. When Xiao Pei sits with the flock
+  // you run at it, and barely calms from humming alone. When Pip sits with the flock
   // (systems/perch.js sets g.perch to a spot beside her) it hops over, perches and listens.
   flock(g) {
     const home = g.home.clone();
@@ -446,7 +446,7 @@ const BEHAVIOURS = {
         const o = g.obj.position;
         const p = G.player;
         timer -= dt;
-        // perching beside Xiao Pei (set by the perch system while she sits with the flock)
+        // perching beside Pip (set by the perch system while she sits with the flock)
         if (g.perch) {
           mode = 'perch';
           _w.subVectors(g.perch, o);
@@ -472,8 +472,8 @@ const BEHAVIOURS = {
           return;
         }
         g.perched = false;
-        // running at them scatters the flock to the rooftops
-        if (mode !== 'scatter' && p.speed > 2.6 && dist < 4) {
+        // sprinting at them scatters the flock to the rooftops
+        if (mode !== 'scatter' && p.rushing && dist < 4) {
           mode = 'scatter';
           timer = 3.5 + Math.random() * 1.5;
           up.set(home.x + (Math.random() - 0.5) * 3, home.y + 3.2 + Math.random(), home.z + (Math.random() - 0.5) * 3);

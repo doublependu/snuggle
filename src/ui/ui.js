@@ -11,12 +11,12 @@ const el = (tag, cls, html) => {
 };
 
 export const SPEAKERS = {
-  xiaopei: ['Xiao Pei', '#e0662c'],
-  tangtang: ['Lin Tangtang', '#2f8a8f'],
-  weibao: ['Wei Bao', '#b7862e'],
+  xiaopei: ['Pip', '#e0662c'],
+  tangtang: ['Sunny Lin', '#2f8a8f'],
+  weibao: ['Bo', '#b7862e'],
   honk: ['Captain Honk', '#6d6d6d'],
   fang: ['Master Fang', '#c95a24'],
-  doudou: ['Doudou', '#a08463'],
+  doudou: ['Bean', '#a08463'],
   passenger: ['Passenger', '#6f7f8f'],
   auntie: ['Auntie on the train', '#7b6aa0'],
   student: ['Student', '#5e8a5e'],

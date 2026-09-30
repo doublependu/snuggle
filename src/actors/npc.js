@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Named characters and townsfolk: a Humanoid that idles, turns toward Xiao Pei when she is close,
+// Named characters and townsfolk: a Humanoid that idles, turns toward Pip when she is close,
 // gestures while speaking, and offers a "Talk" interaction that runs a script.
 import { Quaternion, Vector3 } from 'three';
 import { G } from '../game.js';
@@ -73,7 +73,19 @@ export class NPC {
     this.h.play(name, fade);
   }
 
-  // Walk along with Xiao Pei (actors/follower.js); slot in her frame (x right, z behind). null stops.
+  // Stand at pos, on the floor under it (story spots come from markers at ground level; see Player.teleport),
+  // facing `facing`. Stops a scripted walk.
+  place(pos, facing = this.facing, collision = G.collision) {
+    this.walkTarget = null;
+    this.seated = false;
+    this.root.position.copy(pos);
+    const y = collision?.floorY(pos);
+    if (y != null) this.root.position.y = y;
+    this.facing = this.homeFacing = facing;
+    this.root.rotation.y = facing;
+  }
+
+  // Walk along with Pip (actors/follower.js); slot in her frame (x right, z behind). null stops.
   follow(slot = { x: 1.3, z: 0.5 }) {
     this.follower = slot ? new Follower(this, slot) : null;
     this.interactable.priority = slot ? -1 : 0; // a friend at her elbow shouldn't steal every prompt
@@ -93,6 +105,7 @@ export class NPC {
   // Sit on a seat: front = centre of the seat's front edge, seat = seat-top height (Humanoid.seatRoot).
   sitOn(seat, front = this.root.position.clone(), facing = this.facing) {
     this.base = 'sit';
+    this.seated = true;
     this.h.play('sit', 0);
     this.h.seatRoot(front, facing, seat, this.root.position);
     this.facing = this.homeFacing = facing;
@@ -132,7 +145,7 @@ export class NPC {
       const want = d < 4.5 || this.talking ? Math.atan2(p.position.x - this.root.position.x, p.position.z - this.root.position.z) : this.homeFacing;
       this.turnTo(want, dt, 3);
     }
-    // look at Xiao Pei when she is close or while talking to her
+    // look at Pip when she is close or while talking to her
     const near = p && (this.talking || this.root.position.distanceTo(p.position) < 4.5);
     this.h.lookTarget = near && !this.noLook ? p.h.worldBone('head', this.lookPoint || (this.lookPoint = new Vector3())) : null;
     const camD = G.camera.position.distanceTo(this.root.position);

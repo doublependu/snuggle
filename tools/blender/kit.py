@@ -319,7 +319,7 @@ def waistband(B, top_z, bottom_z, r_top, r_bottom, depth=0.8, thick=0.02):
 
 
 def hightops(B, collar=0.1, sock_top=0.13, width=1.0):
-    """Chunky high-top shoes with a sock above (Xiao Pei / Wei Bao)."""
+    """Chunky high-top shoes with a sock above (Pip / Bo)."""
     f = Field((-B.leg_x - 0.1, -0.16, -0.01), (B.leg_x + 0.1, 0.1, sock_top + 0.03), vs=0.002)
     for g in (1, -1):
         x = B.leg_x * 1.02 * g

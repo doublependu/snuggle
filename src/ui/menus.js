@@ -166,6 +166,7 @@ export class Menus {
     if (!this.open) return;
     if (input.consume('back') || input.consume('pause')) this.stack.length > 1 ? this.back() : this.resume();
     if (input.consume('book') && this.stack.at(-1) === this.book) this.back();
+    if (!this.open) return; // that closed the last menu
     const focusables = [...this.stack.at(-1).querySelectorAll('button, select, input, a')];
     const i = focusables.indexOf(document.activeElement);
     if (input.consume('down_edge')) focusables[(i + 1) % focusables.length]?.focus();

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Chapter 1: Welcome to Mistbloom. Master Fang's welcome and first lesson, Captain Honk's interruption,
-// the lost-sock and homework missions, baking with Tangtang, the lonely pom-pom, and the chapter end.
+// the lost-sock and homework missions, baking with Sunny, the lonely pom-pom, and the chapter end.
 import { Vector3 } from 'three';
 import { G, flag, wait, until } from '../game.js';
 import { talk, ask, objective, hint, shot, near } from './helpers.js';
@@ -19,11 +19,11 @@ export function chapterObjective() {
   if (!f('sockDone')) left.push('the Lost Sock (laundry yard)');
   if (!f('homeworkDone')) left.push('the Homework (under the library stairs)');
   if (left.length) return 'Soothe ' + left.join(' and ');
-  if (!f('cookDone')) return 'Bake custard tarts with Tangtang in the kitchen';
+  if (!f('cookDone')) return 'Bake custard tarts with Sunny in the kitchen';
   if (!f('pompomDone')) return 'Someone is sitting all alone by the practice field…';
   if (!f('ch1Done')) return 'Meet everyone at the harbour overlook';
-  if (!f('ch2_start')) return 'Meet Wei Bao at the Academy gate: the night market awaits!';
-  if (!f('ch2Done')) return 'The night market is down the hill (Wei Bao is at the gate)';
+  if (!f('ch2_start')) return 'Meet Bo at the Academy gate: the night market awaits!';
+  if (!f('ch2Done')) return 'The night market is down the hill (Bo is at the gate)';
   return 'Free roam: find every lemon candy and fill your Sprite Book';
 }
 
@@ -46,26 +46,20 @@ export async function chapter1(z) {
     await until(() => flag('sockDone') && flag('homeworkDone') && flag('cookDone') && flag('pompomDone'));
     placeCast(z);
     refreshObjective();
-    G.ui.toast('💌 A paper crane note: “Meet us at the overlook! — Tangtang, Wei Bao & Captain Honk”', 5);
+    G.ui.toast('💌 A paper crane note: “Meet us at the overlook! — Sunny, Bo & Captain Honk”', 5);
     await until(() => near(z.marker('POINT_overlook').position, 4.5) && !G.frozen);
     await ending(z);
   }
 }
 
-// Put Fang / Tangtang / Wei Bao where the story currently needs them.
+// Put Fang / Sunny / Bo where the story currently needs them.
 function placeCast(z) {
   const fang = npc('fang'),
     tt = npc('tangtang'),
     wb = npc('weibao');
-  const at = (n, m, facing) => {
-    if (!n || !m) return;
-    n.walkTarget = null;
-    n.root.position.copy(m.position);
-    n.facing = n.homeFacing = facing ?? m.facing;
-    n.root.rotation.y = n.facing;
-  };
+  const at = (n, m, facing) => n && m && n.place(m.position, facing ?? m.facing, z.collision);
   if (flag('ch1Done')) {
-    // evening: Fang at the pavilion, Tangtang baking, Wei Bao at the gate ready for the night market
+    // evening: Fang at the pavilion, Sunny baking, Bo at the gate ready for the night market
     at(fang, z.marker('POINT_fang_lesson'));
     at(tt, z.marker('POINT_kitchen'));
     tt.homeFacing = Math.PI / 2;
@@ -82,12 +76,8 @@ function placeCast(z) {
     const o = z.marker('POINT_overlook').position;
     at(fang, { position: o.clone().add(new Vector3(-1.2, 0, -0.6)), facing: 0 });
     at(tt, { position: o.clone().add(new Vector3(1.4, 0, -0.4)), facing: -0.4 });
-    if (wb) {
-      wb.base = 'idle';
-      wb.h.play('idle', 0.2);
-      wb.lookAtPlayer = true;
-      at(wb, { position: o.clone().add(new Vector3(0.2, 0, -1.4)), facing: 0.3 });
-    }
+    // Bo sits on the overlook bench (its seat's front edge, 0.46 m up, facing the path up from the courtyard)
+    wb?.sitOn(0.46, o.clone().add(new Vector3(0.2, 0, -1.425)), Math.PI);
     return;
   }
   if (flag('ch1_welcome')) {
@@ -112,7 +102,7 @@ async function welcome(z) {
   shot('CAM_welcome', fang.position, 0.8, 1.2);
   await talk([
     ['tangtang', 'Master Fang! I found her! Cardboard suitcase and everything!'],
-    ['fang', 'So I see. Welcome to Mistbloom Academy, Xiao Pei. We have been expecting you — for about fifty years, give or take.'],
+    ['fang', 'So I see. Welcome to Mistbloom Academy, Pip. We have been expecting you — for about fifty years, give or take.'],
     ['xiaopei', 'F-fifty years? I only turned eleven…', { face: 'surprised' }],
   ]);
   fang.setAnim('pat', 0.3);
@@ -141,7 +131,8 @@ async function lesson(z) {
     fang = npc('fang'),
     wb = npc('weibao');
   G.frozen = true;
-  fang.root.position.copy(z.marker('POINT_fang_lesson').position);
+  const pav = z.marker('POINT_fang_lesson');
+  fang.place(pav.position, pav.facing, z.collision);
   const seat = z.marker('POINT_lessonseat');
   p.sitOn(seat.position, seat.facing, seat.data.seat ?? 0.89);
   shot('CAM_lesson', fang.position, 0.8, 1.2);
@@ -155,9 +146,9 @@ async function lesson(z) {
   wb.h.overlayPlay('shy', 0.2);
   await talk([
     ['xiaopei', 'Ah— custard tart crumbs! Um. Thank you… goose?', { face: 'shy' }],
-    ['honk', 'CAPTAIN HONK. THE BOY IS WEI BAO. HE SAYS HELLO. HE IS TOO SHY TO SAY IT HIMSELF.'],
+    ['honk', 'CAPTAIN HONK. THE BOY IS BO. HE SAYS HELLO. HE IS TOO SHY TO SAY IT HIMSELF.'],
     ['weibao', '…hello.'],
-    ['fang', "Wei Bao's technique is Echo Friend. A Grumbling can speak through Captain Honk, so we can hear what it really needs."],
+    ['fang', "Bo's technique is Echo Friend. A Grumbling can speak through Captain Honk, so we can hear what it really needs."],
     ['weibao', "If you ever want to know what a Grumbling needs… I can ask it. It takes a little Cozy Energy, though."],
   ]);
   wb.h.overlayPlay(null, 0.3);
@@ -168,7 +159,7 @@ async function lesson(z) {
     ['fang', 'Now then. Two small missions for our newest sorcerer.'],
     ['fang', 'A lost-sock Grumbling has been knocking over baskets in the laundry yard, through the moon gate to the south-west.'],
     ['fang', "And somebody's unfinished homework is hiding under the library stairs, across the little bridge to the east."],
-    ['fang', 'Off you go, dear. And do visit Tangtang. She bakes when she is nervous, so the kitchen is always full.'],
+    ['fang', 'Off you go, dear. And do visit Sunny. She bakes when she is nervous, so the kitchen is always full.'],
   ]);
   G.cam.clearShot();
   p.stand(seat.position.clone().add(new Vector3(0, 0, 1.6)));
@@ -186,7 +177,7 @@ async function ending(z) {
   shot('CAM_overlook', npc('fang').position, 0.9, 1.4);
   await talk([
     ['tangtang', 'THERE you are! Look — you can see the whole bay from here.'],
-    ['fang', 'A lost sock, a worried page of homework, a lonely pom-pom… and a kitchen full of tarts. You did wonderfully, Xiao Pei.'],
+    ['fang', 'A lost sock, a worried page of homework, a lonely pom-pom… and a kitchen full of tarts. You did wonderfully, Pip.'],
     ['honk', 'TOMORROW NIGHT IS THE NIGHT MARKET. WE WILL SHOW YOU THE BEST DUMPLING STALL. HONK.'],
     ['weibao', '…it really is the best one.'],
     ['xiaopei', 'I think… I am going to like it here.', { face: 'happy' }],
@@ -198,14 +189,14 @@ async function ending(z) {
     ['tangtang', 'HE TALKS?!'],
   ]);
   p.doudou.userData.awake = false;
-  await talk([[null, 'Doudou is already asleep again. Across the water, the harbour lanterns begin to glow.']]);
+  await talk([[null, 'Bean is already asleep again. Across the water, the harbour lanterns begin to glow.']]);
   flag('ch1Done', true);
   writeSave(G.save);
   placeCast(z);
   G.frozen = true; // talk() unfroze her; stay put through the chapter cards
   G.cam.clearShot();
   await G.ui.card('Chapter 1 complete', 'Welcome to Mistbloom', 3);
-  await G.ui.card('Chapter 2: The Night Market Mix-Up', 'The next evening, down by the harbour… (Wei Bao is waiting at the gate)', 3.4);
+  await G.ui.card('Chapter 2: The Night Market Mix-Up', 'The next evening, down by the harbour… (Bo is waiting at the gate)', 3.4);
   G.frozen = false;
   refreshObjective();
 }
@@ -237,7 +228,7 @@ export function wireAcademy(z) {
     ]);
     G.ui.toast('💡 It calms best with company: lead it to the courtyard where the Charm Sprites play tag, then hum.', 5.5);
   });
-  // Tangtang: cooking (repeatable, restocks tarts)
+  // Sunny: cooking (repeatable, restocks tarts)
   tt.onTalk = async () => {
     if (!flag('ch1_welcome')) return;
     const first = !flag('cookDone');
@@ -270,14 +261,14 @@ export function wireAcademy(z) {
       ['fang', pickLine([
         'Notice them first. A Grumbling that feels seen is already half soothed.',
         'If a Grumbling acts out, step aside and keep humming. There is no rush in kindness.',
-        'Tangtang’s tarts can calm even a very grumpy Grumbling. Toss one if you need to.',
+        'Sunny’s tarts can calm even a very grumpy Grumbling. Toss one if you need to.',
         'The lemon candies around the grounds? I may have dropped a few. Or ten.',
       ])],
     ]);
   wb.onTalk = async () => {
     if (flag('ch3_greys')) {
       // Chapter 3: the ferry across the harbour to the Quiet District (or the night market)
-      const a = await ask('honk', flag('ch3_arrive') ? 'WHERE TO? HONK.' : 'THE FERRY TO THE QUIET DISTRICT LEAVES FROM THE HARBOUR. TANGTANG IS COMING TOO. HONK.', ['The Quiet District', 'The night market', 'Not yet']);
+      const a = await ask('honk', flag('ch3_arrive') ? 'WHERE TO? HONK.' : 'THE FERRY TO THE QUIET DISTRICT LEAVES FROM THE HARBOUR. SUNNY IS COMING TOO. HONK.', ['The Quiet District', 'The night market', 'Not yet']);
       G.ui.closeDialogue();
       if (a === 0) G.goto('quiet', 'SPAWN_ferry');
       else if (a === 1) G.goto('market', 'SPAWN_start');
@@ -285,13 +276,13 @@ export function wireAcademy(z) {
     }
     if (flag('ch1Done')) {
       // Chapter 2: off to the night market (and back again any time)
-      const a = await ask('honk', flag('ch2_start') ? 'BACK TO THE NIGHT MARKET? HONK.' : 'THE NIGHT MARKET AWAITS. TANGTANG IS ALREADY THERE, GUARDING THE DUMPLINGS. HONK.', ['Let’s go!', 'Not yet']);
+      const a = await ask('honk', flag('ch2_start') ? 'BACK TO THE NIGHT MARKET? HONK.' : 'THE NIGHT MARKET AWAITS. SUNNY IS ALREADY THERE, GUARDING THE DUMPLINGS. HONK.', ['Let’s go!', 'Not yet']);
       G.ui.closeDialogue();
       if (a === 0) G.goto('market', 'SPAWN_start');
       return;
     }
     return flag('weibaoFriend')
-      ? talk([['honk', pickLine(['NEED ECHO FRIEND? PRESS THE ASSIST BUTTON NEAR A GRUMBLING. HONK.', 'WEI BAO LIKES YOU. HE WILL NOT SAY IT. I WILL. HONK.', 'THE LIBRARY STAIRS ARE MOSSY. MIND YOUR FEET.'])]])
+      ? talk([['honk', pickLine(['NEED ECHO FRIEND? PRESS THE ASSIST BUTTON NEAR A GRUMBLING. HONK.', 'BO LIKES YOU. HE WILL NOT SAY IT. I WILL. HONK.', 'THE LIBRARY STAIRS ARE MOSSY. MIND YOUR FEET.'])]])
       : talk([['weibao', '…(he hides behind his puppet)']]);
   };
 }

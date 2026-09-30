@@ -46,7 +46,7 @@ function retarget(lib, charRest) {
   const k = hipsChar.y / hipsLib.y;
   const out = {};
   // bones that no clip ever animates (neck, hood) keep the character's own rest pose: the library's rest
-  // for them assumes the library's bone axes, which rolled Wei Bao's neck sideways
+  // for them assumes the library's bone axes, which rolled Bo's neck sideways
   const animated = new Set();
   for (const clip of lib.clips) for (const t of clip.tracks) animated.add(t.name.split('.')[0]);
   for (const clip of lib.clips) {

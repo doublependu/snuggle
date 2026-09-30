@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Lost children at the night market (Chapter 2). A soothed Wistful Sparrow becomes a Charm Sprite that
-// "guides lost children back to their parents": with it equipped as her helper (ability: Guide), Xiao
-// Pei can lead a crying child through the crowd. The child holds on and follows (actors/follower.js), and
+// "guides lost children back to their parents": with it equipped as her helper (ability: Guide), Pip
+// can lead a crying child through the crowd. The child holds on and follows (actors/follower.js), and
 // a little glowing sparrow flies ahead, leaving a trail of sparkles to the parent.
 import { Vector3 } from 'three';
 import { G, flag } from '../game.js';
@@ -12,7 +12,7 @@ import { writeSave } from '../core/save.js';
 
 const FAMILIES = [
   { kid: 'kid1', parent: 'parent1', lost: 'I can’t find my mama… there were so many lanterns and then she was gone…', thanks: 'Mei-Mei! There you are! Oh, thank you, young sorcerer!' },
-  { kid: 'kid2', parent: 'parent2', lost: 'Baba said wait by the water… but I followed a sparrow and now I don’t know where the water is…', thanks: 'Little Bo! I was so worried! Thank you, thank you!' },
+  { kid: 'kid2', parent: 'parent2', lost: 'Baba said wait by the water… but I followed a sparrow and now I don’t know where the water is…', thanks: 'Little Sam! I was so worried! Thank you, thank you!' },
   { kid: 'kid3', parent: 'parent3', lost: 'I wanted to see the boats… Grandma is by the dumplings… I think…', thanks: 'Ah, my little sailor! Grandma was about to cry into the dumplings. Thank you, dear.' },
 ];
 
@@ -20,7 +20,7 @@ const _t = new Vector3();
 
 export function setupGuide(z) {
   let leading = null; // { fam, kid, parent }
-  // the guide sparrow: a small glowing sprite that flies from Xiao Pei toward the parent, over and over
+  // the guide sparrow: a small glowing sprite that flies from Pip toward the parent, over and over
   let bird = null,
     birdT = 0,
     birdGlow = -1;
@@ -32,7 +32,7 @@ export function setupGuide(z) {
       z.whenNPC(fam.parent, (parent) => {
         if (home(fam)) {
           // already reunited on an earlier visit: they stay together
-          kid.root.position.copy(parent.position).add(_t.set(0.7, 0, 0.3));
+          kid.place(_t.set(0.7, 0, 0.3).add(parent.position), kid.facing, z.collision);
           kid.setAnim('idle', 0);
           return;
         }

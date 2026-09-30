@@ -33,7 +33,7 @@ export async function chapter2(z) {
   const tt = npc('tangtang'),
     wb = npc('weibao');
   if (!flag('ch2_start')) await arrival(z);
-  // the friends walk along with Xiao Pei all evening
+  // the friends walk along with Pip all evening
   tt?.follow({ x: 1.3, z: 0.5 });
   wb?.follow({ x: -1.3, z: 0.8 });
   wireFriends(z);
@@ -49,7 +49,8 @@ export async function chapter2(z) {
   if (!flag('ch2_dumplings')) {
     await until(() => flag('flock1Done') && flag('flock2Done') && flag('flock3Done') && !G.frozen);
     refreshObjective2();
-    await until(() => near(z.marker('POINT_dumpling').position, 3.2) && !G.frozen && G.player.state === 'move');
+    // in front of the stall, or beside it: everyone is there
+    await until(() => near(z.marker('POINT_dumpling').position, 4.2) && !G.frozen && G.player.state === 'move');
     await dumplings(z);
   }
   if (!flag('ch2Done')) {
@@ -77,7 +78,7 @@ async function arrival(z) {
   p.doudou.userData.awake = false;
   await talk([['tangtang', 'Also: emergency tarts. For Grumbling emergencies. You never know!']]);
   G.collection.addTarts(3);
-  G.ui.toast('🥧 Got 3 of Tangtang’s tarts. Toss one with Assist, then press Assist again for Wei Bao’s Echo Friend.', 5);
+  G.ui.toast('🥧 Got 3 of Sunny’s tarts. Toss one with Assist, then press Assist again for Bo’s Echo Friend.', 5);
   G.cam.clearShot();
   G.cam.snapBehind(p);
   G.frozen = false;
@@ -86,7 +87,7 @@ async function arrival(z) {
   refreshObjective2();
 }
 
-// The lantern stall: the first flock, and Xiao Pei working out what they really need.
+// The lantern stall: the first flock, and Pip working out what they really need.
 async function tutorial(z) {
   const stall = z.marker('POINT_tutorial').position;
   const f1 = z.flocks[0];
@@ -223,7 +224,7 @@ async function hook(z) {
     ['weibao', '…that’s the Quiet District.'],
     ['honk', '(very quietly) …honk.'],
     ['xiaopei', 'It feels cold all of a sudden. Like somebody sighed.', { face: 'worried' }],
-    [null, 'In Xiao Pei’s hood, Doudou is wide awake, staring across the water. He doesn’t say a word.'],
+    [null, 'In Pip’s hood, Bean is wide awake, staring across the water. He doesn’t say a word.'],
   ]);
   flag('ch2Done', true);
   writeSave(G.save);
@@ -277,6 +278,6 @@ function wireFriends(z) {
       talk([['honk', pick([
         'PRESS ASSIST TWICE: A SNACK, THEN ME. WE WORK BEST TOGETHER. HONK.',
         'THE SPARROWS EACH LOVE ONE FREE THING BEST. I CAN ASK THEM. HONK.',
-        flag('ch2Done') ? 'CAPTAIN HONK IS NOT SCARED OF THE DARK. CAPTAIN HONK WOULD LIKE TO HOLD YOUR HAND. HONK.' : 'WEI BAO HAS NEVER BEEN TO THE MARKET WITH FRIENDS BEFORE. HE IS VERY HAPPY. HONK.',
+        flag('ch2Done') ? 'CAPTAIN HONK IS NOT SCARED OF THE DARK. CAPTAIN HONK WOULD LIKE TO HOLD YOUR HAND. HONK.' : 'BO HAS NEVER BEEN TO THE MARKET WITH FRIENDS BEFORE. HE IS VERY HAPPY. HONK.',
       ])]]);
 }

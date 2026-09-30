@@ -276,6 +276,7 @@ export class Zone {
         }
         // seat markers mark the centre of the seat's front edge (see NPC.sitOn)
         if (m.data.anim === 'sit') n.sitOn(m.data.seat ?? 0.45, m.position, m.facing);
+        else n.place(m.position, m.facing, this.collision);
         this.addNPC(n);
         for (const fn of this.npcWaiters.get(n.id) || []) fn(n);
         this.npcWaiters.delete(n.id);

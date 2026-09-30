@@ -41,7 +41,7 @@ export async function create() {
   // the Quiet District's lanterns across the bay (they go out at the end of the chapter)
   z.far = z.markersBy('POINT_far_').map((m, i) => ({ pos: m.position, i: G.fx.glows.add(m.position, i % 3 ? '#ffa04a' : '#ffc870', flag('ch2Done') ? 0 : 3.2 + (i % 4) * 0.6) }));
 
-  // ---- the cast: Tangtang and Wei Bao come along; vendors, the musician and the children stream in
+  // ---- the cast: Sunny and Bo come along; vendors, the musician and the children stream in
   await z.populateNPCs(undefined, { essential: ['tangtang', 'weibao'] });
   for (const id of ['tangtang', 'weibao']) z.whenNPC(id, (n) => (n.blobRadius = 0.32));
 
