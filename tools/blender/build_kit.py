@@ -411,40 +411,81 @@ def stairs(x, name='stairs', w=2.4, h=2.0, run=3.2):
 
 
 def library(x, name='library', w=7.0, d=5.0):
-    """Two-storey library with an outside staircase; a cosy nook under the stairs."""
+    """Two-storey library. An outside staircase climbs the east side from the ground behind the building to a
+    landing on the balcony, which runs right round the upper room; a cosy nook under the stairs.
+    The balcony is a real floor (collision deck, railings on its open sides, a solid upper room): it used to
+    have no collision at all, so the stairs led nowhere."""
     V, K = [], []
     bv, bc = base_platform(w + 1.0, d + 1.0, 0.4, steps_front=True)
     V += bv
     K += bc
     z0 = 0.4
     h1, h2 = 3.0, 2.6
+    deck = z0 + h1 + 0.2                       # the balcony floor (top of the deck)
+    dx, dy0, dy1 = (w + 1.2) / 2, -0.3 - (d + 1.2) / 2, -0.3 + (d + 1.2) / 2   # the deck's edges
     V.append(box('f1', (0, 0, z0 + h1 / 2), (w, d, h1), 'plain', C(PLASTER)))
     K.append(col_box('f1', (0, 0, z0 + h1 / 2), (w, d, h1)))
     V.append(box('door', (0, -d / 2 - 0.06, z0 + 1.05), (1.4, 0.12, 2.1), 'wood', C(TIMBER_D)))
     for sx in (-1, 1):
         V += lattice_window((sx * w / 3, -d / 2 - 0.08, z0 + 1.7), 1.4, 1.2)
-    V.append(box('balcony', (0, -0.3, z0 + h1 + 0.1), (w + 1.2, d + 1.2, 0.2), 'wood', C(TIMBER)))
-    V.append(box('f2', (0, 0, z0 + h1 + 0.2 + h2 / 2), (w * 0.82, d * 0.8, h2), 'plain', C(PLASTER)))
+    V.append(box('balcony', (0, -0.3, deck - 0.1), (w + 1.2, d + 1.2, 0.2), 'wood', C(TIMBER)))
+    V.append(box('balcony_top', (0, -0.3, deck - 0.004), (w + 1.1, d + 1.1, 0.01), 'wood', C('#9c6a44')))
+    K.append(col_box('balcony', (0, -0.3, deck - 0.1), (w + 1.2, d + 1.2, 0.2)))
+    fw, fd = w * 0.82, d * 0.8
+    V.append(box('f2', (0, 0, deck + h2 / 2), (fw, fd, h2), 'plain', C(PLASTER)))
+    K.append(col_box('f2', (0, 0, deck + h2 / 2), (fw, fd, h2)))
     for sx in (-1, 0, 1):
-        V += lattice_window((sx * w / 3.6, -d * 0.4 - 0.08, z0 + h1 + 0.2 + h2 * 0.5), 1.1, 1.1)
-    for i in range(7):
-        xx = -(w + 1.2) / 2 + i * (w + 1.2) / 6
-        V.append(box('bal%d' % i, (xx, -0.3 - (d + 1.2) / 2, z0 + h1 + 0.6), (0.08, 0.08, 0.8), 'wood', C(TIMBER)))
-    V.append(box('balrail', (0, -0.3 - (d + 1.2) / 2, z0 + h1 + 1.0), (w + 1.2, 0.1, 0.08), 'wood', C(TIMBER)))
-    V += roof(name + '_r1', (0, -0.3, z0 + h1 + 0.2), w + 1.2, d + 1.2, 0.6, over=0.5, lift=0.3, ridge=False, res=(14, 8))
-    V += roof(name + '_r2', (0, 0, z0 + h1 + 0.2 + h2), w * 0.82, d * 0.8, 2.0, over=0.9, lift=0.45)
-    # outside staircase up the east side (collision ramp), open underneath
-    sx0 = w / 2 + 0.9
-    n = 16
+        V += lattice_window((sx * w / 3.6, -fd / 2 - 0.08, deck + h2 * 0.5), 1.1, 1.1)
+    V += roof(name + '_r2', (0, 0, deck + h2), fw, fd, 2.0, over=0.9, lift=0.45)
+
+    # outside staircase up the east side, open underneath: from the ground behind the building (north) up to a
+    # landing at the balcony's south-east corner
+    sw = 1.3                                   # width
+    sx0 = dx + 0.05 + sw / 2                   # clear of the balcony's edge, so nobody bumps their head on it
+    land0, land1 = dy0, dy0 + 1.2              # the landing, y from the front edge
+    run = deck / math.tan(math.radians(27))    # a 27 degree climb
+    foot = land1 + run
+    n = 19
     for i in range(n):
-        yy = d / 2 - (i + 0.5) * (d + 1.0) / n
-        zz = z0 + (i + 1) * h1 / n
-        V.append(box('ost%d' % i, (sx0, yy, zz - 0.06), (1.3, (d + 1.0) / n + 0.02, 0.12), 'wood', C('#8a5a3c')))
-    ang = math.degrees(math.atan2(h1, d + 1.0))
-    K.append(col_box('stairs', (sx0, -0.5 + 0.0, z0 + h1 / 2 - 0.1), (1.3, math.hypot(d + 1.0, h1), 0.15), rot=(-ang, 0, 0)))
-    V.append(box('ostrail', (sx0 + 0.62, -0.5, z0 + h1 / 2 + 0.7), (0.08, math.hypot(d + 1.0, h1), 0.08), 'wood', C(TIMBER), rot=(-ang, 0, 0)))
-    for k in range(4):
-        V.append(tube('ostpost%d' % k, (sx0 + 0.62, d / 2 - k * (d + 1) / 3, 0), (sx0 + 0.62, d / 2 - k * (d + 1) / 3, z0 + h1 * (k / 3) + 0.9), 0.05, 0.05, 'wood', C(TIMBER), segs=5, rings=1))
+        yy = foot - (i + 0.5) * run / n
+        zz = (i + 1) * deck / n
+        V.append(box('ost%d' % i, (sx0, yy, zz - 0.06), (sw, run / n + 0.02, 0.12), 'wood', C('#8a5a3c')))
+    ang = math.degrees(math.atan2(deck, run))
+    L = math.hypot(run, deck)
+    ym, zm = (foot + land1) / 2, deck / 2
+    K.append(col_box('stairs', (sx0, ym, zm - 0.075 / math.cos(math.radians(ang))), (sw, L, 0.15), rot=(-ang, 0, 0)))
+    V.append(box('landing', ((dx + sx0 + sw / 2) / 2, (land0 + land1) / 2, deck - 0.075), (sx0 + sw / 2 - dx, land1 - land0, 0.15), 'wood', C('#8a5a3c')))
+    K.append(col_box('landing', ((dx + sx0 + sw / 2) / 2, (land0 + land1) / 2, deck - 0.075), (sx0 + sw / 2 - dx + 0.1, land1 - land0, 0.15)))
+    for k, sxx in enumerate((sx0 - sw / 2, sx0 + sw / 2)):
+        # stringers under the treads, a handrail above them (drawn and solid: nobody falls off the side)
+        V.append(box('oststr%d' % k, (sxx, ym, zm - 0.2), (0.08, L, 0.18), 'wood', C(TIMBER_D), rot=(-ang, 0, 0)))
+        V.append(box('ostrail%d' % k, (sxx, ym, zm + 0.95), (0.08, L, 0.08), 'wood', C(TIMBER), rot=(-ang, 0, 0)))
+        K.append(col_box('ostrail%d' % k, (sxx, ym, zm + 0.55), (0.1, L, 1.1), rot=(-ang, 0, 0)))
+        for j in range(5):
+            t = (j + 0.5) / 5
+            yy, zz = foot - t * run, t * deck
+            V.append(box('ostbal%d%d' % (k, j), (sxx, yy, zz + 0.5), (0.06, 0.06, 1.0), 'wood', C(TIMBER)))
+    for sxx, yy in ((sx0 + sw / 2, land0), (sx0 + sw / 2, land1), (sx0 - sw / 2, land1)):
+        V.append(tube('ostpost%.1f%.1f' % (sxx, yy), (sxx, yy, 0), (sxx, yy, deck - 0.1), 0.06, 0.06, 'wood', C(TIMBER), segs=5, rings=1))
+
+    # railings: the balcony's open sides and the landing. The east side is open only where the landing joins.
+    def rail(nm, x0, y0, x1, y1):
+        cx, cy, ln = (x0 + x1) / 2, (y0 + y1) / 2, math.hypot(x1 - x0, y1 - y0)
+        along_x = abs(x1 - x0) > abs(y1 - y0)
+        size = (ln, 0.1, 0.08) if along_x else (0.1, ln, 0.08)
+        V.append(box('rail_' + nm, (cx, cy, deck + 0.95), size, 'wood', C(TIMBER)))
+        m = max(2, int(ln / 1.2) + 1)
+        for i in range(m):
+            t = i / (m - 1)
+            V.append(box('bal_%s%d' % (nm, i), (x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, deck + 0.47), (0.08, 0.08, 0.95), 'wood', C(TIMBER)))
+        K.append(col_box('rail_' + nm, (cx, cy, deck + 0.55), (ln, 0.15, 1.1) if along_x else (0.15, ln, 1.1)))
+
+    ex = sx0 + sw / 2
+    rail('front', -dx, dy0, ex, dy0)           # the front, and on along the landing
+    rail('west', -dx, dy0, -dx, dy1)
+    rail('back', -dx, dy1, dx, dy1)
+    rail('east', dx, land1, dx, dy1)           # beside the stairs going down
+    rail('land', ex, dy0, ex, land1)
     return piece(name, V, K, x)
 
 

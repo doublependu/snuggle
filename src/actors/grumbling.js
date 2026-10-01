@@ -248,15 +248,19 @@ const BEHAVIOURS = {
     let timer = 2,
       phase = 'drift',
       raining = 0.4;
+    // its own rain sound: as loud as it is raining, quieter with distance, and gone when it's soothed (the
+    // rain outside the train's windows is a different, duller bed: core/audio.js)
+    const patter = (level, dist) => G.audio.bed('patter', level * Math.min(1, Math.max(0, (10 - dist) / 7.5)), 0.5);
     const b = {
       hover,
-      idle(dt) {
+      idle(dt, dist) {
         // gentle ambient drizzle on whoever is below (the passengers' shoes)
         g.obj.position.y = g.home.y + hover + Math.sin(g.t * 1.3) * 0.08;
         rain.center.copy(g.obj.position);
         rain.mat.uniforms.opacity.value = 0.35;
         ring.material.opacity = 0;
         if (Math.random() < dt * 0.8) G.audio.play('drip');
+        patter(0.4, dist);
       },
       update(dt, dist) {
         timer -= dt;
@@ -293,6 +297,7 @@ const BEHAVIOURS = {
             timer = 2.5 + Math.random() * 1.5;
           }
         }
+        patter(0.25 + raining * 0.75, dist);
         rain.center.copy(o);
         rain.mat.uniforms.opacity.value = 0.25 + raining * 0.4;
         rain.mat.uniforms.uSize.value.y = o.y - g.ground;
@@ -300,6 +305,7 @@ const BEHAVIOURS = {
         ring.material.opacity = phase === 'rain' ? 0.35 : phase === 'windup' ? 0.5 + Math.sin(g.t * 20) * 0.2 : 0;
       },
       stop() {
+        G.audio.bed('patter', 0, 0.5);
         rain.mesh.removeFromParent();
         ring.removeFromParent();
       },

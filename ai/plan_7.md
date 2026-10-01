@@ -314,3 +314,10 @@ Measured and screenshotted in this session with a throwaway script (in the sessi
 - A fishing mini-game
 - A map screen
 - Deploying (you do that)
+
+## 12. Decisions after review (yours, before implementation)
+
+- **The dialogue is not trimmed** (question 3). The text speed setting and the walking bubbles stay.
+- **Added: skip to the end of a long conversation.**
+- **W walks, Shift + W runs** (question 6). No "hold C": with a walk on W, a separate walk key has no job.
+- **Everything else:** on the defaults. What was built is in `ai/next_7.md`.

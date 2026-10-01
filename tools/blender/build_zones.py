@@ -72,7 +72,40 @@ def grid_terrain(name, x0, x1, y0, y1, nx, ny, hfn, cfn, kind='ground'):
     return ob
 
 
+def rect_dist(px, py, cx, cy, hx, hy):
+    return math.hypot(max(0.0, abs(px - cx) - hx), max(0.0, abs(py - cy) - hy))
+
+
+def grove(name, pos, extents, paths, **props):
+    """A scatter area inside the play area. Trees have trunks you bump into, so the build fails if the area
+    comes within 2.5 m of a path, or (checked in check_groves, once every marker exists) of a marker."""
+    for pts in paths:
+        for i in range(len(pts) - 1):
+            (x0, y0), (x1, y1) = pts[i][:2], pts[i + 1][:2]
+            n = max(1, int(math.hypot(x1 - x0, y1 - y0) / 0.5))
+            for k in range(n + 1):
+                d = rect_dist(x0 + (x1 - x0) * k / n, y0 + (y1 - y0) * k / n, pos[0], pos[1], extents[0], extents[1])
+                assert d >= 2.5, '%s is %.1f m from a path' % (name, d)
+    e = area(name, pos, extents, **props)
+    e['grove'] = 1
+    return e
+
+
+def check_groves():
+    """Groves keep 2.5 m from every marker (spawns, people, story spots) and 5 m from camera spots."""
+    groves = [o for o in bpy.context.scene.objects if o.get('grove')]
+    for o in bpy.context.scene.objects:
+        pre = o.name.split('_')[0]
+        if o.type != 'EMPTY' or pre in ('SCATTER', 'WATER', 'AREA', 'TRIGGER', 'PLACE') or o.get('grove'):
+            continue
+        need = 5.0 if pre == 'CAM' else 2.5
+        for g in groves:
+            d = rect_dist(o.location.x, o.location.y, g.location.x, g.location.y, g.scale.x, g.scale.y)
+            assert d >= need, '%s is %.1f m from %s' % (g.name, d, o.name)
+
+
 def export_zone(name, objs_root_coll):
+    check_groves()
     objs = [o for o in bpy.context.scene.objects]
     for o in objs:
         if o.type == 'MESH' and o.name.startswith('COL_'):
@@ -210,7 +243,9 @@ def station():
         z = 0.0
         if y > 16:
             z = min(14.5, (y - 16) * 0.255) + 0.7 * math.sin(x * 0.17) * math.cos(y * 0.13) * min(1, (y - 16) / 8)
-        z += max(0.0, x - 40) * 0.7 + max(0.0, -26 - x) * 0.7
+        # no lift at the east and west edges (it used to rise 6-8 m to hide the world's edge, which read as a
+        # bowl): the ground keeps its shape to the edge, and the runtime carries it on into the forest
+        # (src/procgen/forest.js)
         d, i, t = poly_dist(x, y, PATH)
         if d < 3.5 and y > 15:
             k = max(0.0, 1 - max(0.0, d - 1.6) / 1.9)
@@ -236,11 +271,12 @@ def station():
     V.append(box('platform', (-4, 3.7, PLAT_Z / 2), (36, 6.4, PLAT_Z), 'stone', C('#c7bfb0'), bevel=0.04))
     V.append(box('plat_edge', (-4, 0.55, PLAT_Z + 0.005), (36, 0.3, 0.02), 'glow', C('#e2b33a')))
     K = [col('platform', (-4, 3.7, PLAT_Z / 2), (36, 6.4, PLAT_Z))]
-    V.append(box('bed', (8, -2.2, 0.08), (90, 4.0, 0.16), 'stone', C('#8a8074')))
+    # the line runs on into the mist both ways (the forest beyond the walls leaves it clear)
+    V.append(box('bed', (8, -2.2, 0.08), (280, 4.0, 0.16), 'stone', C('#8a8074')))
     for sy in (-2.9, -1.5):
-        V.append(box('rail%.1f' % sy, (8, sy, 0.24), (90, 0.1, 0.12), 'stone', C('#6e6e70')))
-    for i in range(45):
-        V.append(box('sleeper%d' % i, (-36 + i * 2, -2.2, 0.17), (0.25, 2.2, 0.08), 'wood', C('#6b5240')))
+        V.append(box('rail%.1f' % sy, (8, sy, 0.24), (280, 0.1, 0.12), 'stone', C('#6e6e70')))
+    for i in range(82):
+        V.append(box('sleeper%d' % i, (-72 + i * 2, -2.2, 0.17), (0.25, 2.2, 0.08), 'wood', C('#6b5240')))
     # steps down from the platform's east end to the plaza
     for i in range(5):
         hgt = PLAT_Z * (5 - i) / 5
@@ -303,8 +339,9 @@ def station():
     area('WATER_harbour', (8, -70, -0.65), (180, 130, 1))
     area('SCATTER_tree_hill1', (12, 45, 8), (14, 22, 1), count=26)
     area('SCATTER_tree_hill2', (45, 45, 10), (6, 24, 1), count=12)
-    area('SCATTER_tree_back', (-12, 24, 2), (12, 10, 1), count=14)
+    area('SCATTER_tree_back', (-12, 24, 2), (12, 10, 1), count=20)
     area('SCATTER_maple', (20, 30, 5), (6, 8, 1), count=6)
+    grove('SCATTER_blossom_plaza', (40, 4, 0), (1.2, 6, 1), [PATH], count=3)
     return export_zone('station', None)
 
 
@@ -343,8 +380,8 @@ def academy():
             t = 1 - d / RISE[2]
             z += RISE[3] * (t * t * (3 - 2 * t)) * 1.25
         z = min(z, RISE[3])
-        # outer hills hide the world edge
-        z += max(0.0, abs(x) - 46) ** 1.3 * 0.9 + max(0.0, y - 53) ** 1.3 * 0.9
+        # no outer hills (they rose up to 18 m to hide the world's edge, which read as a bowl): the ground stays
+        # level to the edge, and the runtime carries it on into the forest (src/procgen/forest.js)
         # south cliff down to the harbour (behind the wall / overlook railing)
         if y < -40:
             z -= min(14.0, (-40 - y) * 2.2)
@@ -403,6 +440,16 @@ def academy():
     bake_ao(meshes, occluders=meshes + [terrain], dist=1.0, samples=12, strength=0.4)
 
     K = []
+    # a kerb along the pond's rim stones, so nobody slips between them on the way past. Open at the lotus
+    # buds on the west shore (the way onto the pads) and at the stream's outlet.
+    for i in range(28):
+        a = (i + 0.5) / 28 * math.tau
+        x = POND[0] + math.cos(a) * POND[2] * 1.12
+        y = POND[1] + math.sin(a) * POND[3] * 1.12
+        if (abs(y - (-5.5)) < 3.2 and abs(x - 24) < 3.6) or 2.2 < a < 3.0:
+            continue
+        tx, ty = -math.sin(a) * POND[2], math.cos(a) * POND[3]
+        K.append(col('rim%d' % i, (x, y, h(x, y) + 0.2), (2.5, 0.55, 0.9), rot=(0, 0, math.degrees(math.atan2(ty, tx)))))
     K.append(col('b_west', (-47, 5, 5), (0.5, 120, 20)))
     K.append(col('b_east', (47, 5, 5), (0.5, 120, 20)))
     K.append(col('b_north', (0, 54, 5), (100, 0.5, 20)))
@@ -502,11 +549,11 @@ def academy():
     area('WATER_stream', (24, -15, -0.45), (3.2, 10.5, 1))
     area('WATER_harbour', (0, -120, -13.6), (220, 60, 1))
     area('SCATTER_pine_north', (0, 50, 0), (40, 3, 1), count=22, size=1.2)
-    area('SCATTER_tree_east', (43, 10, 0), (2.5, 34, 1), count=12)
-    area('SCATTER_tree_west', (-43, 0, 0), (2.5, 30, 1), count=10)
+    area('SCATTER_tree_east', (43, 10, 0), (2.5, 34, 1), count=18)
+    area('SCATTER_tree_west', (-43, 0, 0), (2.5, 30, 1), count=16)
     area('SCATTER_maple_court', (-10, -16, 0), (2, 2, 1), count=2)
     area('SCATTER_maple_court2', (10, 4, 0), (2, 1.5, 1), count=2)
-    area('SCATTER_maple_lib', (36, 30, 0), (3, 4, 1), count=3)
+    area('SCATTER_maple_lib', (40.5, 32, 0), (2, 3, 1), count=3)   # clear of the library's outside stairs
     area('SCATTER_willow_pond', (17, 10, 0), (1.5, 4, 1), count=2)
     area('SCATTER_willow_pond2', (34, 0, 0), (1.5, 4, 1), count=2)
     area('SCATTER_blossom_dorm', (-38, 20, 0), (3, 8, 1), count=4)
@@ -514,6 +561,12 @@ def academy():
     area('SCATTER_bush_hall', (0, 32, 0), (8, 0.8, 1), count=6)
     area('SCATTER_pine_pagoda', (-38, 46, 3), (6, 4, 1), count=6)
     area('SCATTER_tree_south', (-30, -38.5, 0), (10, 1.5, 1), count=6)
+    # more trees in the bare parts (ai/plan_7.md 4.8): blossom along the main axis and by the practice field,
+    # and in the south-east corner
+    grove('SCATTER_blossom_axis_w', (-10.5, -27, 0), (0.8, 4, 1), PATHS, count=2)
+    grove('SCATTER_blossom_axis_e', (10.5, -27, 0), (0.8, 4, 1), PATHS, count=2)
+    grove('SCATTER_blossom_field', (-24, 44.5, 0), (1.5, 4, 1), PATHS, count=3)
+    grove('SCATTER_tree_southeast', (41, -22, 0), (3, 6, 1), PATHS, count=5)
     return export_zone('academy', None)
 
 

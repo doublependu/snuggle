@@ -133,7 +133,7 @@ export async function prologueStation(z) {
   const tt = G.npcs.get('tangtang');
   if (flag('prologueDone')) {
     tt?.hide();
-    objective('Walk up the hill to Mistbloom Academy');
+    objective('Walk up the hill to Mistbloom Academy', 'TRIGGER_academy');
     return;
   }
   G.audio.bed('rain', 0.25);
@@ -146,7 +146,7 @@ export async function prologueStation(z) {
   G.cam.clearShot();
   G.cam.snapBehind(p);
   G.frozen = false;
-  objective('Say hello to the girl with the sign');
+  objective('Say hello to the girl with the sign', 'tangtang');
   hint('talk');
   await new Promise((res) => {
     tt.onTalk = () => {
@@ -186,9 +186,10 @@ export async function prologueStation(z) {
   G.cam.clearShot();
   G.frozen = false;
   hint('book', 5);
-  objective('Follow Sunny up the hill to Mistbloom Academy');
+  objective('Follow Sunny up the hill to Mistbloom Academy', 'tangtang');
   flag('prologueDone', true);
   writeSave(G.save);
+  z.clearUp?.(); // the drizzle stops
   // Sunny walks the path ahead, waiting for Pip at each bend
   const pts = z.markersBy('POINT_path').sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
   tt.onTalk = () => talk([['tangtang', pick(['This way! The Academy is right at the top.', 'Mind the steps, they get mossy in the rain.', 'Did you know Grumblings love humming? Of course you did.'])]]);
@@ -199,7 +200,7 @@ export async function prologueStation(z) {
   // the top of the path: she stops here, so say so (following her any further would mean standing still)
   if (G.zone?.id === 'station') {
     G.ui.bubble(tt.root, 'Here we are! Mistbloom is just up there. Go on, I’ll catch up!', 4, 1.5);
-    objective('Walk up the hill to Mistbloom Academy');
+    objective('Walk up the hill to Mistbloom Academy', 'TRIGGER_academy');
   }
 }
 

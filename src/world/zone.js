@@ -9,7 +9,7 @@ import { plantTrees } from '../procgen/trees.js';
 import { mulberry } from '../render/sky.js';
 import { G } from '../game.js';
 import { loadGLB } from '../core/assets.js';
-import { stylize, setGreyOut } from '../render/materials.js';
+import { stylize, setGreyOut, setMist } from '../render/materials.js';
 import { createSky } from '../render/sky.js';
 import { BlobShadows } from '../render/vfx.js';
 import { bakeLampMap, clearLamps } from '../render/lamps.js';
@@ -46,7 +46,10 @@ export class Zone {
     root.updateMatrixWorld(true);
     const cols = [];
     root.traverse((o) => {
-      if (o.name.startsWith('GROUND_') && o.isMesh) this.collision.addMesh(o);
+      if (o.name.startsWith('GROUND_') && o.isMesh) {
+        this.collision.addMesh(o);
+        this.ground = o; // the terrain (procgen/forest.js and flowers.js read its extent and colours)
+      }
       if (o.name.startsWith('COL_')) cols.push(o);
       else if (/^(SPAWN|NPC|GRUMB|TRIGGER|POINT|CAM|PLACE|SCATTER|WATER|LIGHT|AREA|SEAT|GOOD)_/.test(o.name)) this.addMarker(o);
     });
@@ -342,5 +345,6 @@ export class Zone {
     this.sunLight?.shadow.map?.dispose();
     G.scene.fog = null;
     setGreyOut();
+    setMist();
   }
 }

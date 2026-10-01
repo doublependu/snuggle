@@ -79,17 +79,26 @@ Web Inspector and the Develop menu of Safari on a Mac.
 
 | Action | Keyboard + mouse | Gamepad | Touch |
 |---|---|---|---|
-| Move / look | WASD, mouse (click to capture) | sticks | left stick, drag right side |
+| Walk / look | WASD, mouse (click to capture) | sticks | left stick, drag right side |
+| Run | hold Shift while walking | LB | push the stick all the way |
 | Hum (soothe) | hold E or left mouse | hold RT | hold the big Hum button |
 | On-beat bonus | re-press Hum when the ring pulses | RT | Hum |
 | Notice / talk | F or Enter | X | context button |
-| Jump / sprint | Space / Shift | A / LB | Jump / push the stick all the way |
+| Jump | Space | A | Jump |
+| Skip a long conversation | hold F (or Enter) | hold X | tap Skip |
 | Friend assist (a snack, then Echo Friend) | Q (twice for both) | Y | Assist |
 | Point out a free good thing (sparrows) | click it, or 1–3 | d-pad left / right | tap it |
 | Sprite Book / pause | Tab / Esc | Back / Start | 📖 / Ⅱ |
 
-Keys and gamepad buttons can be changed in **Pause > Controls > Change controls**, and **Settings** has a text
-size for the dialogue, prompts and menus.
+Keys and gamepad buttons can be changed in **Pause > Controls > Change controls**. **Settings** has a text size
+for the dialogue, prompts and menus, a text speed (normal, fast, all at once), and the direction hints (after a
+while, always, off). The pause menu also lists the **things to do here**: the place's optional things and how far
+along they are.
+
+**Finding your way:** every building and place has a name board, fingerposts stand where the paths fork, and a
+place's name shows on screen as you walk up to it. After 40 seconds without getting nearer the objective, your
+Charm Sprite flies ahead along the path and an arrow under the objective points the way, with the distance
+left. Running (Shift) startles the shy Grumblings (the sparrows, the grey ones): walk up to them.
 
 **Soothing:** Notice a Grumbling, then hold Hum to wrap it in the Lullaby Thread. Dodge its tantrums (rain,
 paper balls, darting socks, sighs) — a hit snaps the thread and costs Calm. Run out of Calm and Pip just
@@ -102,7 +111,8 @@ children home.
 humming alone. Sit with a flock, point out one of the free good things nearby — roasting chestnuts, lanterns
 on the water, the musician's song, the moon — and hum: the thread reaches every perched sparrow at once.
 Each sparrow loves one good thing best (Bo's Echo Friend tells you which). Team up before humming: a snack
-from Sunny gives a **Sweet Lullaby**, Echo Friend an **Echo Lullaby**, both together **Everyone Together**.
+from Sunny gives a **Sweet Lullaby**, Echo Friend an **Echo Lullaby**, both together **Everyone Together**: for
+five seconds every sparrow shows its favourite, and calms three times as fast to it.
 Between flocks: roast chestnuts on the beat, float lanterns from the pier, and guide lost children home.
 
 **The Quiet District (Chapter 3):** the Grumblings are turning grey and heavy, and they don't want to be hugged:
@@ -115,7 +125,7 @@ lifts a shutter. And check on the neighbours who never left.
 
 **This build:** the Prologue (the Rainy Train, Lantern Bay station), Chapter 1 (Mistbloom Academy), Chapter 2
 (the Night Market Mix-Up) and Chapter 3 (the Quiet District). Later chapters are planned in
-[`ai/plan_0.md`](ai/plan_0.md); what was built and what's next is in [`ai/next_5.md`](ai/next_5.md), and a new player's playtest in [`ai/playtest_5.md`](ai/playtest_5.md).
+[`ai/plan_0.md`](ai/plan_0.md); what was built and what's next is in [`ai/next_7.md`](ai/next_7.md), and a new player's playtest in [`ai/playtest_5.md`](ai/playtest_5.md).
 
 ## Characters
 
@@ -143,6 +153,16 @@ The names were chosen to be easy to say in English (plan 5). Ids, model files an
 - **The Quiet District's grey** is a few instructions in the same shaders: zone scenery fades to grey except in
   *pockets of colour* around restored memories (up to eight spheres, one uniform array), and a height fog
   thickens near the ground and toward the fog wall. Characters and Charm Sprites keep their colour.
+- **The woods beyond the map** ([`src/procgen/forest.js`](src/procgen/forest.js)): the station and the Academy
+  end at invisible walls, and beyond them the ground carries on into a forest generated when the zone loads
+  (nothing is downloaded): a skirt of ground that continues the authored terrain's edge, whole trees and a
+  thicket along the walls, cheap crowns further out. A mist that thickens with distance *from the map* (not
+  from the camera, so the grounds stay clear) hides where it ends; it is a few lines in the shared fog code.
+  Wildflowers grow where the terrain's own vertex colours say grass ([`src/procgen/flowers.js`](src/procgen/flowers.js)).
+- **Signs and the guide:** a zone's name boards and fingerposts are one mesh and one canvas texture
+  ([`src/world/signs.js`](src/world/signs.js)). The guide follows a small graph of path points per zone
+  ([`src/systems/wayfinder.js`](src/systems/wayfinder.js)), so it leads over the bridge, not through the pond;
+  the fingerposts point along the same graph.
 - **All sound is synthesized** with WebAudio (the lullaby, rain, the train, Captain Honk, the night market's
   crowd and its street musician). The **music** is composed as note data ([`src/content/music.js`](src/content/music.js)):
   every track is a variation on Pip's mother's lullaby, played by a small step sequencer
@@ -161,9 +181,10 @@ The names were chosen to be easy to say in English (plan 5). Ids, model files an
   Blender is also the level editor: zones carry marker empties (`SPAWN_`, `NPC_`, `GRUMB_`, `POINT_`,
   `PLACE_<kit piece>`, `SCATTER_`, `WATER_`, `TRIGGER_`, `AREA_`, `LIGHT_`, `SEAT_`, `GOOD_`, `POINT_mem_`)
   that the game reads.
-- Trees, lotus pads, candies, sky, water, rain and the scenery outside the train are generated in JavaScript.
+- Trees, flowers, signs, lotus pads, candies, sky, water, rain and the scenery outside the train are generated
+  in JavaScript.
 - Load budget: the first playable scene needs about 0.79 MB; a returning player's zone at most 1.4 MB, with
-  townsfolk streaming in after Begin. Every zone is interactive in under 2.3 s on a throttled 10 Mbps / 4x-CPU
+  townsfolk streaming in after Begin. Every zone is interactive in under 2.4 s on a throttled 10 Mbps / 4x-CPU
   profile (a repeat visit, from the service worker's cache, in about 0.6 s). Quality tiers + dynamic
   resolution keep integrated GPUs and entry-level phones happy.
 
@@ -172,6 +193,8 @@ The names were chosen to be easy to say in English (plan 5). Ids, model files an
 ```bash
 # headless (developed with Blender 5.2 LTS); or run one build_*.py at a time
 blender -b -P tools/blender/build_all.py
+blender -b -P tools/blender/build_kit.py         # just the Academy's building kit
+blender -b -P tools/blender/build_zones.py       # the train, the station and the Academy
 blender -b -P tools/blender/build_market.py      # just the night market (kit + zone)
 blender -b -P tools/blender/build_quiet.py       # just the Quiet District (kit + zone)
 npm run assets       # meshopt-compress assets-src/export/*.glb into public/assets/models/
@@ -189,7 +212,11 @@ publish a fork, it stays under the same licence with its source available. A few
   `shot()` and waits on state such as `await soothed(grumbling)` (never on a one-shot event: players get
   ahead of the script).
 - **Build a new area:** add a zone function to `tools/blender/build_zones.py` and a matching module in
-  `src/world/zones/`.
+  `src/world/zones/`. In the module: its paths as a small graph (`NODES`, `EDGES`, then `new Routes` and
+  `startGuide`), its signs (`PLACES`, `FINGERS`, `addSigns`), and for open land its play rectangle (`z.edge`,
+  the inside of the invisible walls) with `addForest` and `addFlowers`. Story objectives name where they are:
+  `objective(text, target)`. New tree groups go in with `grove()`, which fails the build if one comes within
+  2.5 m of a path or a marker. `npm run e2e -- routes- signs- forest- edge-` checks all of it.
 
 ## Licence and credits
 

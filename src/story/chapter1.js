@@ -3,9 +3,9 @@
 // the lost-sock and homework missions, baking with Sunny, the lonely pom-pom, and the chapter end.
 import { Vector3 } from 'three';
 import { G, flag, wait, until } from '../game.js';
-import { talk, ask, objective, hint, shot, near } from './helpers.js';
+import { talk, chat, ask, objective, hint, shot, near } from './helpers.js';
 import { cookingGame } from '../systems/cooking.js';
-import { chapter3Objective } from './chapter3.js';
+import { chapter3Objective, chapter3Target } from './chapter3.js';
 import { writeSave } from '../core/save.js';
 
 const npc = (id) => G.npcs.get(id);
@@ -27,8 +27,23 @@ export function chapterObjective() {
   return 'Free roam: find every lemon candy and fill your Sprite Book';
 }
 
+// Where that objective is, for the guide (systems/wayfinder.js): an NPC or Grumbling id, a marker, or a list.
+export function chapterTarget() {
+  const f = (k) => flag(k);
+  if (f('ch2Done')) return chapter3Target();
+  if (!f('ch1_welcome')) return 'fang';
+  if (!f('ch1_lesson')) return 'POINT_lessonseat';
+  const left = ['sock', 'homework'].filter((id) => !f(id + 'Done'));
+  if (left.length) return left;
+  if (!f('cookDone')) return 'tangtang';
+  // the pom-pom calms best in company: once it is noticed, the way is to the sprites playing tag
+  if (!f('pompomDone')) return [...G.grumblings].some((g) => g.id === 'pompom' && g.noticed) ? 'POINT_tag' : 'pompom';
+  if (!f('ch1Done')) return 'POINT_overlook';
+  return 'weibao';
+}
+
 export function refreshObjective() {
-  objective(chapterObjective());
+  objective(chapterObjective(), chapterTarget);
 }
 
 // ---------------------------------------------------------------- main flow
@@ -95,7 +110,7 @@ async function welcome(z) {
   G.ui.card('Chapter 1', 'Welcome to Mistbloom', 2.8);
   await wait(3.2);
   G.frozen = false;
-  objective('Meet Master Fang in the courtyard');
+  objective('Meet Master Fang in the courtyard', 'fang');
   tt.walkTo(new Vector3(1.6, 0, 23.5), 1.9);
   await until(() => near(fang.position, 4));
   G.frozen = true;
@@ -135,7 +150,11 @@ async function lesson(z) {
   fang.place(pav.position, pav.facing, z.collision);
   const seat = z.marker('POINT_lessonseat');
   p.sitOn(seat.position, seat.facing, seat.data.seat ?? 0.89);
-  shot('CAM_lesson', fang.position, 0.8, 1.2);
+  // the shot: from in front of the pavilion, a little to the east, looking between Master Fang and Pip on her bench
+  // (from CAM_lesson, aimed at Fang alone, Pip sat at the very edge of it, half behind a column)
+  const both = fang.position.clone().lerp(p.position, 0.45).setY(fang.position.y + 0.8);
+  const cam = pav.position.clone().add(new Vector3(2.2, 1.9, 1.6));
+  G.cam.setShot(cam, both, 1.2);
   await talk([
     ['fang', 'Every sorcerer carries Cozy Energy: the warm glow you get from doing kind things. Sharing snacks. Listening. Tucking someone in.'],
     ['fang', 'Grumblings are not monsters. They are small feelings that never got a hug. We do not fight them. We soothe them.'],
@@ -154,7 +173,7 @@ async function lesson(z) {
   wb.h.overlayPlay(null, 0.3);
   flag('weibaoFriend', true);
   G.collection.refreshHud();
-  shot('CAM_lesson', fang.position, 0.8, 1.0);
+  G.cam.setShot(cam, both, 1.0);
   await talk([
     ['fang', 'Now then. Two small missions for our newest sorcerer.'],
     ['fang', 'A lost-sock Grumbling has been knocking over baskets in the laundry yard, through the moon gate to the south-west.'],
@@ -174,7 +193,10 @@ async function lesson(z) {
 async function ending(z) {
   const p = G.player;
   G.frozen = true;
-  shot('CAM_overlook', npc('fang').position, 0.9, 1.4);
+  // a little east of CAM_overlook: a lamp post stands right in front of that marker, and its lantern filled a
+  // third of the picture
+  const fang = npc('fang').position;
+  G.cam.setShot(z.marker('CAM_overlook').position.clone().add(new Vector3(2.2, -0.1, -0.5)), fang.clone().setY(fang.y + 0.9), 1.4);
   await talk([
     ['tangtang', 'THERE you are! Look — you can see the whole bay from here.'],
     ['fang', 'A lost sock, a worried page of homework, a lonely pom-pom… and a kitchen full of tarts. You did wonderfully, Pip.'],
@@ -216,9 +238,10 @@ export function wireAcademy(z) {
     if (!lines) return;
     flag(g.species + 'Done', true);
     writeSave(G.save);
-    await wait(2.4);
-    if (!G.frozen) await talk(lines);
     refreshObjective();
+    // a word from Pip and from the new Charm Sprite, as bubbles: she can walk on meanwhile
+    await wait(2.4);
+    chat(lines);
   });
   z.on('noticed', async (g) => {
     if (g.species !== 'pompom') return;

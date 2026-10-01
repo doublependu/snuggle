@@ -504,7 +504,9 @@ export const TESTS = [
     },
   },
 
-  // Team-up: a snack, then Echo Friend, then Hum: "Everyone Together!" soothes the whole flock at once.
+  // Team-up: a snack, then Echo Friend, then Hum: "Everyone Together!" is a boost for five seconds (each sparrow
+  // calms three times as fast to its favourite, and shows which that is). It used to soothe the whole flock at
+  // once; now only the sparrow whose favourite is pointed out goes at once, and the others need theirs.
   {
     name: 'market-combo',
     async run(h) {
@@ -522,7 +524,12 @@ export const TESTS = [
       await h.until(() => window.__combo, { timeout: 5000 });
       const name = await h.eval(() => window.__combo);
       h.assert(name === 'Everyone Together!', 'combo was ' + name);
-      await h.until(() => window.__G.save.story.flock1Done, { timeout: 15000 });
+      await h.page.waitForTimeout(1200);
+      const soothed = await h.eval(() => window.__G.zone.flocks[0].sparrows.filter((g) => !g.active).length);
+      h.assert(soothed >= 1 && soothed < 3, `Everyone Together with one good thing pointed out soothed ${soothed} of 3 sparrows at once`);
+      // point out the others' favourites in turn
+      let n = 0;
+      await h.until(() => window.__G.save.story.flock1Done, { timeout: 30000, every: 900, tick: () => h.page.keyboard.press('Digit' + ((n++ % 3) + 1)) });
       await h.page.keyboard.up('KeyE');
     },
   },
@@ -594,7 +601,8 @@ export const TESTS = [
       await h.until(() => window.__G.interact.current?.label === 'Talk', { timeout: 5000 });
       await h.page.keyboard.press('KeyF');
       await h.until(() => window.__G.npcs.get('kid3').follower, { timeout: 15000, tick: () => h.skipDialogue() });
-      // walk her (and the child) to the parent in a few hops
+      // take her (and the child) to the parent in hops of up to 3 m along the market's routes. (Hopping in a
+      // straight line from the pier sometimes landed her inside a stall's counter, which the floor check reports.)
       await h.until(
         () => window.__G.save.story.kid3Home,
         {
@@ -608,9 +616,10 @@ export const TESTS = [
               const to = G.npcs.get('parent3').position;
               const p = G.player.position;
               const d = p.distanceTo(to);
-              const step = Math.min(3, d - 1.2);
+              const next = d < 6 ? to : G.zone.routes.path(p, to).points[0];
+              const step = Math.min(3, next === to ? d - 1.2 : p.distanceTo(next));
               if (step > 0) {
-                const dir = to.clone().sub(p).setY(0).normalize();
+                const dir = next.clone().sub(p).setY(0).normalize();
                 G.player.teleport(p.clone().addScaledVector(dir, step), Math.atan2(dir.x, dir.z));
               }
             });
@@ -786,18 +795,18 @@ export const TESTS = [
         G.cam.snapBehind(G.player);
       });
       await h.page.keyboard.down('KeyW');
-      await h.until(() => window.__G.frozen, { timeout: 10000 });
+      await h.until(() => window.__G.frozen, { timeout: 30000 });
       await h.page.keyboard.up('KeyW');
       await h.until(`window.__G.save.story.${done} && !window.__G.frozen`, { timeout: 150000, tick: () => h.skipDialogue() });
       const f = await h.feet();
       h.assert(Math.abs(f.y - 0.45) < 0.03 && f.under < 0.03, 'not on the pavilion floor: ' + JSON.stringify(f));
-      const w = await h.walk('KeyW', 2500);
+      const w = await h.walk('KeyW', 5000);
       h.assert(w.moved > 2 && w.y < 0.1, 'could not walk off the pavilion: ' + JSON.stringify(w));
     },
   })),
 
-  // Shy Grumblings and the keyboard: holding W is her normal run (there's no walk key), so walking up to a flock
-  // must not scatter it; only sprinting at it does. (Both used to scatter it: anything over 2.6 m/s.)
+  // Shy Grumblings and the keyboard: W walks, so walking up to a flock must not scatter it; running at it
+  // (Shift) does.
   {
     name: 'shy-walk',
     async run(h) {
@@ -821,7 +830,7 @@ export const TESTS = [
         await h.until(() => {
           const G = window.__G;
           return G.zone.flocks[0].sparrows.some((g) => g.position.distanceTo(G.player.position) < 2.5 || g.behaviour.mode === 'scatter');
-        }, { timeout: 8000, every: 50 });
+        }, { timeout: 25000, every: 50 });
         await h.page.keyboard.up('KeyW');
         await h.page.keyboard.up('ShiftLeft');
         const m = await mode();
@@ -884,7 +893,7 @@ export const TESTS = [
           return { top };
         }, pc);
         await h.page.keyboard.down('KeyW');
-        await h.until(`window.__G.player.position.y > ${r.top - 0.1}`, { timeout: 6000, every: 100 }).catch(() => {});
+        await h.until(`window.__G.player.position.y > ${r.top - 0.1}`, { timeout: 12000, every: 100 }).catch(() => {});
         await h.page.keyboard.up('KeyW');
         const y = await h.eval(() => window.__G.player.position.y);
         if (y < r.top - 0.15) bad.push(`${pc.name}: at ${y.toFixed(2)}, floor ${r.top.toFixed(2)}`);
@@ -1093,7 +1102,7 @@ export const TESTS = [
   },
 
   // Feel: the walk and run clips play at the speed that keeps a planted foot planted (Humanoid.gait), for Pip
-  // walking, running and sprinting and for a friend walking somewhere. Stepped by hand at 1/480 s (the
+  // walking and running (keyboard), strolling and jogging (a stick), and for a friend walking somewhere. Stepped by hand at 1/480 s (the
   // headless browser renders ~15 fps, too few frames land in a footfall): how far a foot drifts while it is
   // down, as a share of how far the body moved. Plus turning on the spot, and turning to face a speaker.
   {
@@ -1130,17 +1139,20 @@ export const TESTS = [
           }
           return Math.abs(st.slip / st.body);
         };
-        const run = (stick, sprint) => {
+        const run = (stick, sprint, device = 'keyboard') => {
           p.teleport(p.position.clone().set(-20, 0, -36), 0);
           G.cam.snapBehind(p);
           G.input.move.set(0, stick);
+          G.input.device = device;
           if (sprint) G.input.keys.add('sprint');
           const out = measure(p.h, p.position, () => p.update(dt));
           G.input.keys.delete('sprint');
           G.input.move.set(0, 0);
+          G.input.device = 'keyboard';
           return out;
         };
-        const out = { walk: run(0.35), run: run(1), sprint: run(1, true) };
+        // a keyboard's walk (W) and run (Shift + W), and a stick's stroll and jog
+        const out = { walk: run(1), sprint: run(1, true), stroll: run(0.35, false, 'gamepad'), run: run(1, false, 'gamepad') };
         // a friend walking somewhere at a stroll
         const tt = G.npcs.get('tangtang');
         tt.root.position.set(20, 0, -36);
@@ -1167,7 +1179,7 @@ export const TESTS = [
         G.paused = false;
         return out;
       });
-      h.assert(r.walk < 0.05 && r.run < 0.18 && r.sprint < 0.3 && r.friend < 0.08, 'feet slide: ' + JSON.stringify(r));
+      h.assert(r.walk < 0.1 && r.stroll < 0.05 && r.run < 0.18 && r.sprint < 0.3 && r.friend < 0.08, 'feet slide: ' + JSON.stringify(r));
       h.assert(r.turned && r.turnMoved < 0.05 && r.turnAngle > 2.8, 'no turn on the spot: ' + JSON.stringify(r));
       // facing whoever talks to her: Sunny behind her says something, and Pip turns round
       await h.eval(() => {
@@ -1233,6 +1245,552 @@ export const TESTS = [
       await h.until(() => window.__G.player.state === 'move', { timeout: 5000 });
     },
   },
+
+  // ---------------------------------------------------------------- plan 7
+
+  // The rain you hear is the cloud's: its own sound (the 'patter' bed) is there while it rains and gone once
+  // it is soothed, and the rain outside the windows ('rainOut') eases to a drizzle. It used to be one bed that
+  // nothing ever changed. At the station the drizzle (sound and drops) clears once Sunny has said hello.
+  {
+    name: 'train-rain',
+    async run(h) {
+      await h.open('?zone=train', base());
+      await h.begin();
+      const beds = () => h.eval(() => ({ ...window.__G.audio.loops }));
+      const start = await beds();
+      h.assert(start.rainOut > 0.5 && !start.rain, 'the outside rain at the start: ' + JSON.stringify(start));
+      // stand under the cloud: its own rain is heard
+      await h.until(() => !window.__G.frozen, { timeout: 30000, tick: () => h.skipDialogue() });
+      await h.eval(() => {
+        const G = window.__G;
+        G.player.teleport(G.zone.cloud.position.clone().setY(0), 0);
+      });
+      await h.page.waitForTimeout(400);
+      const near = await beds();
+      h.assert(near.patter > 0.2, 'no patter under the cloud: ' + near.patter);
+      await h.until(() => window.__G.zone.cloud.enabled, { timeout: 30000, tick: () => h.skipDialogue() });
+      await h.eval(() => window.__G.zone.cloud.wrap(1));
+      await h.until(() => window.__G.zone.cloud.soothed, { timeout: 10000 });
+      await h.page.waitForTimeout(300);
+      const after = await beds();
+      h.assert(!after.patter, 'the cloud still patters after it was soothed: ' + after.patter);
+      h.assert(after.rainOut < start.rainOut * 0.5, `the rain outside did not ease: ${start.rainOut} -> ${after.rainOut}`);
+      await playUntilZone(h, 'station');
+      const st = await h.eval(() => ({ rain: window.__G.audio.loops.rain, drops: !!window.__G.zone.clearUp }));
+      h.assert(st.drops, 'no drizzle to see at the station');
+      // talk to Sunny; when she has finished, the drizzle clears
+      await h.until(() => window.__G.audio.loops.rain > 0, { timeout: 20000, tick: () => h.skipDialogue() });
+      await h.until(() => !window.__G.frozen, { timeout: 20000, tick: () => h.skipDialogue() });
+      await h.eval(() => window.__G.npcs.get('tangtang').onTalk());
+      await h.until(() => window.__G.save.story.prologueDone, { timeout: 60000, tick: () => h.skipDialogue() });
+      h.assert((await beds()).rain === 0, 'the drizzle sound goes on after Sunny has said hello');
+    },
+  },
+
+  // The library's outside staircase leads onto its balcony (the balcony had no collision: she walked off the
+  // top step and dropped to the ground). With real keys: from the ground behind the building up the stairs,
+  // along the front of the balcony to the lemon candy, into the west rail, at the front rail with a jump, and
+  // round the back to the landing again.
+  {
+    name: 'library-balcony',
+    async run(h) {
+      await h.open('?zone=academy', base({ zone: 'academy', spawn: 'SPAWN_gate', story: { ...CH1_DONE } }));
+      await h.begin();
+      await h.until(() => !window.__G.frozen, { timeout: 20000, tick: () => h.skipDialogue() });
+      const lib = await h.eval(() => {
+        const m = window.__G.zone.markersBy('PLACE_library')[0];
+        return { x: m.position.x, z: m.position.z };
+      });
+      const { page } = h;
+      const pos = () => h.eval(() => window.__G.player.position.toArray());
+      // face a way and hold W until she stops moving (a rail, a wall) or `until` is true (software WebGL
+      // runs slowly, so times mean little)
+      const go = async (facing, until = () => false, jump = false) => {
+        await h.eval((f) => {
+          const G = window.__G;
+          G.player.facing = f;
+          G.cam.snapBehind(G.player);
+        }, facing);
+        await page.keyboard.down('KeyW');
+        if (jump) await page.keyboard.press('Space');
+        let last = await pos(),
+          still = 0;
+        for (let i = 0; i < 150 && still < 4; i++) {
+          await page.waitForTimeout(200);
+          const p = await pos();
+          if (until(p)) break;
+          still = Math.hypot(p[0] - last[0], p[1] - last[1], p[2] - last[2]) < 0.03 ? still + 1 : 0;
+          last = p;
+        }
+        await page.keyboard.up('KeyW');
+        await page.waitForTimeout(250);
+        return pos();
+      };
+      const at = (p) => p.map((v) => v.toFixed(2)).join(', ');
+      const up = (p) => Math.abs(p[1] - 3.6) < 0.06;
+      await h.eval((lib) => {
+        const G = window.__G;
+        G.player.teleport(G.player.position.clone().set(lib.x + 4.8, 0.2, lib.z - 7.4), 0);
+        G.cam.snapBehind(G.player);
+      }, lib);
+      let p = await go(0, (q) => q[1] > 3.58 && q[2] > lib.z + 2.6);
+      h.assert(up(p), 'not on the landing after the stairs: ' + at(p));
+      p = await go(-Math.PI / 2, (q) => q[0] < lib.x - 0.5);
+      h.assert(up(p) && p[0] < lib.x + 1, "not on the balcony's front: " + at(p));
+      h.assert(await h.eval(() => !!window.__G.save.candies.POINT_candy_6), 'the balcony candy was not collected');
+      p = await go(-Math.PI / 2);
+      h.assert(up(p) && p[0] > lib.x - 4.1, 'the west rail did not hold her: ' + at(p));
+      p = await go(0, () => false, true);
+      h.assert(up(p), 'she got over the front rail with a jump: ' + at(p));
+      p = await go(Math.PI); // north along the west side
+      p = await go(Math.PI / 2); // east along the back
+      p = await go(0); // south along the east side, to the front rail
+      h.assert(up(p) && p[0] > lib.x + 2.9 && p[2] > lib.z + 2.6, 'not round the back to the south-east corner: ' + at(p));
+      p = await go(Math.PI / 2); // onto the landing
+      h.assert(up(p) && p[0] > lib.x + 4.2, 'not back on the landing: ' + at(p));
+      p = await go(Math.PI, (q) => q[1] < 0.05);
+      h.assert(p[1] < 0.1, 'not back on the ground: ' + at(p));
+    },
+  },
+
+  // The woods beyond the walls of the station and the Academy (src/procgen/forest.js): no forest tree inside
+  // the play area, the generated ground tucked just under the authored ground's edge, no bowl (the ground
+  // used to rise 6-18 m at the map's edge), and within the triangle and draw-call budget on the low and the
+  // high tier (ai/plan_7.md 4.7). The wildflowers stand on the ground.
+  ...[
+    ['station', { train_intro: true, prologueTrain: true, prologueDone: true }, 'SPAWN_start'],
+    ['academy', null, 'SPAWN_gate'],
+  ].map(([zone, story, spawn]) => ({
+    name: 'forest-' + zone,
+    async run(h) {
+      for (const [quality, maxTris, maxCalls] of [['low', 22000, 8], ['high', 55000, 14]]) {
+        // the tier comes from the URL (the save says Auto): the seeded save is only written once per tab
+        const save = base({ zone, spawn, story: story || { ...CH1_DONE } });
+        save.settings.quality = 'auto';
+        await h.open(`?zone=${zone}&quality=${quality}`, save);
+        const r = await h.eval(() => {
+          const G = window.__G;
+          const z = G.zone,
+            f = z.forest,
+            R = f.rect;
+          const bad = { inside: 0, seam: [], bowl: [], flowers: 0 };
+          const meshes = z.group.children.filter((o) => o.name.startsWith('forest-') && o.isInstancedMesh);
+          const m = meshes[0].matrixWorld.clone();
+          for (const im of meshes)
+            for (let i = 0; i < im.count; i++) {
+              im.getMatrixAt(i, m);
+              const x = m.elements[12],
+                zz = m.elements[14];
+              if (x > R.minX && x < R.maxX && zz > R.minZ) bad.inside++;
+            }
+          // the skirt's vertices that lie under the authored ground: a little below it, never above
+          const pos = f.skirt.geometry.attributes.position;
+          const t = z.ground.userData.terrain;
+          for (let i = 0; i < pos.count; i++) {
+            const x = pos.getX(i),
+              zz = pos.getZ(i);
+            if (x < t.x0 || x > t.x1 || zz < t.z0 || zz > t.z1) continue;
+            const d = t.y(x, zz) - pos.getY(i);
+            if (d < 0.02 || d > 0.4) bad.seam.push([x.toFixed(1), zz.toFixed(1), d.toFixed(2)]);
+          }
+          // no bowl: up to 15 m beyond each land wall the ground is never much higher than at the wall
+          const sides = [];
+          if (f.land.west) for (let zz = R.minZ + 3; zz < R.maxZ - 6; zz += 6) sides.push([R.minX, zz, -1, 0]);
+          if (f.land.east) for (let zz = R.minZ + 3; zz < R.maxZ - 6; zz += 6) sides.push([R.maxX, zz, 1, 0]);
+          if (f.land.north) for (let x = R.minX + 3; x < R.maxX; x += 6) sides.push([x, R.minZ, 0, -1]);
+          for (const [x, zz, nx, nz] of sides) {
+            const y0 = f.ground(x + nx * 0.5, zz + nz * 0.5);
+            for (let d = 2; d <= 15; d += 1) {
+              const y = f.ground(x + nx * d, zz + nz * d);
+              if (y > y0 + 2.5) bad.bowl.push([x.toFixed(0), zz.toFixed(0), d, (y - y0).toFixed(1)]);
+            }
+          }
+          for (const im of z.group.children.filter((o) => o.name.startsWith('flowers-')))
+            for (let i = 0; i < im.count; i++) {
+              im.getMatrixAt(i, m);
+              if (Math.abs(m.elements[13] - t.y(m.elements[12], m.elements[14])) > 0.2) bad.flowers++;
+            }
+          return { tier: G.quality.name, trees: f.trees, crowns: f.crowns, tris: f.tris, calls: meshes.length + 1, flowers: z.flowers, bad, mist: G.scene.fog && window.__G.zone.forest.reach };
+        });
+        const where = `${zone}, ${quality}: `;
+        h.assert(r.tier === quality, where + 'tier is ' + r.tier);
+        h.assert(r.trees > 60 && r.crowns > 100, where + `too few trees: ${r.trees} trees, ${r.crowns} crowns`);
+        h.assert(r.bad.inside === 0, where + r.bad.inside + ' forest trees inside the play area');
+        h.assert(!r.bad.seam.length, where + 'the skirt is off the authored ground at ' + JSON.stringify(r.bad.seam.slice(0, 5)));
+        h.assert(!r.bad.bowl.length, where + 'the ground rises beyond the wall at ' + JSON.stringify(r.bad.bowl.slice(0, 5)));
+        h.assert(r.tris <= maxTris, where + `${r.tris} triangles (budget ${maxTris})`);
+        h.assert(r.calls <= maxCalls, where + `${r.calls} draw calls (budget ${maxCalls})`);
+        h.assert(r.flowers > 80 && r.bad.flowers === 0, where + `flowers: ${r.flowers}, ${r.bad.flowers} off the ground`);
+      }
+    },
+  })),
+
+  // The invisible walls at the edge of the woods: walking into each land side with real keys, she stops at
+  // the play rectangle the forest was built round, and is told once why.
+  ...[
+    ['station', { train_intro: true, prologueTrain: true, prologueDone: true }, 'SPAWN_start'],
+    ['academy', null, 'SPAWN_gate'],
+  ].map(([zone, story, spawn]) => ({
+    name: 'edge-' + zone,
+    async run(h) {
+      await h.open('?zone=' + zone, base({ zone, spawn, story: story || { ...CH1_DONE } }));
+      await h.begin();
+      await h.until(() => !window.__G.frozen, { timeout: 20000, tick: () => h.skipDialogue() });
+      for (const side of ['west', 'east', 'north']) {
+        // a spot 3 m inside the wall with nothing between it and the wall (trunks, buildings)
+        const ok = await h.eval((side) => {
+          const G = window.__G;
+          const R = G.zone.forest.rect;
+          const dir = { west: [-1, 0], east: [1, 0], north: [0, -1] }[side];
+          const V = (x, y, zz) => G.player.position.clone().set(x, y, zz);
+          for (let k = 0.15; k < 0.9; k += 0.05) {
+            const x = side === 'north' ? R.minX + (R.maxX - R.minX) * k : side === 'west' ? R.minX + 3 : R.maxX - 3;
+            const zz = side === 'north' ? R.minZ + 3 : R.minZ + (R.maxZ - R.minZ) * k;
+            const y = G.collision.groundY(x, zz, 60);
+            if (y === null || y < -0.3) continue;
+            const clear = [0.3, 0.9].every((hh) => Math.abs(G.collision.raycast(V(x, y + hh, zz), V(dir[0], 0, dir[1]), 10) - 3) < 0.3);
+            if (!clear) continue;
+            G.player.teleport(V(x, y + 0.1, zz), Math.atan2(dir[0], dir[1]));
+            G.cam.snapBehind(G.player);
+            return true;
+          }
+          return false;
+        }, side);
+        h.assert(ok, `${zone}: no clear spot at the ${side} wall`);
+        await h.page.keyboard.down('KeyW');
+        for (let last = null, still = 0; still < 10; ) {
+          await h.page.waitForTimeout(200);
+          const p = await h.eval(() => window.__G.player.position.toArray());
+          still = last && Math.hypot(p[0] - last[0], p[2] - last[2]) < 0.02 ? still + 1 : 0;
+          last = p;
+        }
+        await h.page.keyboard.up('KeyW');
+        const r = await h.eval((side) => {
+          const G = window.__G;
+          const R = G.zone.forest.rect,
+            p = G.player.position;
+          return { gap: side === 'west' ? p.x - R.minX : side === 'east' ? R.maxX - p.x : p.z - R.minZ, toast: !!G.zone.forest.told };
+        }, side);
+        h.assert(r.gap > 0.1 && r.gap < 0.6, `${zone}: at the ${side} wall she is ${r.gap.toFixed(2)} m inside the play rectangle`);
+        if (side === 'west') h.assert(r.toast, zone + ': no word about the woods at the wall');
+      }
+    },
+  })),
+
+  // Every edge of a zone's route graph (src/systems/wayfinder.js) can be walked: a floor all along it, no step
+  // over 0.35 m, and nothing in the way at knee or chest height. The guide and the fingerposts follow these.
+  ...[
+    ['station', () => ({ train_intro: true, prologueTrain: true, prologueDone: true }), 'SPAWN_start'],
+    ['academy', () => ({ ...CH1_DONE }), 'SPAWN_gate'],
+    ['market', () => ({ ...CH1_DONE, ch2_start: true, ch2_tutorial: true }), 'SPAWN_start'],
+    ['quiet', () => CH3_ARRIVED, 'SPAWN_ferry'],
+  ].map(([zone, story, spawn]) => ({
+    name: 'routes-' + zone,
+    async run(h) {
+      await h.open('?zone=' + zone, base({ zone, spawn, sprites: CH2_SPRITES, story: story() }));
+      const bad = await h.eval(() => {
+        const G = window.__G;
+        const r = G.zone.routes,
+          col = G.collision;
+        const out = [];
+        const V = (x, y, zz) => G.player.position.clone().set(x, y, zz);
+        for (const [a, b] of r.edges) {
+          const A = r.nodes.get(a),
+            B = r.nodes.get(b);
+          const n = Math.max(1, Math.ceil(A.distanceTo(B) / 0.4));
+          let y = A.y,
+            px = A.x,
+            pz = A.z;
+          for (let i = 0; i <= n; i++) {
+            const x = A.x + ((B.x - A.x) * i) / n,
+              zz = A.z + ((B.z - A.z) * i) / n;
+            const fy = col.groundY(x, zz, y + 1.2);
+            if (fy === null || Math.abs(fy - y) > 0.35) {
+              out.push(`${a}-${b}: ${fy === null ? 'no floor' : 'a step of ' + (fy - y).toFixed(2) + ' m'} at ${x.toFixed(1)}, ${zz.toFixed(1)}`);
+              break;
+            }
+            // nothing between this step and the last, at knee and chest height above the floor
+            const hit = [0.45, 0.9].find((hh) => {
+              const dir = V(x - px, fy - y, zz - pz);
+              const len = dir.length();
+              return len > 1e-3 && col.raycast(V(px, y + hh, pz), dir.normalize(), len) < len;
+            });
+            if (hit) {
+              out.push(`${a}-${b}: something in the way at ${x.toFixed(1)}, ${zz.toFixed(1)}, ${hit} m up`);
+              break;
+            }
+            y = fy;
+            px = x;
+            pz = zz;
+          }
+        }
+        return { edges: r.edges.length, out };
+      });
+      h.assert(bad.edges > 0, 'no routes in ' + zone);
+      h.assert(!bad.out.length, 'unwalkable edges: ' + bad.out.join('; '));
+    },
+  })),
+
+  // The guide (src/systems/wayfinder.js), set to Always: with the Homework left to soothe, the way from the
+  // courtyard goes over the bridge to the library (a straight line would go through the pond), the arrow and
+  // the distance show under the objective, and her Charm Sprite flies ahead.
+  {
+    name: 'guide-library',
+    async run(h) {
+      const save = base({ zone: 'academy', spawn: 'SPAWN_gate', sprites: { doudou: 1, cloud: 1, sock: 1 }, helper: 'cloud', soothed: { 'academy:sock': true }, story: { ...LESSON_DONE, sockDone: true } });
+      save.settings.hints = 'always';
+      await h.open('?zone=academy', save);
+      await h.begin();
+      await h.until(() => !window.__G.frozen, { timeout: 20000, tick: () => h.skipDialogue() });
+      await h.eval(() => {
+        const G = window.__G;
+        G.player.teleport(G.player.position.clone().set(0, 0, 8), 0);
+        G.cam.snapBehind(G.player);
+      });
+      await h.page.waitForTimeout(1000); // the way is worked out a couple of times a second
+      await h.until(() => window.__G.zone.guide?.path && !document.querySelector('.way').hidden, { timeout: 10000 });
+      const r = await h.eval(() => {
+        const G = window.__G;
+        const g = G.zone.guide;
+        const near = (x, z) => g.path.points.some((p) => Math.hypot(p.x - x, p.z - z) < 1.5);
+        const hw = [...G.grumblings].find((q) => q.id === 'homework');
+        const end = g.path.points.at(-1);
+        return { bridge: near(21, 12) && near(27, 12), first: g.path.points[0].toArray(), ends: end.distanceTo(hw.position), way: document.querySelector('.way').textContent, bird: !!G.zone.group.getObjectByName('guide')?.visible, straight: G.player.position.distanceTo(hw.position), length: g.path.length };
+      });
+      h.assert(r.bridge, 'the way to the library does not cross the bridge: first point ' + r.first.map((v) => v.toFixed(1)));
+      h.assert(r.first[0] > 5 && Math.abs(r.first[2] - 8) < 2, 'the first leg is not east along the path to the bridge: ' + r.first.map((v) => v.toFixed(1)));
+      h.assert(r.ends < 0.5, 'the way does not end at the Homework');
+      h.assert(r.length > r.straight + 8, `the way (${r.length.toFixed(0)} m) is no longer than the straight line (${r.straight.toFixed(0)} m)`);
+      h.assert(/\d+ m/.test(r.way), 'no distance under the objective: ' + r.way);
+      h.assert(r.bird, 'no Charm Sprite flying ahead');
+      // Off: nothing shows
+      await h.eval(() => (window.__G.save.settings.hints = 'off'));
+      await h.page.waitForTimeout(1200);
+      const off = await h.eval(() => ({ way: document.querySelector('.way').hidden, bird: !!window.__G.zone.group.getObjectByName('guide')?.visible }));
+      h.assert(off.way && !off.bird, 'the guide still shows with Direction hints off: ' + JSON.stringify(off));
+    },
+  },
+
+  // After a while: the guide waits while she makes progress or reads, and starts after 40 s of free play without
+  // getting nearer the objective.
+  {
+    name: 'guide-timer',
+    async run(h) {
+      await h.open('?zone=academy', base({ zone: 'academy', spawn: 'SPAWN_gate', sprites: { doudou: 1, cloud: 1 }, helper: 'cloud', story: { ...LESSON_DONE } }));
+      await h.begin();
+      await h.until(() => !window.__G.frozen, { timeout: 20000, tick: () => h.skipDialogue() });
+      await h.until(() => window.__G.zone.guide?.path, { timeout: 10000 });
+      h.assert(await h.eval(() => !window.__G.zone.guide.on && document.querySelector('.way').hidden), 'the guide is on from the start');
+      const t0 = await h.eval(() => window.__G.time);
+      await h.until(() => window.__G.zone.guide.on, { timeout: 180000, every: 500 });
+      const dt = (await h.eval(() => window.__G.time)) - t0;
+      h.assert(dt > 36 && dt < 46, `the guide started after ${dt.toFixed(0)} s of standing about (40 s)`);
+      h.assert(await h.eval(() => !document.querySelector('.way').hidden), 'no arrow once the guide is on');
+    },
+  },
+
+  // Signs (src/world/signs.js): every zone has its name boards and fingerposts, no post stands inside
+  // something, and each fingerpost arm points at a spot she can see from the post (the first leg of its route).
+  ...[
+    ['station', () => ({ train_intro: true, prologueTrain: true, prologueDone: true }), 'SPAWN_start', ['Lantern Bay', 'Mistbloom Academy']],
+    ['academy', () => ({ ...CH1_DONE }), 'SPAWN_gate', ['Library', 'Kitchen', 'Lesson Pavilion', 'Great Hall', 'Dormitories', 'Old Pagoda', 'Laundry Yard', 'Practice Field', 'Harbour Overlook', 'Lotus Pond']],
+    ['market', () => ({ ...CH1_DONE, ch2_start: true, ch2_tutorial: true }), 'SPAWN_start', ['Lanterns', 'Toys', 'Jasmine Tea', 'Sweets', 'Fish Balls', 'Dumplings', 'Lantern Pier', 'Mistbloom Academy', 'Stairs to the Academy']],
+    ['quiet', () => CH3_ARRIVED, 'SPAWN_ferry', ['Ferry', 'Post Office', 'Sweet Shop', 'Teahouse', 'Thread Shop', 'Noticeboard']],
+  ].map(([zone, story, spawn, names]) => ({
+    name: 'signs-' + zone,
+    async run(h) {
+      await h.open('?zone=' + zone, base({ zone, spawn, sprites: CH2_SPRITES, story: story() }));
+      const r = await h.eval(() => {
+        const G = window.__G;
+        const col = G.collision,
+          sg = G.zone.signs;
+        const V = (x, y, zz) => G.player.position.clone().set(x, y, zz);
+        const bad = [];
+        for (const s of sg.list) {
+          if (s.kind === 'board') continue;
+          const y = col.groundY(s.at.x, s.at.z, 60);
+          // nothing right round the post at knee height
+          for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (col.raycast(V(s.at.x, y + 0.5, s.at.z), V(dx, 0, dz), 0.35) < 0.35) bad.push(`${s.text || 'fingerpost'} at ${s.at.x.toFixed(1)}, ${s.at.z.toFixed(1)} stands in something`);
+          for (const a of s.arms || []) {
+            // from a metre up at the post to a metre up at the spot it points to (the ground may slope)
+            const dir = V(a.toward.x - s.at.x, a.toward.y - y, a.toward.z - s.at.z);
+            const len = dir.length();
+            if (col.raycast(V(s.at.x, y + 1.0, s.at.z), dir.normalize(), len) < len - 0.5) bad.push(`the “${a.text}” arm at ${s.at.x.toFixed(1)}, ${s.at.z.toFixed(1)} points through something`);
+          }
+        }
+        return { texts: sg.labels.map((l) => l.text), tris: sg.mesh.geometry.attributes.position.count / 3, places: sg.places.length, bad };
+      });
+      for (const n of names) h.assert(r.texts.includes(n), `${zone}: no sign says “${n}” (${r.texts.join(', ')})`);
+      h.assert(r.tris > 20 && r.places > 0, `${zone}: ${r.tris} sign triangles, ${r.places} named places`);
+      h.assert(!r.bad.length, r.bad.join('; '));
+      if (zone !== 'academy') return;
+      // walking up to the library, its name shows on screen
+      await h.begin();
+      await h.until(() => !window.__G.frozen, { timeout: 20000, tick: () => h.skipDialogue() });
+      await h.eval(() => {
+        const G = window.__G;
+        G.player.teleport(G.player.position.clone().set(38, 0, -8), Math.PI); // on the path up the pond's east side
+        G.cam.snapBehind(G.player);
+      });
+      await h.page.keyboard.down('ShiftLeft');
+      await h.page.keyboard.down('KeyW');
+      await h.until(() => [...document.querySelectorAll('.toast.place')].some((t) => /Library/.test(t.textContent)), { timeout: 20000, every: 100 });
+      await h.page.keyboard.up('KeyW');
+      await h.page.keyboard.up('ShiftLeft');
+    },
+  })),
+
+  // On a keyboard the move keys walk and Shift runs (holding W used to be a run, with no gentler pace).
+  {
+    name: 'walk-run',
+    async run(h) {
+      await h.open('?zone=academy', base({ zone: 'academy', spawn: 'SPAWN_gate', story: { ...CH1_DONE } }));
+      await h.begin();
+      await h.until(() => !window.__G.frozen, { timeout: 20000, tick: () => h.skipDialogue() });
+      const pace = async (shift) => {
+        await h.eval(() => {
+          const G = window.__G;
+          G.player.teleport(G.player.position.clone().set(0, 0, 20), Math.PI);
+          G.cam.snapBehind(G.player);
+        });
+        if (shift) await h.page.keyboard.down('ShiftLeft');
+        await h.page.keyboard.down('KeyW');
+        await h.page.waitForTimeout(2500);
+        const r = await h.eval(() => ({ speed: window.__G.player.speed, clip: window.__G.player.h.base?.getClip().name, rushing: window.__G.player.rushing }));
+        await h.page.keyboard.up('KeyW');
+        await h.page.keyboard.up('ShiftLeft');
+        await h.page.waitForTimeout(400);
+        return r;
+      };
+      const walk = await pace(false);
+      h.assert(Math.abs(walk.speed - 1.45) < 0.1 && walk.clip === 'walk' && !walk.rushing, 'W alone: ' + JSON.stringify(walk));
+      const run = await pace(true);
+      h.assert(Math.abs(run.speed - 4.7) < 0.2 && run.clip === 'run' && run.rushing, 'Shift + W: ' + JSON.stringify(run));
+    },
+  },
+
+  // A long conversation can be skipped to its end, by the Skip button or by holding the key that advances;
+  // a short one has no Skip; a question stops the skipping. Text speed "All at once" shows a line whole.
+  {
+    name: 'dialogue-skip',
+    async run(h) {
+      await h.open('?zone=academy', base({ zone: 'academy', spawn: 'SPAWN_gate', story: { ...CH1_DONE } }));
+      await h.begin();
+      await h.until(() => !window.__G.frozen, { timeout: 20000, tick: () => h.skipDialogue() });
+      const start = (n, ask) =>
+        h.eval(async ([n, ask]) => {
+          const { talk } = await import('/src/story/helpers.js');
+          const G = window.__G;
+          window.__said = 0;
+          window.__off?.();
+          window.__off = G.events.on('said', () => window.__said++);
+          window.__done = false;
+          const lines = Array.from({ length: n }, (_, i) => ['fang', `Line ${i + 1} of a rather long conversation about nothing in particular.`]);
+          (async () => {
+            await talk(lines);
+            if (ask) window.__answer = await G.ui.say('fang', 'A question?', { choices: ['Yes', 'No'] });
+            if (ask) G.ui.closeDialogue();
+            window.__done = true;
+          })();
+        }, [n, ask]);
+      const skipShown = () => h.eval(() => getComputedStyle(document.querySelector('.dialogue .skip')).display !== 'none');
+      // a short conversation: no Skip
+      await start(2);
+      await h.page.waitForTimeout(300);
+      h.assert(!(await skipShown()), 'Skip shows on a two-line conversation');
+      await h.until(() => window.__done, { timeout: 10000, tick: () => h.skipDialogue() });
+      // a long one: the button
+      await start(6);
+      await h.page.waitForTimeout(300);
+      h.assert(await skipShown(), 'no Skip on a six-line conversation');
+      await h.page.click('.dialogue .skip', { force: true });
+      await h.until(() => window.__done, { timeout: 3000 });
+      h.assert((await h.eval(() => window.__said)) === 6, 'not every line was said when skipping');
+      await h.page.waitForTimeout(1600); // the skip has ended
+      // holding the advance key, and a question at the end stops it
+      await start(6, true);
+      await h.page.waitForTimeout(300);
+      await h.page.keyboard.down('KeyF');
+      await h.until(() => document.querySelectorAll('.dialogue .choices button').length === 2, { timeout: 5000 });
+      await h.page.keyboard.up('KeyF');
+      h.assert(!(await h.eval(() => window.__done)), 'the question was skipped too');
+      await h.skipDialogue();
+      await h.until(() => window.__done, { timeout: 3000 });
+      // text speed: all at once
+      await h.page.waitForTimeout(1600);
+      await h.eval(() => (window.__G.save.settings.textSpeed = 0));
+      await start(1);
+      await h.page.waitForTimeout(250);
+      const shown = await h.eval(() => window.__G.ui.dlgText.textContent.length);
+      h.assert(shown > 60, 'with text speed "All at once" only ' + shown + ' letters showed after a quarter of a second');
+      await h.until(() => window.__done, { timeout: 5000, tick: () => h.skipDialogue() });
+    },
+  },
+
+  // The menus load after Begin (they are not in the first-load bundle): Esc right after Begin still opens the
+  // pause menu, with "Things to do here" and the new settings.
+  {
+    name: 'menus-lazy',
+    async run(h) {
+      await h.open('?zone=academy', base({ zone: 'academy', spawn: 'SPAWN_gate', story: { ...CH1_DONE } }));
+      h.assert(await h.eval(() => !window.__G.menus.stack), 'the menus are loaded before Begin');
+      await h.begin();
+      await h.page.keyboard.press('Escape');
+      await h.until(() => window.__G.menus.stack?.length === 1 && window.__G.paused, { timeout: 5000 });
+      const r = await h.eval(() => ({
+        todo: [...document.querySelectorAll('#menu-pause .todo span')].map((e) => e.textContent),
+        settings: ['#s-g', '#s-ts'].every((id) => document.querySelector(id)),
+      }));
+      h.assert(r.todo.some((t) => /Lemon candies 0\/10/.test(t)) && r.todo.length >= 5, 'things to do here: ' + r.todo.join(' | '));
+      h.assert(r.settings, 'the Direction hints and Text speed settings are missing');
+      await h.page.keyboard.press('Escape');
+      await h.until(() => !window.__G.menus.open && !window.__G.paused, { timeout: 3000 });
+    },
+  },
+
+  // The pond: running at it from the path up its east side, the rim stones stop her (nobody slips in on the
+  // way to the library any more); at the lotus buds on the west shore the rim is open, and with the buds
+  // watered she can hop across the pads to the island. The buds' prompt offers the Soggy Cloud on the spot.
+  {
+    name: 'pond-rim',
+    async run(h) {
+      await h.open('?zone=academy', base({ zone: 'academy', spawn: 'SPAWN_gate', sprites: { doudou: 1, cloud: 1, sock: 1 }, helper: 'sock', story: { ...CH1_DONE } }));
+      await h.begin();
+      await h.until(() => !window.__G.frozen, { timeout: 20000, tick: () => h.skipDialogue() });
+      const run = async (x, z, facing, ms) => {
+        await h.eval(([x, z, f]) => {
+          const G = window.__G;
+          G.player.teleport(G.player.position.clone().set(x, 0.1, z), f);
+          G.cam.snapBehind(G.player);
+        }, [x, z, facing]);
+        await h.page.keyboard.down('ShiftLeft');
+        await h.page.keyboard.down('KeyW');
+        let low = 9;
+        for (let i = 0; i < ms / 100; i++) {
+          await h.page.waitForTimeout(100);
+          low = Math.min(low, await h.eval(() => window.__G.player.position.y));
+        }
+        await h.page.keyboard.up('KeyW');
+        await h.page.keyboard.up('ShiftLeft');
+        return low;
+      };
+      // from the east path, straight at the water (west)
+      const east = await run(39, -4, -Math.PI / 2, 4000);
+      h.assert(east > -0.3, 'she ran into the pond from the east path: y ' + east.toFixed(2));
+      // the buds: the prompt, and the offer to equip the cloud
+      await h.eval(() => {
+        const G = window.__G;
+        const b = G.zone.marker('POINT_bud_1').position;
+        G.player.teleport(G.player.position.clone().set(b.x - 3.0, 0.1, b.z - 1.8), Math.PI / 2); // on the west shore
+        G.cam.snapBehind(G.player);
+      });
+      await h.until(() => !!window.__G.interact.current, { timeout: 5000 });
+      h.assert((await h.eval(() => window.__G.interact.current.label())) === 'Look at the lotus buds', 'the prompt at the buds');
+      await h.page.keyboard.press('KeyF');
+      await h.until(() => document.querySelectorAll('.dialogue .choices button').length === 2, { timeout: 15000, tick: () => h.skipDialogue().then(() => {}) }).catch(() => {});
+      await h.until(() => window.__G.save.story.lotusBloomed && window.__G.save.helper === 'cloud', { timeout: 15000, tick: () => h.skipDialogue() });
+    },
+  },
 ];
 
 const CH2_SPRITES = { doudou: 1, cloud: 1, sock: 1, homework: 1, pompom: 1, sparrow: 12 };
@@ -1264,6 +1822,7 @@ async function remember(h, id, pick) {
   throw new Error('could not look closer at memory ' + id);
 }
 
+const LESSON_DONE = { prologueTrain: true, prologueDone: true, ch1_welcome: true, ch1_lesson: true, weibaoFriend: true };
 const CH1_DONE = { prologueTrain: true, prologueDone: true, ch1_welcome: true, ch1_lesson: true, sockDone: true, homeworkDone: true, cookDone: true, pompomDone: true, ch1Done: true, weibaoFriend: true };
 
 // Walk Pip up to a flock's seat and choose "Sit with them".

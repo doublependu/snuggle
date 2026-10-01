@@ -6,7 +6,7 @@
 // Every wait is on state (flags, positions), so a reload resumes at the right step.
 import { Color, Vector3 } from 'three';
 import { G, flag, wait, until } from '../game.js';
-import { talk, objective, hint, shot, near } from './helpers.js';
+import { talk, chat, remark, objective, hint, shot, near } from './helpers.js';
 import { writeSave } from '../core/save.js';
 
 const npc = (id) => G.npcs.get(id);
@@ -25,8 +25,20 @@ export function chapter2Objective() {
   return 'Free roam: guide lost children home, float lanterns, roast chestnuts';
 }
 
+// Where that objective is, for the guide (systems/wayfinder.js).
+export function chapter2Target() {
+  const f = (k) => flag(k);
+  if (!f('ch2_tutorial')) return 'POINT_dumpling';
+  if (!f('flock1Done')) return 'SEAT_flock1';
+  const left = [2, 3].filter((n) => !f(`flock${n}Done`)).map((n) => 'SEAT_flock' + n);
+  if (left.length) return left;
+  if (!f('ch2_dumplings')) return 'POINT_dumpling';
+  if (!f('ch2Done')) return 'POINT_hook';
+  return f('ch3_start') ? null : 'TRIGGER_academy';
+}
+
 export function refreshObjective2() {
-  objective(chapter2Objective());
+  objective(chapter2Objective(), chapter2Target);
 }
 
 export async function chapter2(z) {
@@ -108,7 +120,7 @@ async function tutorial(z) {
   ]);
   G.cam.clearShot();
   G.frozen = false;
-  objective('Soothe the sparrows at the lantern stall');
+  objective('Soothe the sparrows at the lantern stall', 'SEAT_flock1');
   hint('hum', 5);
   // humming alone barely calms them, and running at them scatters the flock: let her try for a bit
   let tried = 0,
@@ -141,7 +153,7 @@ async function tutorial(z) {
   G.frozen = false;
   flag('ch2_tutorial', true);
   writeSave(G.save);
-  objective('Sit on the stool by the lantern stall');
+  objective('Sit on the stool by the lantern stall', 'SEAT_flock1');
   G.ui.toast('💡 Walk to the stool and choose “Sit with them”.', 4.5);
 }
 
@@ -167,15 +179,16 @@ async function flockDone(z, f) {
   if (flag(`flock${f.id}Done`)) return;
   flag(`flock${f.id}Done`, true);
   writeSave(G.save);
-  await wait(2.6);
-  await until(() => !G.frozen && !G.ui.dialogueOpen);
-  await talk(FLOCK_LINES[f.id] || []);
   if (f.id === 1) {
     z.enableFlock(2);
     z.enableFlock(3);
-    G.ui.toast('✨ Sparrow sprites know the way home. Equip one in the Sprite Book to help lost children.', 5);
   }
   refreshObjective2();
+  await wait(2.6);
+  await until(() => !G.frozen && !G.ui.dialogueOpen);
+  // what everyone says about it, as bubbles: she can walk on to the next flock meanwhile
+  chat(FLOCK_LINES[f.id] || []);
+  if (f.id === 1) G.ui.toast('✨ Sparrow sprites know the way home. Equip one in the Sprite Book to help lost children.', 5);
 }
 
 async function dumplings(z) {
@@ -260,10 +273,14 @@ function hookAftermath(z, instant) {
   G.updaters.add(fn);
 }
 
-// Talking to the friends in the market.
+// Talking to the friends in the market, and what they say in passing.
 function wireFriends(z) {
   const tt = npc('tangtang'),
     wb = npc('weibao');
+  z.on('scatter', () => remark('scatter', 'honk', 'SLOWLY. SPARROWS ARE SHY. HONK.'));
+  z.on('reunited', () => remark('reunited', 'tangtang', 'Look at that hug! You found them!'));
+  z.on('lanterns', () => remark('lanterns', 'weibao', '…make a wish.'));
+  z.on('splash', () => remark('splash', 'tangtang', 'Pip! Are you all right? …The water does look lovely, though.'));
   const pick = (a) => a[Math.floor(Math.random() * a.length)];
   if (tt)
     tt.onTalk = () =>

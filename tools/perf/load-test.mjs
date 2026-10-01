@@ -5,7 +5,7 @@
 // players start wherever their save is, so every zone is measured with a save placed there.
 // Usage: npm run build && npm run perf
 //   CHROME=/path/to/chrome  RUNS=5  ZONES=train,academy  node tools/perf/load-test.mjs
-//   URL=https://snuggle-sorcery.<you>.workers.dev npm run perf   (a deployed site: real CDN, real headers)
+//   URL=https://snuggle.<you>.workers.dev npm run perf   (a deployed site: real CDN, real headers)
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { gzipSync } from 'node:zlib';

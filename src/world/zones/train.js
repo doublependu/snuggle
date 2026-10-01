@@ -18,11 +18,12 @@ export async function create() {
     clouds: 14, cloudColor: '#e3e8ec', cloudShade: '#8e9aa6', peakColor: '#7e8e98',
   });
   z.updaters.push(trainScenery(z.group, { density: G.quality.tier.foliage }));
-  for (const side of [-1, 1]) {
+  const streaks = [-1, 1].map((side) => {
     const r = new Rain({ count: Math.round(420 * G.quality.tier.particles) + 60, size: new Vector3(44, 9, 9), speed: 12, length: 0.5, wrap: false, opacity: 0.38 });
     r.center.set(0, 5.5, side * 6.3);
     z.group.add(r.mesh);
-  }
+    return r;
+  });
   // warm ceiling lamps
   for (let i = 0; i < 7; i++) G.fx.glows.add(new Vector3(-8 + (i + 0.5) * (16 / 7), 2.4, 0), '#ffcf86', 0.9);
   // dormant until the story points it out (story/prologue.js); stays inside the carriage (AREA_cloud)
@@ -30,6 +31,19 @@ export async function create() {
   z.collision.build();
   z.killY = -4;
   G.audio.mix('train');
+  // once the cloud is asleep the rain outside eases to a drizzle, to hear and to see (the station carries on
+  // from there: "The rain softens to a drizzle as the train pulls into Lantern Bay")
+  const ease = (seconds) => {
+    G.audio.bed('rainOut', 0.22, seconds);
+    let t = 0;
+    z.updaters.push((dt) => {
+      if (t >= 1) return;
+      t = Math.min(1, t + dt / Math.max(0.01, seconds));
+      for (const r of streaks) r.mat.uniforms.opacity.value = 0.38 - 0.22 * t;
+    });
+  };
+  if (!z.cloud) ease(0);
+  else z.on('soothed', (g) => g === z.cloud && ease(4));
   z.start = () => prologueTrain(z);
   return z;
 }

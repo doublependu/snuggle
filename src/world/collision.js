@@ -17,6 +17,7 @@ export class Collision {
     this.parts = [];
     this.bvh = null;
     this.walkableY = 0.55; // normal.y above this counts as ground
+    this.groundNormal = new Vector3(0, 1, 0); // of the ground the last capsule stood on (collideCapsule)
   }
 
   // Copy world-space positions (de-quantized) of a mesh into the collision soup.
@@ -143,6 +144,8 @@ export class Collision {
   collideCapsule(segment, radius) {
     if (!this.bvh) return false;
     let grounded = false;
+    const gn = this.groundNormal;
+    let gy = 0; // the most level ground touched
     for (let iter = 0; iter < 3; iter++) {
       let moved = false;
       _box.makeEmpty();
@@ -168,6 +171,7 @@ export class Collision {
                 _seg.start.addScaledVector(_dir, radius - below);
                 _seg.end.addScaledVector(_dir, radius - below);
                 grounded = moved = true;
+                if (_dir.y > gy) gy = gn.copy(_dir).y;
                 return;
               }
             }
@@ -178,7 +182,10 @@ export class Collision {
             _dir.subVectors(_cap, _tri);
             if (_dir.lengthSq() < 1e-10) tri.getNormal(_dir);
             _dir.normalize();
-            if (_dir.y > this.walkableY) grounded = true;
+            if (_dir.y > this.walkableY) {
+              grounded = true;
+              if (_dir.y > gy) gy = gn.copy(_dir).y;
+            }
             _seg.start.addScaledVector(_dir, depth);
             _seg.end.addScaledVector(_dir, depth);
             moved = true;

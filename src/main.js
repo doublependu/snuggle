@@ -3,15 +3,14 @@
 import { PerspectiveCamera, Scene, WebGLRenderer } from 'three';
 import css from './ui/ui.css?inline';
 import { G, logError } from './game.js';
-import { loadSave, writeSave, reloadFromSave } from './core/save.js';
-import { Input } from './core/input.js';
+import { loadSave, writeSave, resetSave, reloadFromSave } from './core/save.js';
+import { Input, KEYS, PAD, keyLabel, PAD_NAMES } from './core/input.js';
 import { Audio } from './core/audio.js';
 import { Quality, probeTier } from './core/quality.js';
 import { trackProgress, prefetch } from './core/assets.js';
 import { shared } from './render/materials.js';
 import { Glows, Sparkles } from './render/vfx.js';
-import { UI } from './ui/ui.js';
-import { Menus, applyTextSize } from './ui/menus.js';
+import { UI, applyTextSize } from './ui/ui.js';
 import { createTouch } from './ui/touch.js';
 import { lockZoom } from './ui/zoomlock.js';
 import { Humanoid } from './actors/humanoid.js';
@@ -22,6 +21,9 @@ import { SpriteFollowers } from './actors/sprites.js';
 import { Soothe } from './systems/soothe.js';
 import { Interact } from './systems/interact.js';
 import { Collection } from './systems/collection.js';
+import { SPECIES, BOOK_ORDER } from './content/species.js';
+import { MEMORY_BOOK } from './content/memories.js';
+import { thumb } from './ui/thumb.js';
 import { useAssist } from './systems/assists.js';
 // shared by every zone: bundle it with the main chunk to save a round trip
 import './world/zone.js';
@@ -74,7 +76,12 @@ async function boot() {
   G.audio.musicVolume = save.settings.music;
   const uiRoot = $('ui');
   G.ui = new UI(uiRoot);
-  G.menus = new Menus(uiRoot);
+  // The menus (pause, settings, the Sprite Book, the bug report) load right after Begin: nothing before it
+  // needs one. Until they arrive this stands in; a press that comes first waits for them.
+  let menus = null;
+  const deps = { G, SPECIES, BOOK_ORDER, MEMORY_BOOK, thumb, applyTextSize, writeSave, resetSave, reloadFromSave, KEYS, PAD, keyLabel, PAD_NAMES };
+  const loadMenus = () => (menus ||= import('./ui/menus.js').then(({ Menus }) => (G.menus = new Menus(uiRoot, deps))));
+  G.menus = { open: false, load: loadMenus, update() {}, togglePause: () => loadMenus().then((m) => m.togglePause()), toggleBook: () => loadMenus().then((m) => m.toggleBook()) };
   G.touch = createTouch(uiRoot, G.input);
   lockZoom(document.body);
   watchContext(canvas);
@@ -130,6 +137,7 @@ async function boot() {
     G.zone.start?.();
     // production builds: cache the game for the next visit, a few seconds into play (see vite.config.js)
     if (!import.meta.env.DEV && 'serviceWorker' in navigator && !params.has('nosw')) setTimeout(() => navigator.serviceWorker.register('./sw.js').catch(() => {}), 5000);
+    loadMenus().catch((e) => console.error(e));
     // the composed music loads after Begin (it is code, not audio files: a few KB)
     import('./core/music.js')
       .then(({ Music }) => G.audio.ctx && G.audio.attachScore(new Music(G.audio)))

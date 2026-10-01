@@ -10,7 +10,7 @@
 // at the right step.
 import { CylinderGeometry, Color, Mesh, Vector3 } from 'three';
 import { G, flag, wait, until } from '../game.js';
-import { talk, ask, objective, hint, shot, near } from './helpers.js';
+import { talk, chat, remark, ask, objective, hint, shot, near } from './helpers.js';
 import { writeSave } from '../core/save.js';
 import { materialFor } from '../render/materials.js';
 
@@ -32,8 +32,22 @@ export function chapter3Objective() {
   return 'Free roam: keep the grey Grumblings company, and check on the neighbours';
 }
 
+// Where that objective is, for the guide (systems/wayfinder.js).
+export function chapter3Target() {
+  const f = (k) => flag(k);
+  if (!f('ch3_greys')) return 'POINT_fang_court';
+  if (G.zone?.id === 'academy') return !f('ch3_return') ? 'weibao' : f('ch3Done') ? null : 'POINT_lessonseat';
+  if (G.zone?.id !== 'quiet' || f('ch3Done')) return null;
+  if (f('ch3_return')) return 'ferryman';
+  const left = MEMORY_IDS.filter((id) => !f('mem_' + id)).map((id) => 'POINT_mem_' + id);
+  if (left.length) return left;
+  if (!G.collection.has('grey')) return greyTargets;
+  return 'POINT_mem_kitchen';
+}
+const greyTargets = () => [...G.grumblings].filter((g) => g.species === 'grey' && !g.soothed).map((g) => g.position);
+
 export function refreshObjective3() {
-  objective(chapter3Objective());
+  objective(chapter3Objective(), chapter3Target);
 }
 
 // ---------------------------------------------------------------- the memories (systems/memories.js)
@@ -211,7 +225,7 @@ async function greyMorning(z) {
   ]);
   G.cam.clearShot();
   G.frozen = false;
-  objective('Try humming to the grey Grumblings');
+  objective('Try humming to the grey Grumblings', greyTargets);
   hint('hum', 4);
   let t = 0,
     tried = 0;
@@ -267,7 +281,7 @@ export async function district(z) {
     if (flag('greyReadyTalk')) return;
     flag('greyReadyTalk', true);
     await until(() => !G.frozen && !G.ui.dialogueOpen);
-    await talk([
+    chat([
       ['xiaopei', 'It’s looking at me… Maybe it just needed someone to stay.', { face: 'smile' }],
       ['weibao', '…now it might let you hum to it.'],
     ]);
@@ -275,12 +289,12 @@ export async function district(z) {
   z.on('sprite', async ({ id, first }) => {
     if (id !== 'grey' || !first) return;
     await wait(2.2);
+    refreshObjective3();
     await until(() => !G.frozen && !G.ui.dialogueOpen);
-    await talk([
+    chat([
       ['tangtang', 'It’s glowing! A grey Charm Sprite… it looks so much lighter now.'],
       ['honk', 'IT REMEMBERS THINGS NOBODY ELSE DOES. MAYBE IT CAN FIND WHAT THE FOG IS HIDING. HONK.'],
     ]);
-    refreshObjective3();
   });
   z.on('flag', ({ name }) => {
     if (name.startsWith('mem_') || name === 'ch3_return') refreshObjective3();
@@ -317,8 +331,9 @@ const MEMORY_LINES = {
 };
 
 async function memoryLines(id) {
+  // a friend's word about the memory, as a bubble: she can walk on to the next one meanwhile
   const lines = MEMORY_LINES[id];
-  if (lines) await talk(lines);
+  if (lines) chat(lines);
   if (memCount() === MEMORY_IDS.length && !flag('mem_kitchen')) {
     await talk([
       ['xiaopei', 'The whole district remembers a little girl… and a fog. Where did it all start?', { face: 'worried' }],
@@ -333,6 +348,10 @@ function wireFriends(z) {
   const tt = npc('tangtang'),
     wb = npc('weibao');
   const pick = (a) => a[Math.floor(Math.random() * a.length)];
+  // what they say in passing
+  z.on('grey-refused', () => remark('refused', 'tangtang', 'It doesn’t want a hug yet… Let’s just stay with it.'));
+  z.on('splash', () => remark('splash', 'honk', 'THE CANAL IS COLD. CAPTAIN HONK KNOWS. HONK.'));
+  z.on('flag', ({ name }) => name.startsWith('kind_') && remark('neighbour', 'tangtang', 'Did you see? So glad that somebody knocked.'));
   if (tt)
     tt.onTalk = () =>
       talk([['tangtang', pick([
@@ -408,7 +427,11 @@ async function fangStory(z) {
   ]);
   p.doudou.userData.awake = true;
   G.audio.play('yawn');
-  shot('CAM_lesson', p.position, 1.0, 1.0);
+  // a close shot over Pip's shoulder: Bean in her hood, looking at Master Fang (the wide shot from outside
+  // the pavilion couldn't show him)
+  const fwd = new Vector3(Math.sin(p.facing), 0, Math.cos(p.facing)),
+    side = new Vector3(Math.cos(p.facing), 0, -Math.sin(p.facing));
+  G.cam.setShot(p.position.clone().addScaledVector(fwd, -1.05).addScaledVector(side, 0.8).setY(p.position.y + 1.05), fang.position.clone().setY(fang.position.y + 0.95), 1.0);
   await talk([
     [null, 'In Pip’s hood, Bean is awake again, very quiet, looking at Master Fang.'],
     [null, 'Master Fang looks back at him for a long moment. Then she takes a lemon candy from her pocket and gives it to him, without a word.'],

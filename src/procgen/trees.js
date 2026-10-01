@@ -8,7 +8,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { materialFor } from '../render/materials.js';
 import { mulberry } from '../render/sky.js';
 
-function paint(geo, color, jitter = 0.08, rnd = Math.random, shadeBottom = 0.25) {
+export function paint(geo, color, jitter = 0.08, rnd = Math.random, shadeBottom = 0.25) {
   geo = geo.index ? geo.toNonIndexed() : geo;
   const pos = geo.attributes.position;
   const col = new Float32Array(pos.count * 3);

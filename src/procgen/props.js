@@ -79,12 +79,21 @@ export function lotusField(marker, count, seed = 3, avoid = []) {
   return g;
 }
 
-// A thirsty lotus bud on a stalk; bloom() swaps it for a big pad you can stand on.
+// A thirsty lotus bud: a closed, drooping bud on a stalk with a leaf on the water (so it reads as a plant,
+// not a fishing float); bloom() swaps it for a big pad you can stand on.
 export function lotusBud(pos) {
   const g = new Group();
   g.position.copy(pos);
-  const stalk = new Mesh(tint(new CylinderGeometry(0.03, 0.03, 0.5, 5).translate(0, 0.25, 0), '#6f8f4a'), materialFor('plain'));
-  const bud = new Mesh(tint(new ConeGeometry(0.14, 0.34, 6).translate(0, 0.62, 0), '#e9a9bf'), materialFor('plain'));
+  const stalk = new Mesh(tint(new CylinderGeometry(0.035, 0.04, 0.5, 5).translate(0, 0.25, 0), '#6f8f4a'), materialFor('plain'));
+  // the bud hangs from the top of the stalk
+  const bud = new Mesh(mergeGeometries([
+    tint(new SphereGeometry(0.17, 7, 5).scale(1, 1.5, 1).translate(0, 0.2, 0), '#e9a9bf', 0.05),
+    tint(new ConeGeometry(0.13, 0.14, 5).rotateX(Math.PI).translate(0, 0.02, 0), '#7da34f', 0.05),
+  ]), materialFor('plain'));
+  bud.position.y = 0.48;
+  bud.rotation.z = 0.75;
+  const leaf = new Mesh(padGeometry(0.34), materialFor('plain'));
+  leaf.position.set(-0.22, 0.03, 0.12);
   const pad = new Mesh(padGeometry(0.85), materialFor('plain'));
   pad.position.y = 0.06;
   pad.scale.setScalar(0.01);
@@ -92,12 +101,12 @@ export function lotusBud(pos) {
   const flower = new Mesh(lotusGeometry(), materialFor('plain'));
   flower.position.set(0.35, 0.08, 0.2);
   flower.visible = false;
-  g.add(stalk, bud, pad, flower);
+  g.add(stalk, bud, leaf, pad, flower);
   g.userData = { stalk, bud, pad, flower, bloomT: -1 };
   g.userData.update = (dt) => {
     const u = g.userData;
     if (u.bloomT < 0) {
-      bud.rotation.z = Math.sin(performance.now() / 700 + pos.x) * 0.08;
+      bud.rotation.z = 0.75 + Math.sin(performance.now() / 700 + pos.x) * 0.08;
       return;
     }
     u.bloomT = Math.min(1, u.bloomT + dt * 1.5);
@@ -105,7 +114,7 @@ export function lotusBud(pos) {
     pad.visible = flower.visible = true;
     pad.scale.setScalar(Math.max(0.01, k * (1 + Math.sin(k * Math.PI) * 0.15)));
     flower.scale.setScalar(k);
-    stalk.visible = bud.visible = k < 0.4;
+    stalk.visible = bud.visible = leaf.visible = k < 0.4;
   };
   g.userData.bloom = () => {
     if (g.userData.bloomT < 0) g.userData.bloomT = 0;

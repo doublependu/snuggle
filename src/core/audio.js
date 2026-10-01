@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // All sound is synthesized with WebAudio: zero download. The lullaby also drives the soothing
 // beat clock (see systems/soothe.js), so humming, the HUD ring and the melody stay in sync.
+const BOOST = 2.5; // the master's make-up gain (+8 dB), ahead of the limiter
+const MUSIC = 0.8; // the music bus at full Music volume (it was 0.5: the quiet zones are mostly music)
 const BPM = 84;
 export const BEAT = 60 / BPM;
 // Pip's mother's lullaby: 16 beats, D major pentatonic (MIDI numbers, 0 = rest)
@@ -17,16 +19,23 @@ const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12);
 // Each place's soundscape: its ambience beds (level 0..1; any bed not listed fades out) and its music
 // track (content/music.js). Zones call G.audio.mix(id); proximity beds (the musician, the wok) are set
 // by their zones every frame on top of this. 'pad' is the simple chord pad heard until the music loads.
+// On the train the rain is outside the windows ('rainOut': duller, heard through the carriage); the Soggy
+// Cloud's own rain is 'patter', set by the cloud itself (actors/grumbling.js), so soothing it is heard.
 const AMBIENCE = {
-  train: { rumble: 1, rain: 0.7, clack: 1, pad: 1, music: 'train' },
+  train: { rumble: 0.8, rainOut: 0.6, clack: 1, pad: 1, music: 'train' },
   station: { water: 0.8, birds: 1, pad: 1, music: 'academy' },
   academy: { birds: 1, water: 0.4, pad: 1, music: 'academy' },
   'academy-dusk': { water: 0.4, insects: 0.5, pad: 1, music: 'dusk' },
   'academy-grey': { wind: 0.3, water: 0.3, pad: 0.6, music: 'grey' },
   market: { water: 0.6, crowd: 1, insects: 1, music: 'market' },
-  quiet: { wind: 0.55, water: 0.35, pad: 0.6, music: 'quiet' },
+  quiet: { wind: 0.7, water: 0.35, pad: 0.6, music: 'quiet' },
 };
-const BEDS = ['rumble', 'rain', 'clack', 'water', 'birds', 'insects', 'wind', 'crowd', 'pad'];
+// The noise beds: filter type, frequency, Q, and the gain at level 1.
+const NOISE_BEDS = {
+  rain: ['highpass', 1200, 0.3, 0.18], rainOut: ['lowpass', 900, 0.5, 0.14], patter: ['bandpass', 3200, 0.7, 0.2], rumble: ['lowpass', 140, 1.2, 0.2],
+  wind: ['bandpass', 500, 0.5, 0.08], water: ['bandpass', 700, 0.7, 0.06], crowd: ['bandpass', 420, 1.1, 0.09], sizzle: ['highpass', 3800, 0.5, 0.05],
+};
+const BEDS = ['rumble', 'rain', 'rainOut', 'patter', 'clack', 'water', 'birds', 'insects', 'wind', 'crowd', 'pad'];
 
 export class Audio {
   constructor() {
@@ -48,13 +57,24 @@ export class Audio {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
     const ctx = (this.ctx = new AC());
+    // The game used to be quiet (-28 LUFS over a playthrough, ai/playtest_5.md): the master is 8 dB hotter
+    // now, with a limiter after it so the loud moments (a pop, a chime over the music) don't clip.
     this.master = ctx.createGain();
-    this.master.gain.value = this.volume;
-    this.master.connect(ctx.destination);
+    this.master.gain.value = this.volume * BOOST;
+    const lim = ctx.createDynamicsCompressor();
+    lim.threshold.value = -12;
+    lim.knee.value = 4;
+    lim.ratio.value = 20;
+    lim.attack.value = 0.003;
+    lim.release.value = 0.2;
+    // (the compressor adds make-up gain of its own: the trim after it keeps the peaks under full scale)
+    const trim = ctx.createGain();
+    trim.gain.value = 0.8;
+    this.master.connect(lim).connect(trim).connect(ctx.destination);
     this.sfx = ctx.createGain();
     this.sfx.connect(this.master);
     this.music = ctx.createGain();
-    this.music.gain.value = this.musicVolume * 0.5;
+    this.music.gain.value = this.musicVolume * MUSIC;
     this.music.connect(this.master);
     // soft room reverb from a generated impulse
     this.verb = ctx.createConvolver();
@@ -95,11 +115,11 @@ export class Audio {
 
   setVolume(v) {
     this.volume = v;
-    if (this.master) this.master.gain.setTargetAtTime(v, this.ctx.currentTime, 0.05);
+    if (this.master) this.master.gain.setTargetAtTime(v * BOOST, this.ctx.currentTime, 0.05);
   }
   setMusic(v) {
     this.musicVolume = v;
-    if (this.music) this.music.gain.setTargetAtTime(v * 0.5, this.ctx.currentTime, 0.1);
+    if (this.music) this.music.gain.setTargetAtTime(v * MUSIC, this.ctx.currentTime, 0.1);
   }
 
   impulse(sec) {
@@ -391,18 +411,19 @@ export class Audio {
   }
 
   // Continuous beds: rain / rumble / wind / water / crowd / sizzle are filtered noise loops with smooth gain.
-  bed(name, level) {
+  // fade: seconds to get there (the time constant is a third of it).
+  bed(name, level, fade = 1.2) {
     this.loops[name] = level;
     if (!this.ctx) return;
     const ctx = this.ctx;
     let b = this.beds?.[name];
-    if (!b && level > 0 && ['rain', 'rumble', 'wind', 'water', 'crowd', 'sizzle'].includes(name)) {
+    if (!b && level > 0 && NOISE_BEDS[name]) {
       this.beds = this.beds || {};
       const src = ctx.createBufferSource();
       src.buffer = this.noise;
       src.loop = true;
       const f = ctx.createBiquadFilter();
-      const cfg = { rain: ['highpass', 1200, 0.3], rumble: ['lowpass', 140, 1.2], wind: ['bandpass', 500, 0.5], water: ['bandpass', 700, 0.7], crowd: ['bandpass', 420, 1.1], sizzle: ['highpass', 3800, 0.5] }[name];
+      const cfg = NOISE_BEDS[name];
       f.type = cfg[0];
       f.frequency.value = cfg[1];
       f.Q.value = cfg[2];
@@ -412,7 +433,7 @@ export class Audio {
       src.start();
       b = this.beds[name] = { src, g };
     }
-    if (b) b.g.gain.setTargetAtTime(level * ({ rain: 0.18, rumble: 0.5, wind: 0.08, water: 0.06, crowd: 0.09, sizzle: 0.05 }[name] || 0.1), ctx.currentTime, 0.4);
+    if (b) b.g.gain.setTargetAtTime(level * NOISE_BEDS[name][3], ctx.currentTime, fade / 3);
   }
   applyLoops() {
     for (const [k, v] of Object.entries(this.loops)) this.bed(k, v);

@@ -74,6 +74,10 @@ export class UI {
     this.calmEl = this.sootheEl.querySelector('.calm');
     for (let i = 0; i < 4; i++) this.calmEl.append(el('i'));
     this.toasts = el('div', 'toasts');
+    // the guide's arrow and distance (systems/wayfinder.js), under the objective, above the toasts
+    this.wayEl = el('div', 'way', '<i>▲</i><span></span>');
+    this.wayEl.hidden = true;
+    this.toasts.append(this.wayEl);
     this.cardEl = el('div', 'card');
     this.fadeEl = el('div', 'fade');
     // dialogue
@@ -82,14 +86,25 @@ export class UI {
     this.dlgText = el('div', 'text');
     this.dlgMore = el('div', 'more', '▼');
     this.dlgChoices = el('div', 'choices');
-    this.dlg.append(this.dlgWho, this.dlgText, this.dlgChoices, this.dlgMore);
+    // skip to the end of a long conversation: tap it, or hold the key that advances (it fills up meanwhile)
+    this.dlgSkip = el('button', 'skip', '<i></i><span>Skip ⏭</span>');
+    this.dlgSkip.setAttribute('aria-label', 'Skip to the end of this conversation');
+    this.dlgSkip.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      this.skip();
+    });
+    this.dlg.append(this.dlgWho, this.dlgText, this.dlgChoices, this.dlgMore, this.dlgSkip);
     this.dlg.addEventListener('pointerdown', (e) => {
       e.stopPropagation();
       if (!this.dlgChoices.childElementCount) this.advance = true;
     });
     this.worldLayer = el('div');
     this.worldLayer.style.cssText = 'position:absolute;inset:0;overflow:hidden';
-    root.append(this.worldLayer, tl, this.objective, tr, this.helper, this.promptEl, this.sootheEl, this.toasts, this.dlg, this.cardEl, this.fadeEl);
+    // the top of the screen, in the middle: the objective, then the guide's arrow and the toasts under it
+    // (one column, so however many lines the objective takes, nothing lands on top of it)
+    const mid = el('div', 'topmid');
+    mid.append(this.objective, this.toasts);
+    root.append(this.worldLayer, tl, mid, tr, this.helper, this.promptEl, this.sootheEl, this.dlg, this.cardEl, this.fadeEl);
     this.bubbles = new Set();
     this.dialogueOpen = false;
     this.lastBeat = -1;
@@ -149,12 +164,21 @@ export class UI {
     setTimeout(() => c.remove(), 1900);
   }
 
-  toast(text, life = 2.6) {
-    const t = el('div', 'toast', text);
+  toast(text, life = 2.6, cls = '') {
+    const t = el('div', 'toast ' + cls, text);
     t.style.setProperty('--life', life + 's');
     this.toasts.append(t);
     setTimeout(() => t.remove(), (life + 0.6) * 1000);
-    while (this.toasts.childElementCount > 3) this.toasts.firstChild.remove();
+    const all = this.toasts.querySelectorAll('.toast');
+    for (let i = 0; i < all.length - 3; i++) all[i].remove();
+  }
+  // The guide: an arrow turned `angle` radians from straight ahead (clockwise) and the metres to go; null hides it.
+  way(angle, metres = 0) {
+    this.wayEl.hidden = angle === null;
+    if (angle === null) return;
+    this.wayEl.firstChild.style.transform = `rotate(${angle.toFixed(2)}rad)`;
+    const m = Math.round(metres) + ' m';
+    if (this.wayEl.lastChild.textContent !== m) this.wayEl.lastChild.textContent = m;
   }
 
   async card(title, sub, seconds = 3) {
@@ -196,11 +220,29 @@ export class UI {
   }
 
   // ---------------------------------------------------------------- dialogue
-  // memory: a sepia line from fifty years ago (Chapter 3's Charm Sprite memories); who may be a plain name
-  say(who, text, { choices = null, auto = 0, face = null, memory = false } = {}) {
+  // Skip to the end of the conversation: every line until the next question (or until the scene has been
+  // quiet for a moment) goes by at once. Lines are still "said", so faces, flags and the story keep in step.
+  skip() {
+    this.skipping = true;
+    this.skipT = 1.2;
+    this.advance = true;
+    G.audio.play('blip');
+  }
+  // memory: a sepia line from fifty years ago (Chapter 3's Charm Sprite memories); who may be a plain name.
+  // more: how many lines follow in this conversation (story/helpers.js talk()): two or more shows Skip.
+  say(who, text, { choices = null, auto = 0, face = null, memory = false, more = 0 } = {}) {
     const [name, color] = SPEAKERS[who] || [who || '', '#2f6f73'];
     this.dialogueOpen = true;
     G.frozen = true;
+    if (choices) this.skipping = false;
+    if (this.skipping) {
+      G.events.emit('say', { who, text, face });
+      G.events.emit('typed', { who });
+      G.events.emit('said', { who });
+      return Promise.resolve(0);
+    }
+    this.dlgSkip.style.display = more >= 2 && !choices ? '' : 'none';
+    let held = 0;
     this.dlg.classList.add('show');
     this.dlg.classList.toggle('memory', !!memory);
     this.dlgWho.textContent = name;
@@ -213,7 +255,9 @@ export class UI {
     let shown = 0;
     this.advance = false;
     return new Promise((resolve) => {
-      const speed = 48;
+      // Settings > Text speed: 1 normal (48 letters a second), 2 fast, 0 all at once
+      const ts = G.save.settings.textSpeed ?? 1;
+      const speed = ts ? 48 * ts : 1e6;
       let t = 0;
       const done = (v) => {
         G.updaters.delete(tick);
@@ -247,6 +291,13 @@ export class UI {
         }
         const confirm = input.consume('confirm') || input.consume('interact') || this.advance;
         this.advance = false;
+        // holding the advance key for 0.8 s skips the rest (the button fills up as a cue)
+        if (more >= 2 && !choices) {
+          held = input.confirmHeld ? held + dt : 0;
+          this.dlgSkip.firstChild.style.width = Math.min(100, (held / 0.8) * 100) + '%';
+          if (held >= 0.8) this.skip();
+        }
+        if (this.skipping) return done(0);
         if (shown < full.length) {
           t += dt * speed;
           const n = confirm ? full.length : Math.min(full.length, Math.floor(t));
@@ -293,9 +344,12 @@ export class UI {
     this.dlg.classList.remove('show');
     this.dialogueOpen = false;
     G.frozen = false;
+    this.skipT = 1.2;
   }
 
   update(dt) {
+    // a skip carries over a short pause between two parts of a scene, then ends
+    if (this.skipping && !this.dialogueOpen && (this.skipT -= dt) <= 0) this.skipping = false;
     for (const b of [...this.bubbles]) {
       b.life -= dt;
       _v.copy(b.obj.position);
@@ -314,4 +368,9 @@ export class UI {
       b.el.style.top = p.y + 'px';
     }
   }
+}
+
+// Text size (Settings): scales the reading text (dialogue, choices, prompts, toasts, menus); see ui.css --ts.
+export function applyTextSize(k = 1) {
+  document.documentElement.style.setProperty('--ts', String(k || 1));
 }

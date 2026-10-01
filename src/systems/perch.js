@@ -33,7 +33,7 @@ export class Perch {
     this.active = null;
     this.selected = -1;
     this.humWas = false;
-    this.combo = { snack: -99, echo: -99, sweetUntil: -99, echoUntil: -99, used: -99 };
+    this.combo = { snack: -99, echo: -99, sweetUntil: -99, echoUntil: -99, togetherUntil: -99, used: -99 };
     this.ribbons = Array.from({ length: MAX + 1 }, (_, i) => new Ribbon(72, i ? 0.03 : 0.045, i ? '#ffc98a' : '#ffb35c'));
     for (const r of this.ribbons) zone.group.add(r.mesh);
     this.chipsEl = document.createElement('div');
@@ -170,8 +170,12 @@ export class Perch {
     const both = Math.abs(c.snack - c.echo) < 4 && (snack || echo) && t - Math.min(c.snack, c.echo) < 6;
     let name = null;
     if (both) {
+      // a big boost, not an instant win: for five seconds a sparrow calms three times as fast to the free good
+      // thing it loves best, and every sparrow shows which one that is. It used to soothe the whole flock at
+      // once, so the chapter's idea (point out the right one for each) never had to be worked out.
       name = 'Everyone Together!';
-      for (const g of this.active.sparrows) if (g.perched && g.active) g.wrap(1);
+      c.togetherUntil = t + 5;
+      for (const g of this.active.sparrows) if (!g.soothed) G.ui.bubble(g.obj, (GOODS[g.favourite] || ['✨'])[0], 6, 0.45);
     } else if (snack) {
       name = 'Sweet Lullaby!';
       c.sweetUntil = t + 4;
@@ -231,7 +235,9 @@ export class Perch {
         }
       }
       const sweet = G.time < this.combo.sweetUntil ? 1.5 : 1;
-      const match = G.time < this.combo.echoUntil ? 3 : 2;
+      // a sparrow hears its favourite twice as well; three times with Echo Friend; and "Everyone Together"
+      // triples that again (only for the favourite: the right good thing still has to be pointed out)
+      const match = (G.time < this.combo.echoUntil ? 3 : 2) * (G.time < this.combo.togetherUntil ? 3 : 1);
       for (const g of perched) {
         const k = g.favourite === good.kind ? match : 0.6;
         g.wrap((1 / (g.def.wrap || 3)) * k * this.strength(good.kind) * sweet * dt);

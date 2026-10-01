@@ -1,19 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Pause screen (with the fork-me link), settings, controls help and the Sprite Book.
-import {
-  AmbientLight, Color, DirectionalLight, PerspectiveCamera, Scene, SRGBColorSpace, WebGLRenderTarget,
-} from 'three';
-import { G } from '../game.js';
-import { SPECIES, BOOK_ORDER } from '../content/species.js';
-import { makeCreature } from '../actors/creatures.js';
-import { writeSave, resetSave, reloadFromSave } from '../core/save.js';
-import { KEYS, PAD, keyLabel, PAD_NAMES } from '../core/input.js';
-import { MEMORY_BOOK } from '../content/memories.js';
+// Pause screen (with the fork-me link), settings, controls help and the Sprite Book. Loaded after Begin
+// (src/main.js): nothing before it needs a menu, and the first load stays small. Like ui/remap.js, it imports
+// nothing: what it needs from the main bundle is handed over in `deps` (a lazy chunk that imports shared
+// modules makes the bundler split the main bundle into several files).
+let G, SPECIES, BOOK_ORDER, MEMORY_BOOK, thumb, applyTextSize, writeSave, resetSave, reloadFromSave, KEYS, PAD, keyLabel, PAD_NAMES;
 
 const REPO = 'https://github.com/doublependu/snuggle';
 
 export class Menus {
-  constructor(root) {
+  constructor(root, deps) {
+    ({ G, SPECIES, BOOK_ORDER, MEMORY_BOOK, thumb, applyTextSize, writeSave, resetSave, reloadFromSave, KEYS, PAD, keyLabel, PAD_NAMES } = deps);
     this.root = root;
     this.pause = this.menu('pause', `<div class="fork"><a href="${REPO}" target="_blank" rel="noopener">Fork me on GitHub</a></div>
       <div class="panel"><h2>Paused</h2><div class="col">
@@ -25,6 +21,7 @@ export class Menus {
         <button class="btn alt" data-a="report">Copy bug report</button>
         <button class="btn alt" data-a="restart">Start again from the train</button>
       </div>
+      <div class="todo"></div>
       <p class="small">Snuggle Sorcery is free software under the <a href="${REPO}/blob/main/LICENSE" target="_blank" rel="noopener">GNU GPL v3</a>. <a href="${REPO}" target="_blank" rel="noopener">Fork it on GitHub</a> and make your own cozy game!</p></div>`);
     this.confirmRestart = this.menu('restart', `<div class="panel"><h2>Start again?</h2>
       <p>Start the story again from the train? Your Sprite Book, Cozy Energy and story progress will be cleared. Your settings stay.</p>
@@ -41,6 +38,8 @@ export class Menus {
         <label for="s-r">Reduce motion</label><input id="s-r" type="checkbox">
         <label for="s-h">Hum: tap to toggle</label><input id="s-h" type="checkbox">
         <label for="s-t">Text size</label><select id="s-t"><option value="1">Normal</option><option value="1.15">Large</option><option value="1.3">Larger</option><option value="1.5">Largest</option></select>
+        <label for="s-ts">Text speed</label><select id="s-ts"><option value="1">Normal</option><option value="2">Fast</option><option value="0">All at once</option></select>
+        <label for="s-g">Direction hints</label><select id="s-g"><option value="auto">After a while</option><option value="always">Always</option><option value="off">Off</option></select>
       </div><div class="col" style="margin-top:16px"><button class="btn" data-a="back">Back</button></div></div>`);
     this.controls = this.menu('controls', `<div class="panel"><h2>Controls</h2><table class="controls"><tbody></tbody></table>
       <div class="col" style="margin-top:14px"><button class="btn alt" data-a="remap">Change controls</button><button class="btn" data-a="back">Back</button></div></div>`);
@@ -48,7 +47,6 @@ export class Menus {
       <div class="grid"></div><div class="mems"></div><div class="col" style="margin-top:14px"><button class="btn" data-a="close">Close</button></div></div>`);
     this.book.classList.add('book');
     this.stack = [];
-    this.thumbs = {};
     this.bindSettings();
   }
 
@@ -104,8 +102,13 @@ export class Menus {
   }
 
   togglePause() {
-    if (this.open) this.resume();
-    else this.show(this.pause);
+    if (this.open) return this.resume();
+    // "Things to do here": the zone's optional things and how far along they are (zone.todo, each zone's module)
+    const todo = G.zone?.todo?.() || [];
+    this.pause.querySelector('.todo').innerHTML = todo.length
+      ? '<h3>Things to do here</h3>' + todo.map(([label, n, of]) => `<span class="${n >= of ? 'done' : ''}">${label} <b>${of > 1 ? n + '/' + of : n ? '✔' : '–'}</b></span>`).join('')
+      : '';
+    this.show(this.pause);
   }
   toggleBook() {
     if (this.stack.at(-1) === this.book) this.back();
@@ -199,13 +202,14 @@ export class Menus {
     const k = (a) => i.label(a, 'keyboard'),
       p = (a) => i.label(a, 'gamepad');
     const rows = [
-      ['Move', `${k('move')} / arrows · left stick · touch stick`],
+      ['Walk', `${k('move')} / arrows · left stick · touch stick`],
       ['Camera', 'Mouse (click to capture) · right stick · drag right side'],
       ['Hum (soothe)', `Hold ${k('hum')} or left mouse · ${p('hum')} · big Hum button`],
       ['On-beat bonus', 'Re-press Hum when the ring pulses'],
       ['Notice / talk', `${k('interact')} or Enter · ${p('interact')} · context button`],
       ['Jump', `${k('jump')} · ${p('jump')} · Jump button`],
-      ['Sprint', `${k('sprint')} · ${p('sprint')} · push the stick all the way`],
+      ['Run', `Hold ${k('sprint')} while walking · ${p('sprint')} · push the stick all the way`],
+      ['Skip a conversation', `Hold ${k('interact')} · hold ${p('interact')} · tap Skip`],
       ['Friend assist', `${k('assist')} · ${p('assist')} · Assist button`],
       ['Sprite Book', `${k('book')} · ${p('book')} · 📖`],
       ['Pause', `Esc or ${k('pause')} · ${p('pause')} · Ⅱ`],
@@ -250,6 +254,8 @@ export class Menus {
       s().textSize = +e.target.value;
       applyTextSize(s().textSize);
     });
+    $('#s-ts').addEventListener('change', (e) => (s().textSpeed = +e.target.value));
+    $('#s-g').addEventListener('change', (e) => (s().hints = e.target.value));
   }
   syncSettings() {
     const s = G.save.settings;
@@ -262,6 +268,8 @@ export class Menus {
     $('#s-r').checked = s.reducedMotion;
     $('#s-h').checked = s.humToggle;
     $('#s-t').value = String(s.textSize || 1);
+    $('#s-ts').value = String(s.textSpeed ?? 1);
+    $('#s-g').value = s.hints || 'auto';
   }
 
   // ---------------------------------------------------------------- sprite book
@@ -275,7 +283,7 @@ export class Menus {
       const known = count > 0 || save.seen[id];
       const e = document.createElement('div');
       e.className = 'entry' + (count ? '' : ' unknown');
-      const img = this.thumb(id);
+      const img = thumb(id);
       e.innerHTML = `${count ? `<span class="count">×${count}</span>` : ''}<img alt="" src="${img}">
         <h3>${known ? sp.name : '???'}</h3><div class="feelq">${known ? '“' + sp.feeling + '”' : sp.chapter > 1 ? 'Chapter ' + sp.chapter : 'Not yet met'}</div>
         ${count && sp.ability ? `<div class="ability">${sp.abilityName}: ${sp.abilityDesc}</div>` : count ? `<div class="ability">${sp.about}</div>` : ''}`;
@@ -299,57 +307,6 @@ export class Menus {
       : '';
     if (this.stack.at(-1) !== this.book) this.show(this.book);
   }
-
-  // Render a creature portrait once into a small render target and cache it as a data URL.
-  thumb(id) {
-    if (this.thumbs[id]) return this.thumbs[id];
-    const size = 128;
-    const renderer = G.renderer;
-    try {
-      const scene = new Scene();
-      scene.add(new AmbientLight(0xffffff, 1.6));
-      const d = new DirectionalLight(0xfff2e0, 2.4);
-      d.position.set(1, 2, 3);
-      scene.add(d);
-      const c = makeCreature(id);
-      c.position.set(0, 0, 0);
-      c.rotation.y = -0.35;
-      scene.add(c);
-      const cam = new PerspectiveCamera(30, 1, 0.05, 20);
-      const h = { grey: 0.55, cloud: 0.52, homework: 0.58, sock: 0.48, pompom: 0.5 }[id] || 0.35;
-      cam.position.set(0.35, h * 0.9, h * 3.2);
-      cam.lookAt(0, h * 0.5, 0);
-      const rt = new WebGLRenderTarget(size, size);
-      rt.texture.colorSpace = SRGBColorSpace;
-      const prevRT = renderer.getRenderTarget();
-      const prevClear = renderer.getClearColor(new Color());
-      const prevAlpha = renderer.getClearAlpha();
-      renderer.setRenderTarget(rt);
-      renderer.setClearColor(0x000000, 0);
-      renderer.clear();
-      renderer.render(scene, cam);
-      const px = new Uint8Array(size * size * 4);
-      renderer.readRenderTargetPixels(rt, 0, 0, size, size, px);
-      renderer.setRenderTarget(prevRT);
-      renderer.setClearColor(prevClear, prevAlpha);
-      rt.dispose();
-      const cv = document.createElement('canvas');
-      cv.width = cv.height = size;
-      const ctx = cv.getContext('2d');
-      const img = ctx.createImageData(size, size);
-      for (let y = 0; y < size; y++) img.data.set(px.subarray((size - 1 - y) * size * 4, (size - y) * size * 4), y * size * 4);
-      ctx.putImageData(img, 0, 0);
-      this.thumbs[id] = cv.toDataURL();
-    } catch {
-      this.thumbs[id] = '';
-    }
-    return this.thumbs[id];
-  }
-}
-
-// Text size (Settings): scales the reading text (dialogue, choices, prompts, toasts, menus); see ui.css --ts.
-export function applyTextSize(k = 1) {
-  document.documentElement.style.setProperty('--ts', String(k || 1));
 }
 
 export function bugReport() {

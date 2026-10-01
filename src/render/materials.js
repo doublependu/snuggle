@@ -20,6 +20,11 @@ export const shared = {
   uPocketN: { value: 0 },
   uHFog: { value: new Vector4() }, // on, top y, falloff (m), strength
   uHFogWall: { value: new Vector4() }, // toward a fog wall: dir x, dir z, start (m along dir), 1 / length
+  // The mist beyond a map's walls (the forest round the station and the Academy, procgen/forest.js): fog by
+  // distance outside a rectangle on the ground, so the grounds stay clear and the forest fades out. See setMist().
+  uMistRect: { value: new Vector4() }, // centre x, centre z, half size x, half size z
+  uMistP: { value: new Vector4() }, // start (m beyond the rectangle), 1 / length, low mist's top y, on
+  uMistSea: { value: -1e4 }, // no mist at or below this height: the sea keeps its own horizon
   // Night lighting (render/lamps.js): lantern light painted into a small top-down texture over the zone.
   // Every lit material adds it per pixel, so static scenery, kit instances, characters and creatures all
   // glow the same way for one texture fetch. uLampOn = 0 in daytime zones.
@@ -49,13 +54,13 @@ const lampUniforms = (sh, fade = 0) => {
   sh.uniforms.uLampRect = shared.uLampRect;
   sh.uniforms.uLampOn = shared.uLampOn;
   sh.uniforms.uLampTop = shared.uLampTop;
-  for (const k of ['uFade', 'uFadeTint', 'uPockets', 'uPocketN', 'uHFog', 'uHFogWall']) sh.uniforms[k] = shared[k];
+  for (const k of ['uFade', 'uFadeTint', 'uPockets', 'uPocketN', 'uHFog', 'uHFogWall', 'uMistRect', 'uMistP', 'uMistSea']) sh.uniforms[k] = shared[k];
   sh.uniforms.uFadeOn = { value: fade };
 };
 
 // Grey-out with colour pockets (after the lamp light), and three's fog plus the height fog / fog wall.
 // W is the world-position varying of the shader it goes into.
-const FADE_HEAD = 'uniform float uFade, uFadeOn, uPocketN; uniform vec3 uFadeTint; uniform vec4 uPockets[8], uHFog, uHFogWall;\n';
+const FADE_HEAD = 'uniform float uFade, uFadeOn, uPocketN; uniform vec3 uFadeTint; uniform vec4 uPockets[8], uHFog, uHFogWall, uMistRect, uMistP; uniform float uMistSea;\n';
 const FADE_FRAG = `if (uFade > 0.0 && uFadeOn > 0.5) {
     float keep = 0.0;
     for (int i = 0; i < 8; i++) {
@@ -74,6 +79,12 @@ export const fogGLSL = (W) => `#ifdef USE_FOG
     float low = saturate((uHFog.y - ${W}.y) / uHFog.z) * saturate(vFogDepth / 30.0);
     float wall = saturate((dot(${W}.xz, uHFogWall.xy) - uHFogWall.z) * uHFogWall.w);
     fogFactor = saturate(fogFactor + low * uHFog.w + wall * wall);
+  }
+  if (uMistP.w > 0.5) {
+    float out_ = length(max(abs(${W}.xz - uMistRect.xy) - uMistRect.zw, 0.0));
+    float m = saturate((out_ - uMistP.x) * uMistP.y);
+    float lowm = saturate((uMistP.z - ${W}.y) * 0.6) * saturate(out_ * 0.1) * 0.45;
+    fogFactor = saturate(fogFactor + (m * (2.0 - m) + lowm) * smoothstep(uMistSea + 0.1, uMistSea + 1.2, ${W}.y));
   }
   gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, fogFactor);
 #endif\n`;
@@ -329,4 +340,16 @@ export function setPockets(list) {
   const n = Math.min(8, list.length);
   for (let i = 0; i < n; i++) shared.uPockets.value[i].set(list[i].position.x, list[i].position.y, list[i].position.z, list[i].radius);
   shared.uPocketN.value = n;
+}
+
+// The mist beyond a map's walls: rect { minX, maxX, minZ, maxZ } is the play area (an open side: +-Infinity),
+// start and length in metres beyond it, lowTop the top of the low mist between the trunks (null: none), sea
+// the water level (the sea is left out: it keeps its own horizon).
+// setMist() with no argument turns it off (zones do on dispose).
+export function setMist(rect = null, { start = 8, length = 70, lowTop = null, sea = null } = {}) {
+  const BIG = 1e5;
+  const c = (v) => Math.max(-BIG, Math.min(BIG, v));
+  if (rect) shared.uMistRect.value.set((c(rect.minX) + c(rect.maxX)) / 2, (c(rect.minZ) + c(rect.maxZ)) / 2, (c(rect.maxX) - c(rect.minX)) / 2, (c(rect.maxZ) - c(rect.minZ)) / 2);
+  shared.uMistP.value.set(start, 1 / length, lowTop ?? -1e4, rect ? 1 : 0);
+  shared.uMistSea.value = sea ?? -1e4;
 }

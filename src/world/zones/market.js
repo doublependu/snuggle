@@ -3,7 +3,7 @@
 // map, render/lamps.js), with three Wistful Sparrow flocks (systems/perch.js), chestnut roasting and
 // floating lanterns (systems/chestnuts.js, systems/lanterns.js), lost children to guide home
 // (systems/guide.js), a street musician, and across the water the Quiet District, whose lights go out.
-import { Vector3 } from 'three';
+import { Quaternion, Vector3 } from 'three';
 import { loadGLB } from '../../core/assets.js';
 import { stylize } from '../../render/materials.js';
 import { G, flag } from '../../game.js';
@@ -15,6 +15,8 @@ import { setupLanterns } from '../../systems/lanterns.js';
 import { setupGuide } from '../../systems/guide.js';
 import { chapter2, refreshObjective2 } from '../../story/chapter2.js';
 import { talk } from '../../story/helpers.js';
+import { addSigns } from '../signs.js';
+import { Routes, startGuide, signsFor } from '../../systems/wayfinder.js';
 
 export const NIGHT_MARKET = {
   skyTop: '#0a1230', horizon: '#33295a', ground: '#141826', fog: '#1d1f40', fogNear: 35, fogFar: 190,
@@ -26,16 +28,40 @@ export const NIGHT_MARKET = {
 // glTF-space rectangle the lamp map covers (the promenade, the stalls and the pier)
 const LAMP_RECT = { minX: -47, minZ: -21, maxX: 47, maxZ: 27 };
 
+// The walkway between the stall rows, the pier and the stairs home, for the guide and the fingerposts
+// (systems/wayfinder.js): [x, z, y?].
+const NODES = {
+  top: [-36, -17.6], st: [-36, -10], w0: [-36, -0.8], w1: [-28, -0.8], w2: [-16, -0.8], w3: [-4, -0.8], w4: [4, -0.8], w5: [15, -0.8], w6: [26, -0.8], east: [38, -0.8],
+  pier0: [26, 6], pier1: [26, 19.5],
+};
+const EDGES = ['top st w0 w1 w2 w3 w4 w5 w6 east', 'w6 pier0 pier1'];
+const PLACES = [
+  ['Stairs to the Academy', '🏮', -33.4, -9.4, Math.PI / 2], ['Lantern Pier', '🎐', 29.4, 3.4, Math.PI], ['Dumplings', '🥟', -10.5, -4.9, 0, { range: 6 }],
+];
+const FINGERS = [[0.8, 3.7, ['Stairs to the Academy', 'Lantern Pier']], [-24.6, -4.6, ['Dumplings', 'Lantern Pier', 'Stairs to the Academy']]];
+// What each stall's board says (the kit's stalls have a blank board over the back of their awning).
+const STALLS = { mstall_lantern: ['Lanterns', '🏮'], mstall_toy: ['Toys', '🎏'], mstall_tea: ['Jasmine Tea', '🍵'], mstall_sweets: ['Sweets', '🍡'], mstall_fish: ['Fish Balls', '🍢'] };
+
 export async function create() {
   const z = new Zone('market');
   z.next = ['academy', 'kit', 'fang', 'folk_kid', 'folk_a', 'folk_b', 'folk_c'];
+  // The promenade's floor used to just stop at both ends, with the sea beyond: three shopfronts from the kit
+  // close each end (extra PLACE_ markers, so placeKit instances them and their collision with the rest).
+  const endLamps = [];
+  for (const [x, turn] of [[-46.1, Math.PI / 2], [46.1, -Math.PI / 2]])
+    [2.5, -3.5, -9.5].forEach((zz, i) => {
+      const name = `PLACE_facade_${(i + (x > 0 ? 1 : 0)) % 2 ? 'a' : 'b'}.9${endLamps.length}`;
+      const position = new Vector3(x, 0, zz);
+      z.markers.set(name, { name, position, quaternion: new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), turn), scale: new Vector3(1, 1, 1), facing: turn, data: {}, object: null });
+      endLamps.push({ position: new Vector3(x - Math.sign(x) * 0.7, 1.2, zz), color: '#ffc46b', radius: 3.5, intensity: 0.7 });
+    });
   await Promise.all([z.addGLB('market'), z.placeKit('market_kit')]);
   z.setupEnvironment(NIGHT_MARKET);
   z.addWater({ deep: '#0a1a2a', shallow: '#15303d' });
   z.collision.build();
 
   // ---- lanterns: every LIGHT_ marker lights the lamp map and gets a glow
-  const lamps = z.lamps(LAMP_RECT, [], { texel: 0.4, floorY: 0, top: 3.4 });
+  const lamps = z.lamps(LAMP_RECT, endLamps, { texel: 0.4, floorY: 0, top: 3.4 });
   for (const m of z.markersBy('LIGHT_')) if (m.data.glow > 0) G.fx.glows.add(m.position, m.data.color || '#ffb45c', m.data.glow);
   z.lampCount = lamps.length;
   // the Quiet District's lanterns across the bay (they go out at the end of the chapter)
@@ -156,6 +182,29 @@ export async function create() {
   setupLanterns(z);
   setupGuide(z);
 
+  // ---- signs and the guide
+  const routes = new Routes(z, NODES, EDGES);
+  const boards = [];
+  for (const m of z.markersBy('PLACE_mstall_')) {
+    const stall = STALLS[m.name.slice(6).replace(/[._]?\d+$/, '')];
+    if (stall) boards.push({ kind: 'board', text: stall[0], icon: stall[1], at: new Vector3(0, 2.75, -0.77).applyQuaternion(m.quaternion).add(m.position), facing: m.facing, w: 1.44 });
+  }
+  addSigns(z, [
+    ...signsFor(z, routes, PLACES, FINGERS),
+    ...boards,
+    // lit over the stairs home (the arch's plaque used to be blank, and the stairs are out of sight from the harbour wall)
+    { kind: 'board', text: 'Mistbloom Academy', icon: '⬆', at: new Vector3(-36, 3.0, -10.41), facing: 0, w: 1.36 },
+  ]);
+  startGuide(z, routes);
+
+  // the pause menu's "Things to do here"
+  z.todo = () => [
+    ['👧 Lost little ones brought home', [1, 2, 3].filter((n) => flag(`kid${n}Home`)).length, 3],
+    ['🏮 Lanterns floated', Math.min(1, G.save.story.lanternsFloated || 0), 1],
+    ['🌰 Chestnuts roasted', flag('chestnutDone') ? 1 : 0, 1],
+    ['🎻 Listened to the music', flag('kind_musician') ? 1 : 0, 1],
+  ];
+
   // ---- back up the hill
   z.onTrigger('TRIGGER_academy', () => {
     if (!flag('ch2_start')) return;
@@ -178,6 +227,7 @@ export async function create() {
       G.audio.play('drip');
       G.ui.floaty(p.position.clone().setY(0.4), 'Splash!');
       p.teleport(p.safe);
+      G.events.emit('splash');
     }
   });
   z.start = () => chapter2(z);

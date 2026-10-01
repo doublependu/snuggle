@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Quality tiers + dynamic resolution. The tier is probed from the device, then refined from the
 // measured frame time during the first seconds of play; players can override it in Settings.
+// forest: the woods beyond the map's walls (procgen/forest.js): how far they and their mist reach (m), and
+// how many of the whole trees and of the far crowns are planted.
 export const TIERS = {
-  low: { pixelRatio: 1.0, shadows: false, shadowSize: 0, water: 0, foliage: 0.4, particles: 0.3, sway: false, drawDistance: 70 },
-  medium: { pixelRatio: 1.25, shadows: true, shadowSize: 1024, water: 1, foliage: 0.7, particles: 0.6, sway: true, drawDistance: 110 },
-  high: { pixelRatio: 1.5, shadows: true, shadowSize: 2048, water: 2, foliage: 1, particles: 1, sway: true, drawDistance: 160 },
+  low: { pixelRatio: 1.0, shadows: false, shadowSize: 0, water: 0, foliage: 0.6, particles: 0.3, sway: false, drawDistance: 70, forest: [55, 0.32, 0.7] },
+  medium: { pixelRatio: 1.25, shadows: true, shadowSize: 1024, water: 1, foliage: 0.7, particles: 0.6, sway: true, drawDistance: 110, forest: [70, 0.7, 0.9] },
+  high: { pixelRatio: 1.5, shadows: true, shadowSize: 2048, water: 2, foliage: 1, particles: 1, sway: true, drawDistance: 160, forest: [85, 1, 1] },
 };
 
 export function probeTier() {

@@ -11,16 +11,18 @@ const _seg = new Line3();
 const _p = new Vector3();
 const _look = new Vector3();
 const _foot = new Vector3();
+const WALK = 1.45; // m/s: a brisk walk, just under where the walk clip gives way to the run (gaitFor)
 const TURN_TIME = 0.34; // a pivot on the spot (the 'turn' clip plays meanwhile)
 const angleTo = (from, to) => MathUtils.euclideanModulo(to - from + Math.PI, Math.PI * 2) - Math.PI;
 
-// Walk or run for a speed, from the character's measured gait: the walk clip up to about 1.9x its natural
-// speed (a brisk stroll), then the run (with a little hysteresis so it doesn't flicker between them), each
-// played at the speed that keeps the planted foot still. Used by Pip, the NPCs and her friends.
+// Walk or run for a speed, from the character's measured gait: the walk clip up to about twice its natural
+// speed (a brisk walk: Pip's on a keyboard), then the run (with a little hysteresis so it doesn't flicker
+// between them), each played at the speed that keeps the planted foot still. Used by Pip, the NPCs and her
+// friends.
 export function gaitFor(h, speed, wasRun = false) {
   const walk = h.gait('walk'),
     run = h.gait('run');
-  const up = (walk?.speed || 0.95) * (wasRun ? 1.7 : 1.9);
+  const up = (walk?.speed || 0.95) * (wasRun ? 2.0 : 2.15);
   if (speed < up || !run) return ['walk', MathUtils.clamp(speed / (walk?.speed || 0.95), 0.5, 2.2)];
   return ['run', MathUtils.clamp(speed / run.speed, 0.7, 3.4)];
 }
@@ -61,6 +63,7 @@ export class Player {
     this.humming = false;
     this.landTimer = 0;
     this.safe = new Vector3();
+    this.groundN = new Vector3(0, 1, 0); // the ground's normal under her (world/collision.js)
     this.stepPhase = 0;
     this.turnT = 0;
     this.stepWas = null;
@@ -91,8 +94,8 @@ export class Player {
     this.root.rotation.y = facing;
   }
 
-  // Sprinting (faster than her normal run): shy Grumblings (sparrows, grey ones) startle at it. Only sprinting,
-  // because on a keyboard her normal pace is a run; there is no key for a gentler walk.
+  // Running flat out: shy Grumblings (sparrows, grey ones) startle at it. On a keyboard that is Shift (the move
+  // keys alone walk); on a gamepad the sprint button; on the touch stick, pushing it right out.
   get rushing() {
     return this.speed > 3.6;
   }
@@ -155,7 +158,9 @@ export class Player {
     if (amount > 0.01) _m.divideScalar(Math.max(amount, 1e-6));
 
     this.humming = !locked && input.humHeld && this.canHum !== false;
-    let top = amount * 3.2;
+    // a keyboard has no half-pressed keys: the move keys walk (the walk clip's brisk stroll), Shift runs.
+    // Sticks are analog: up to an easy jog, and the sprint button runs.
+    let top = amount * (input.device === 'keyboard' ? WALK : 3.2);
     if (input.sprintHeld && amount > 0.5) top = 4.7;
     if (this.humming) top = Math.min(top, 1.15);
     top *= this.moveScale;
@@ -201,7 +206,13 @@ export class Player {
       G.audio.play('jump');
     }
     this.velocity.y -= 13 * dt;
-    if (this.onGround && this.velocity.y < 0) this.velocity.y = -2.5;
+    if (this.onGround) {
+      // Follow the ground: on a slope she rises or drops with it, so her pace over the ground is the same up
+      // steps as on the flat, plus a little push down to stay on it. (It used to be a flat 2.5 m/s down, which
+      // on a 30 degree ramp left a walk only 0.3 m/s of climb.)
+      const n = this.groundN;
+      this.velocity.y = -(n.x * this.velocity.x + n.z * this.velocity.z) / n.y - 1;
+    }
 
     // integrate + collide in substeps
     const steps = dt > 1 / 45 ? 3 : 2;
@@ -215,8 +226,15 @@ export class Player {
       const before = _seg.start.y;
       const g = G.collision.collideCapsule(_seg, this.radius);
       const dy = _seg.start.y - before;
+      // standing still on a slope: the ground pushes her out along its normal, a little downhill every step,
+      // so she would creep down the stairs. Keep her where she is (only a real shove, from a wall, moves her).
+      const creep = g && amount < 0.05 && Math.hypot(_seg.start.x - this.position.x, _seg.start.z - this.position.z) < 0.02;
+      if (creep) _seg.start.set(this.position.x, _seg.start.y, this.position.z);
       this.position.set(_seg.start.x, _seg.start.y - this.radius, _seg.start.z);
-      if (g) grounded = true;
+      if (g) {
+        grounded = true;
+        this.groundN.copy(G.collision.groundNormal);
+      }
       if (dy < -1e-4 && this.velocity.y > 0) this.velocity.y = 0; // head bump
     }
     const wasAir = !this.onGround;

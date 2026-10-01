@@ -8,11 +8,15 @@ import { materialFor } from '../../render/materials.js';
 import { makeCreature, animateParts } from '../../actors/creatures.js';
 import { SPECIES } from '../../content/species.js';
 import { bigTreeGeometry, candy, lotusBud, lotusField, noteSign } from '../../procgen/props.js';
+import { addForest } from '../../procgen/forest.js';
+import { addFlowers } from '../../procgen/flowers.js';
+import { addSigns } from '../signs.js';
+import { Routes, startGuide, signsFor } from '../../systems/wayfinder.js';
 import { chapter1, wireAcademy, refreshObjective } from '../../story/chapter1.js';
 import { chapter3Academy, placeCast3 } from '../../story/chapter3.js';
 import { Grumbling } from '../../actors/grumbling.js';
 import '../../systems/greys.js'; // the grey Grumblings' behaviour (Chapter 3's morning)
-import { talk, ask } from '../../story/helpers.js';
+import { talk, ask, offerHelper } from '../../story/helpers.js';
 import { writeSave } from '../../core/save.js';
 
 // Golden-pink evening before the night market: low sun over the harbour, long shadows.
@@ -34,6 +38,28 @@ const GREY_MORNING = {
   hemiSky: '#dfe4ec', hemiGround: '#88907a', hemi: 1.8, sunColor: '#efe8dc', sunI: 1.5, sun: new Vector3(-0.35, 0.55, 0.6),
   clouds: 18, cloudColor: '#dadde2', cloudShade: '#a7adb6', skyline: { from: 1.2, to: 1.9 }, peakColor: '#9aa3ad', shadows: false,
 };
+
+// The paths, as a graph for the guide and the fingerposts (systems/wayfinder.js): [x, z] of each path point
+// (z = -y of tools/blender/build_zones.py's PATHS), and the chains of points that are joined.
+const NODES = {
+  gate: [0, 31], c0: [0, 21], c1: [0, 8], cW: [-12, 8], kitchen: [-21, 12], cSW: [-12, 14], mgE: [-14.2, 24], mgW: [-17.8, 24], laundry: [-23, 27],
+  cE: [12, 8], br0: [21, 12], br1: [27, 12], e0: [30, 12], e1: [38, 6], e2: [38, -16], lib: [32, -21], o0: [14, 18], o1: [20, 30], over: [24, 36],
+  pf: [0, -9.5], pE: [3.8, -9.5], pNE: [3.8, -18.6], n0: [0, -19.5], n1: [0, -28], hall: [0, -31.8], pr0: [-6, -30], field: [-14, -40],
+  d0: [-10, -2], d1: [-26, -14], d2: [-26, -26], pg0: [-24, -30], pg1: [-30, -37], pagoda: [-34, -41],
+};
+const EDGES = ['gate c0 c1 pf pE pNE n0 n1 hall', 'c1 cW kitchen', 'cW cSW mgE mgW laundry', 'c1 cE br0 br1 e0 e1 e2 lib', 'cE o0 o1 over', 'n1 pr0 field', 'pr0 pg0 pg1 pagoda', 'c1 d0 d1 d2 pg0'];
+// A name board in front of every building and place: text, picture, x, z, the way it faces (0 = south).
+const E = Math.PI / 2;
+const PLACES = [
+  ['Lesson Pavilion', '🎵', -5.4, -8.8, 0], ['Great Hall', '🏯', 3.4, -32.4, 0], ['Library', '📚', 32.4, -22.2, 0], ['Kitchen', '🥧', -21.4, 9.2, E],
+  ['Dormitories', '🛏️', -27.3, -20, E], ['Old Pagoda', '🗼', -33.2, -39.2, E / 2], ['Laundry Yard', '🧺', -14.4, 21.9, E], ['Practice Field', '⚽', -9.6, -36.6, 0],
+  ['Harbour Overlook', '🌊', 27.4, 35.6, Math.PI], ['Lotus Pond', '🌸', 15.4, -2.4, -E],
+];
+// Fingerposts where the paths fork: x, z, and the places their arms point to.
+const FINGERS = [
+  [-2.9, 23.5, ['Lesson Pavilion', 'Kitchen', 'Laundry Yard', 'Library']], [13.4, 6.4, ['Library', 'Harbour Overlook', 'Lotus Pond']], [31.2, 10.4, ['Library', 'Lesson Pavilion']],
+  [-11.4, -3.6, ['Dormitories', 'Old Pagoda', 'Practice Field']], [2.6, -27, ['Great Hall', 'Practice Field', 'Old Pagoda']],
+];
 
 export async function create() {
   const z = new Zone('academy');
@@ -61,6 +87,14 @@ export async function create() {
   z.collision.addCylinder(bt.position.clone().setY(-0.5), 0.6, 5, 8);
   z.collision.build();
   z.scatter(9, [{ x: 0, z: 0, r: 6 }]);
+  // the play area (the inside faces of the invisible walls; the cliff above the harbour to the south), and
+  // the woods beyond it
+  z.edge = { minX: -46.75, maxX: 46.75, minZ: -53.75, maxZ: 40 };
+  addForest(z, { rect: z.edge, kinds: ['pine', 'tree'], far: ['pine', 'tree'], seed: 9, minY: -0.5, lines: { z: [40, 43, 46.5] }, lowMist: 1.4 });
+  addFlowers(z, { rect: z.edge, count: 520, seed: 9 });
+  const routes = new Routes(z, NODES, EDGES);
+  addSigns(z, signsFor(z, routes, PLACES, FINGERS));
+  startGuide(z, routes);
   await z.populateNPCs(undefined, { essential: ['fang', 'tangtang', 'weibao'] });
   z.safeMinY = -0.25; // never "save" a spot at the bottom of the pond
 
@@ -105,25 +139,24 @@ export async function create() {
   if (flag('lotusBloomed')) bloomAll();
   z.addInteractable({
     position: buds[0],
-    radius: 3,
-    label: () => (G.collection.helper('umbrella') ? 'Water the lotus buds' : 'Thirsty lotus buds'),
+    radius: 4.2, // the first bud stands 2 m out in the water: from the shore, not only from its very edge
+    label: () => (G.collection.helper('umbrella') ? 'Water the lotus buds' : 'Look at the lotus buds'),
     enabled: () => !flag('lotusBloomed'),
     action: async () => {
       if (!G.collection.helper('umbrella')) {
         await talk([['xiaopei', 'These lotus buds look so thirsty… If only I had a little rain cloud to help.']]);
-        if (G.collection.has('cloud')) G.ui.toast('💡 Equip the Soggy Cloud as your helper in the Sprite Book.', 4);
-        return;
+        if (!(await offerHelper('umbrella', '(Ask your Soggy Cloud to water them?)'))) return;
       }
       const r = new Rain({ count: 160, size: new Vector3(8, 3, 3), speed: 5, length: 0.25, wrap: false, opacity: 0.6, color: '#bfe3ff' });
       r.center.set((buds[0].x + buds[buds.length - 1].x) / 2, buds[0].y + 3, buds[0].z);
       z.group.add(r.mesh);
-      G.ui.toast('☁️ Your Soggy Cloud rains happily over the pond!', 3);
+      G.ui.toast('☁️ Your Soggy Cloud rains happily over the pond! The buds open into pads you can hop across.', 4);
       G.audio.play('sparkle');
+      flag('lotusBloomed', true); // at once: the prompt goes, so it can't be asked for twice
       setTimeout(() => {
         r.mesh.removeFromParent();
         bloomAll();
         G.audio.play('chime');
-        flag('lotusBloomed', true);
         G.collection.cozy(6, 'Watered the lotus', buds[2].clone().setY(1));
         writeSave(G.save);
       }, 1600);
@@ -175,8 +208,7 @@ export async function create() {
       action: async () => {
         if (!G.collection.helper('read')) {
           await talk([[null, 'The ink is faded and smudged… Maybe someone who knows all about homework could read it.']]);
-          if (G.collection.has('homework')) G.ui.toast('💡 Equip Unfinished Homework as your helper to read old notes.', 4);
-          return;
+          if (!(await offerHelper('read', '(Ask Unfinished Homework to read it?)'))) return;
         }
         await talk([['homework', '(reading carefully) ' + (NOTES[m.data.note] || '…')]]);
         if (!G.save.story['note_' + m.data.note]) {
@@ -269,7 +301,7 @@ export async function create() {
       p.teleport(p.safe);
       if (!G.save.story.splashTip) {
         G.save.story.splashTip = true;
-        G.ui.toast('💡 The pond is deep! Maybe the lotus buds could help you cross.', 4);
+        G.ui.toast('💡 The pond is deep! Take the little bridge to get round it. The lotus buds might get you to the island.', 5.5);
       }
     }
   });
@@ -288,6 +320,16 @@ export async function create() {
       }
     });
   }
+  // the pause menu's "Things to do here"
+  const count = (keys) => keys.filter((k) => G.save.story[k]).length;
+  z.todo = () => [
+    ['🍬 Lemon candies', Object.keys(G.save.candies).length, candies.length],
+    ['🛏️ Sleepy sprites tucked in', count(z.markersBy('POINT_sleepy_').map((m) => 'kind_' + m.name)), 3],
+    ['📜 Old notes read', count(Object.keys(NOTES).map((k) => 'note_' + k)), 3],
+    ['🌸 Lotus buds watered', count(['lotusBloomed']), 1],
+    ['📚 A classmate helped', count(['kind_books']), 1],
+    ['🥧 A tart shared', count(['kind_share']), 1],
+  ];
   z.killY = -12;
   z.stepFx = '#d6c6a4'; // dust on the paths
   if (ch3) placeCast3(z);

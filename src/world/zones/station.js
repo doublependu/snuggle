@@ -1,10 +1,21 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Prologue, part 2: Lantern Bay station platform, the harbour plaza and the hill path to the Academy.
 import { CanvasTexture, Mesh, MeshBasicMaterial, PlaneGeometry, SRGBColorSpace, Vector3 } from 'three';
-import { G } from '../../game.js';
+import { G, flag } from '../../game.js';
 import { Zone } from '../zone.js';
+import { Rain } from '../../render/vfx.js';
+import { addForest } from '../../procgen/forest.js';
+import { addFlowers } from '../../procgen/flowers.js';
+import { addSigns } from '../signs.js';
+import { Routes, startGuide, signsFor } from '../../systems/wayfinder.js';
 import { prologueStation } from '../../story/prologue.js';
 import { talk } from '../../story/helpers.js';
+
+// The way from the platform up the hill, for the guide and the fingerposts (systems/wayfinder.js): [x, z, y?].
+const NODES = { plat: [-6, -1.3, 0.9], p1: [8, -3.2, 0.9], p2: [16.6, -3.7], pz: [18.5, -13.5], plaza: [30, -17], h1: [24, -32], h2: [36, -46], h3: [28, -60], h4: [30, -70] };
+const EDGES = ['plat p1 p2 pz plaza h1 h2 h3 h4'];
+const PLACES = [['Mistbloom Academy', '🏮', 27.2, -68.6, 0]];
+const FINGERS = [[17.6, -5.8, ['Mistbloom Academy']], [27.6, -15.6, ['Mistbloom Academy']], [22.2, -31.2, ['Mistbloom Academy']], [37.9, -46.4, ['Mistbloom Academy']], [26.1, -60.4, ['Mistbloom Academy']]];
 
 export async function create() {
   const z = new Zone('station');
@@ -19,6 +30,21 @@ export async function create() {
   z.addWater({ deep: '#2b5f66', shallow: '#4f8f8c' });
   z.collision.build();
   z.scatter(3, [{ x: 30, z: -60, r: 4 }]);
+  // the play area (the inside faces of the invisible walls; the sea to the south), and the woods beyond it:
+  // the railway runs on through them both ways, and so does the path behind the Academy's gate
+  z.edge = { minX: -23.8, maxX: 42.8, minZ: -75.8, maxZ: 4.5 };
+  addForest(z, {
+    rect: z.edge, kinds: ['tree', 'maple'], far: ['tree', 'pine'], seed: 3, minY: -0.3, lines: { z: [0.2, 4.3, 4.7, 6.5] },
+    clear: [{ x0: -400, z0: 2.2, x1: 400, z1: 2.2, r: 4.2 }, { x0: 30, z0: -70, x1: 30, z1: -220, r: 3 }],
+  });
+  addFlowers(z, { rect: z.edge, count: 420, seed: 3 });
+  const routes = new Routes(z, NODES, EDGES);
+  addSigns(z, [
+    ...signsFor(z, routes, PLACES, FINGERS),
+    // the station's own board, over the building's door (it used to be blank)
+    { kind: 'board', text: 'Lantern Bay', icon: '🚉', at: new Vector3(-4, 4.2, -8.82), facing: 0, w: 3, place: true, range: 13, greet: true },
+  ]);
+  startGuide(z, routes);
   await z.populateNPCs(undefined, { essential: ['tangtang'] });
   // lantern glows along the platform and the hill path
   for (const m of z.markersBy('PLACE_lamp_post')) {
@@ -44,12 +70,33 @@ export async function create() {
       }
     };
   });
+  z.todo = () => [['💬 Friendly chats', ['vendor', 'fisher', 'kid'].filter((id) => G.save.story['kind_' + id]).length, 3]];
   z.onTrigger('TRIGGER_academy', () => {
     if (!G.save.story.prologueDone) return G.ui.toast('Talk to the girl with the sign on the platform first.', 3);
     G.goto('academy', 'SPAWN_gate');
   });
   z.stepFx = '#d2c3a6';
   G.audio.mix('station');
+  // the first arrival: the train's rain has softened to a drizzle, which clears while Sunny says hello
+  // (story/prologue.js starts its sound and calls z.clearUp)
+  if (!flag('prologueDone')) {
+    const rain = new Rain({ count: Math.round(260 * G.quality.tier.particles) + 60, size: new Vector3(26, 10, 26), speed: 9, length: 0.3, opacity: 0.22 });
+    z.group.add(rain.mesh);
+    let fade = 0; // seconds left of the clearing-up (0: still drizzling)
+    const total = 14;
+    z.updaters.push((dt) => {
+      rain.center.copy(G.camera.position).setY(G.camera.position.y + 2);
+      if (!fade) return;
+      fade = Math.max(0.001, fade - dt);
+      rain.mat.uniforms.opacity.value = 0.22 * (fade / total);
+      if (fade <= 0.001) rain.mesh.visible = false;
+    });
+    z.clearUp = () => {
+      if (fade) return;
+      fade = total;
+      G.audio.bed('rain', 0, total);
+    };
+  }
   z.killY = -6;
   z.start = () => prologueStation(z);
   return z;

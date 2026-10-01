@@ -18,12 +18,14 @@
 .chips { display: flex; gap: 6px; }
 .chip { font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #fbf4e8d9; border: 2px solid #e2cfb2; }
 .chip:empty { display: none; }
-.objective { z-index: 3; position: absolute; top: max(12px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); max-width: min(560px, 70vw);
+.topmid { z-index: 3; position: absolute; top: max(12px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); width: max-content; max-width: min(720px, 92vw);
+  display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.objective { max-width: min(560px, 70vw);
   padding: 7px 16px; border-radius: 999px; background: #2f6f73e6; color: #fff; font-weight: 700; font-size: 14px; text-align: center;
   box-shadow: 0 3px 12px #0003; transition: opacity .4s, transform .4s; }
 .objective:empty { opacity: 0; }
 .objective.new { animation: pop .5s ease; }
-@keyframes pop { 30% { transform: translateX(-50%) scale(1.08); } }
+@keyframes pop { 30% { transform: scale(1.08); } }
 .hud-tr { z-index: 3; position: absolute; top: max(12px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); display: flex; gap: 8px; pointer-events: auto; }
 .round { width: 44px; height: 44px; border-radius: 50%; border: 2px solid #e2cfb2; background: #fbf4e8e6; color: #4a3428; font-weight: 800; font-size: 18px;
   display: grid; place-items: center; cursor: pointer; box-shadow: 0 2px 8px #0002; padding: 0; }
@@ -57,7 +59,7 @@ body.touch .helper { bottom: auto; top: 84px; }
 .soothe.company .pulse { border-color: #d6dfef; }
 
 /* toasts, chapter cards, fade */
-.toasts { z-index: 3; position: absolute; top: 64px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.toasts { display: flex; flex-direction: column; align-items: center; gap: 6px; max-width: 100%; }
 .toast { padding: 8px 16px; border-radius: 14px; background: #fbf4e8f2; border: 2px solid #e8c79a; font-weight: 700; font-size: 14px; box-shadow: 0 3px 12px #0003;
   animation: toastIn .35s ease, toastOut .5s ease forwards; animation-delay: 0s, var(--life, 2.6s); }
 @keyframes toastIn { from { opacity: 0; transform: translateY(-8px); } }
@@ -160,7 +162,10 @@ body.touch .touchui { display: block; }
 
 .debug { z-index: 9; position: absolute; left: 8px; bottom: 8px; font: 11px/1.35 ui-monospace, monospace; background: #000a; color: #cfe; padding: 6px 8px; border-radius: 6px; white-space: pre; }
 body.touch .debug { bottom: auto; top: 120px; }
-@media (max-width: 640px) { .cozy .bar { width: 72px; } .objective { font-size: 12px; top: 58px; } }
+/* narrow screens: the objective goes under the top row of buttons, and stays clear of the helper's portrait
+   (which loses its caption there) */
+@media (max-width: 640px) { .cozy .bar { width: 72px; } .objective { font-size: 12px; max-width: calc(100vw - 136px); } .topmid { top: max(58px, calc(env(safe-area-inset-top) + 46px)); }
+  body.touch .helper { padding: 3px; } body.touch .helper span { display: none; } }
 @media (prefers-reduced-motion: reduce) { #ui * { animation-duration: .01s !important; } }
 
 /* phone zoom recovery (ui/zoomlock.js) and small overlays */
@@ -239,3 +244,20 @@ body.touch .cook.nuts, body.touch .cook.lanterns { bottom: 118px; }
 .entry { font-size: calc(12px * var(--ts)); }
 @media (max-width: 640px) { .objective { font-size: calc(12px * var(--ts)); } }
 @media (max-height: 520px) { .menu .btn { font-size: calc(14px * var(--ts)); } }
+/* the guide's arrow (it turns to point the way) and the name of a place she walks up to */
+.way { display: flex; align-items: center; gap: 8px; padding: 4px 12px 4px 8px; border-radius: 999px; background: #2f6f73e0; color: #fff; font-weight: 700; font-size: calc(13px * var(--ts)); box-shadow: 0 2px 8px #0003; }
+.way[hidden] { display: none; }
+.way i { display: inline-block; font-style: normal; width: 1.3em; height: 1.3em; line-height: 1.3em; text-align: center; color: #ffd98a; transition: transform .15s linear; }
+.toast.place { background: #fbf4e8e8; color: #4a3428; font-weight: 700; letter-spacing: .02em; }
+/* Skip, on a conversation with more lines to come: it fills while the advance key is held */
+.dialogue .skip { position: absolute; top: -14px; right: 16px; overflow: hidden; padding: 3px 12px; border: 0; border-radius: 999px; background: #6d5a4a; color: #fff; font: inherit; font-weight: 800;
+  font-size: calc(12px * var(--ts)); cursor: pointer; pointer-events: auto; }
+.dialogue .skip i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: #e0662c; }
+.dialogue .skip span { position: relative; }
+body.touch .dialogue .skip { padding: 7px 16px; top: -22px; }
+/* pause menu: things to do here */
+.todo { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.todo:empty { display: none; }
+.todo h3 { flex-basis: 100%; margin: 0 0 2px; font-size: calc(14px * var(--ts)); text-align: center; }
+.todo span { padding: 3px 10px; border-radius: 999px; background: #f1e3cc; font-size: calc(13px * var(--ts)); }
+.todo span.done { background: #cfe6c2; }

@@ -37,7 +37,7 @@ export function makeWater(opts = {}) {
       #include <common>
       #include <fog_pars_fragment>
       uniform float uTime; uniform vec3 deep, shallow, skyTop, skyHorizon, sunDir; uniform float grey;
-      uniform sampler2D uLampMap; uniform vec4 uLampRect; uniform float uLampOn; uniform vec4 uHFog, uHFogWall;
+      uniform sampler2D uLampMap; uniform vec4 uLampRect; uniform float uLampOn; uniform vec4 uHFog, uHFogWall, uMistRect, uMistP; uniform float uMistSea;
       varying vec3 vWorld; varying float vShore;
       float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float n2(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
@@ -82,5 +82,8 @@ export function makeWater(opts = {}) {
   m.uniforms.grey = shared.uFade;
   m.uniforms.uHFog = shared.uHFog;
   m.uniforms.uHFogWall = shared.uHFogWall;
+  m.uniforms.uMistRect = shared.uMistRect;
+  m.uniforms.uMistP = shared.uMistP;
+  m.uniforms.uMistSea = shared.uMistSea;
   return m;
 }

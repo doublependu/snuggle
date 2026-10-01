@@ -1,11 +1,33 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Small helpers shared by the story scripts.
 import { Vector3 } from 'three';
-import { G, until } from '../game.js';
+import { G, until, wait } from '../game.js';
+import { SPEAKERS } from '../ui/ui.js';
+import { SPECIES } from '../content/species.js';
 
 export async function talk(lines) {
-  for (const [who, text, opts] of lines) await G.ui.say(who, text, opts);
+  for (let i = 0; i < lines.length; i++) {
+    const [who, text, opts] = lines[i];
+    await G.ui.say(who, text, { ...opts, more: lines.length - 1 - i });
+  }
   G.ui.closeDialogue();
+}
+
+// Comments said as speech bubbles over whoever says them, one after another, while the player keeps walking
+// (after a soothe, a flock, a memory: nothing the story waits for). Narration (who = null) is a toast.
+export async function chat(lines) {
+  for (const [who, text] of lines) {
+    const life = 2 + text.length / 16;
+    const n = G.npcs.get(who === 'honk' ? 'weibao' : who);
+    const sprite = G.sprites?.list.find((s) => s.id === who);
+    const name = SPEAKERS[who]?.[0];
+    if (!who) G.ui.toast(text, life);
+    else if (who === 'xiaopei') G.ui.bubble(G.player.root, text, life, 1.6);
+    else if (n && !n.hidden) G.ui.bubble(n.root, who === 'honk' ? '🪿 ' + text : text, life, 1.55);
+    else if (sprite) G.ui.bubble(sprite.obj, text, life, 0.55);
+    else G.ui.bubble(G.player.root, `<b>${name || who}:</b> ${text}`, life, 1.6);
+    await wait(life + 0.4);
+  }
 }
 
 // Ask a question; resolves to the chosen index (dialogue stays open for the reply).
@@ -13,7 +35,33 @@ export function ask(who, text, choices) {
   return G.ui.say(who, text, { choices });
 }
 
-export function objective(text) {
+// A spot that needs a Charm Sprite's ability (thirsty lotus buds, a faded note, a lost child). If that sprite
+// is in the book but isn't the helper, offer to equip it right there: the Sprite Book is the only other
+// place to do it, and easy to miss. Resolves true when it is helping now.
+export async function offerHelper(ability, question) {
+  if (G.collection.helper(ability)) return true;
+  const id = Object.keys(SPECIES).find((k) => SPECIES[k].ability === ability);
+  if (!id || !G.collection.has(id)) return false;
+  const a = await ask('xiaopei', question, ['Yes, please', 'Not now']);
+  G.ui.closeDialogue();
+  if (a !== 0) return false;
+  G.collection.equip(id);
+  return true;
+}
+
+// target: where the objective is, for the guide (systems/wayfinder.js): an NPC's or Grumbling's id, a marker's
+// name, a position, a list of those (the nearest counts), or a function that returns one. null: nowhere.
+// A friend's passing remark, as a bubble: once a visit for each key, and never over a scene.
+const remarked = new Set();
+export function remark(key, who, text) {
+  const k = G.zone?.id + ':' + key;
+  if (remarked.has(k) || G.frozen || G.ui.dialogueOpen) return;
+  remarked.add(k);
+  chat([[who, text]]);
+}
+
+export function objective(text, target = null) {
+  G.goal = text ? target : null;
   G.ui.setObjective(text);
   G.events.emit('objective', text);
 }
@@ -21,7 +69,7 @@ export function objective(text) {
 // {action} shows the key or button bound to it on the device in use (the player may have changed them).
 const HINTS = {
   move: {
-    keyboard: 'Move with <b>{move}</b>. Click the view to look around with the <b>mouse</b>.',
+    keyboard: 'Walk with <b>{move}</b>, hold <b>{sprint}</b> to run. Click the view to look around with the <b>mouse</b>.',
     gamepad: 'Move with the <b>left stick</b>, look with the <b>right stick</b>.',
     touch: 'Drag on the <b>left</b> to walk, drag on the <b>right</b> to look around.',
   },

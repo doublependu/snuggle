@@ -210,6 +210,12 @@ export class Input {
     if (this.humToggle) return this.humLatched;
     return this.keys.has('hum') || this.mouseHum || this.touch.hum || this.pad.hum;
   }
+  // Interact / Jump held down (holding it skips a long conversation, ui/ui.js).
+  get confirmHeld() {
+    const b = this.pad.prev,
+      pb = this.padBind;
+    return this.keys.has('interact') || this.keys.has('jump') || !!(b[pb.jump] || b[pb.interact]);
+  }
   get sprintHeld() {
     return this.keys.has('sprint') || this.touch.sprint || this.pad.sprint;
   }

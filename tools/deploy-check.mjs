@@ -3,7 +3,7 @@
 // content types, caching (immutable /assets/, revalidated HTML), security headers, model revisions, and
 // that build-only files aren't served. Reports the bytes on the wire and the compression per file.
 // Usage: npm run build && npm run cf:check                 (starts `wrangler dev` on dist/ itself)
-//        npm run cf:check -- https://snuggle-sorcery.<you>.workers.dev   (a deployed site)
+//        npm run cf:check -- https://snuggle.<you>.workers.dev   (a deployed site)
 import { spawn } from 'node:child_process';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';

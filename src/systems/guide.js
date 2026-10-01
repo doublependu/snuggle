@@ -5,7 +5,7 @@
 // a little glowing sparrow flies ahead, leaving a trail of sparkles to the parent.
 import { Vector3 } from 'three';
 import { G, flag } from '../game.js';
-import { talk } from '../story/helpers.js';
+import { talk, offerHelper } from '../story/helpers.js';
 import { makeCreature } from '../actors/creatures.js';
 import { SPECIES } from '../content/species.js';
 import { writeSave } from '../core/save.js';
@@ -45,9 +45,8 @@ export function setupGuide(z) {
         await talk([['kid', fam.lost]]);
         if (!G.collection.helper('guide')) {
           await talk([['xiaopei', 'Don’t cry. We’ll find them… I just need a way to know where they are.', { face: 'worried' }]]);
-          if (G.collection.has('sparrow')) G.ui.toast('💡 Equip a Wistful Sparrow as your helper in the Sprite Book: its Guide ability knows the way.', 5);
-          else G.ui.toast('💡 Wistful Sparrows know the way home. Soothe a flock, then come back!', 4.5);
-          return;
+          if (!G.collection.has('sparrow')) return void G.ui.toast('💡 Wistful Sparrows know the way home. Soothe a flock, then come back!', 4.5);
+          if (!(await offerHelper('guide', '(Ask a Wistful Sparrow to show the way?)'))) return;
         }
         await talk([
           ['xiaopei', 'My sparrow knows the way. Hold on to my jacket, okay?', { face: 'smile' }],
@@ -65,6 +64,7 @@ export function setupGuide(z) {
   }
 
   z.updaters.push((dt) => {
+    z.leading = !!leading; // the objective's guide (systems/wayfinder.js) waits meanwhile
     if (!leading) {
       if (bird) bird.visible = false;
       if (birdGlow >= 0) G.fx.glows.set(birdGlow, _t.set(0, -99, 0), null, 0);

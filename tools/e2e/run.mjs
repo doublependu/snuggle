@@ -8,7 +8,7 @@ import { chromium } from 'playwright-core';
 import { existsSync, mkdirSync } from 'node:fs';
 import { TESTS } from './tests.mjs';
 
-const PORT = 5199;
+const PORT = +process.env.E2E_PORT || 5199;
 const OUT = 'tools/e2e/out';
 mkdirSync(OUT, { recursive: true });
 const executablePath = process.env.CHROME || ['/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find(existsSync);

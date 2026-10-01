@@ -116,7 +116,7 @@ export function installEyes() {
     'Look closer': 'a faint glow',
     'Float lanterns': 'paper lanterns stacked at the end of the pier',
     'Sit down': 'a bench',
-    'Thirsty lotus buds': 'drooping lotus buds in the pond',
+    'Look at the lotus buds': 'drooping lotus buds in the pond',
     'Water the lotus buds': 'drooping lotus buds in the pond',
   };
   const HAZARD = { 0x8fc3e8: 'a rain ring on the ground', 0x4a3428: 'a shadow on the ground where something will land', 0xb69ccf: 'a sighing ripple', 0x9aa6bf: 'a grey ripple' };
@@ -261,6 +261,24 @@ export function installEyes() {
       const [looks, r] = PLACES[piece] || [];
       if (!looks || r < 1.5) continue; // small props are scenery
       see(m, looks, 'place', m.position, Math.min(4, r), { size: r }, r + 1);
+    }
+    // name boards near enough to read (the letters about 10 px tall or more). A board names the building it
+    // stands by: its words go with that building, if she can see it too (walking to the board itself would
+    // leave her standing outside). A board with no building by it (a field, a pond) is a place of its own.
+    for (const sg of zone.signs?.list || []) {
+      if (sg.kind === 'finger' || sg.dim?.()) continue;
+      const foot = sg.kind === 'post' ? sg.at : sg.at.clone().setY(sg.at.y - 1.6);
+      if (foot.distanceTo(me) >= 16 || !onScreen(G, foot.clone().setY(foot.y + 1.7), 1)) continue;
+      const by = zone
+        .markersBy('PLACE_')
+        .filter((m) => (PLACES[m.name.slice(6).replace(/[._]?\d+$/, '')] || [0, 0])[1] >= 2 && Math.hypot(m.position.x - foot.x, m.position.z - foot.z) < 9)
+        .sort((a, b) => Math.hypot(a.position.x - foot.x, a.position.z - foot.z) - Math.hypot(b.position.x - foot.x, b.position.z - foot.z))[0];
+      const said = `a sign that says “${sg.text}”`;
+      if (!by) see(sg, said, 'place', foot, 1.9, { size: 2 }, 1);
+      else {
+        const t = out.find((o) => o.kind === 'place' && Math.hypot(o.pos[0] - by.position.x, o.pos[2] - by.position.z) < 0.1);
+        if (t && !t.looks.includes(said)) t.looks += ', with ' + said;
+      }
     }
     for (const [z, re, looks, r] of FEATURES) {
       if (z !== zone.id) continue;

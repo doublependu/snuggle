@@ -3,6 +3,7 @@
 import { G } from '../game.js';
 import { SPECIES } from '../content/species.js';
 import { writeSave } from '../core/save.js';
+import { thumb } from '../ui/thumb.js';
 
 export class Collection {
   constructor() {
@@ -18,7 +19,10 @@ export class Collection {
     G.ui.setCozy(s.cozy);
     G.ui.setChips(s.tarts, Object.keys(s.candies).length, this.candyTotal, s.chestnuts || 0);
     const h = s.helper && SPECIES[s.helper];
-    G.ui.setHelper(h ? h.name : '', h ? G.menus.thumb(s.helper) : '', h ? h.abilityName : '');
+    const img = h ? thumb(s.helper) : '';
+    G.ui.setHelper(h ? h.name : '', img, h ? h.abilityName : '');
+    // the portrait can come out blank before the first frame: once more a little later
+    if (h && !img && !this.retry) this.retry = setTimeout(() => ((this.retry = 0), this.refreshHud()), 1500);
     G.touch?.setAssist(this.assistLabel());
   }
 

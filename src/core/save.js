@@ -21,8 +21,9 @@ export function defaultSave() {
     tarts: 0,
     chestnuts: 0,
     candies: {}, // collectible id -> true
-    // keys / pad: only the actions the player rebound (core/input.js); textSize scales the reading text
-    settings: { volume: 0.8, music: 0.6, sensitivity: 1, invertY: false, reducedMotion: false, humToggle: false, quality: 'auto', textSize: 1, keys: {}, pad: {} },
+    // keys / pad: only the actions the player rebound (core/input.js); textSize scales the reading text;
+    // textSpeed: 1 normal, 2 fast, 0 all at once; hints: the guide (systems/wayfinder.js) 'auto' | 'always' | 'off'
+    settings: { volume: 0.8, music: 0.6, sensitivity: 1, invertY: false, reducedMotion: false, humToggle: false, quality: 'auto', textSize: 1, textSpeed: 1, hints: 'auto', keys: {}, pad: {} },
   };
 }
 

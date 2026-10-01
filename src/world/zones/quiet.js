@@ -15,6 +15,8 @@ import { Memories } from '../../systems/memories.js';
 import { district, refreshObjective3, MEMORIES } from '../../story/chapter3.js';
 import { talk, ask } from '../../story/helpers.js';
 import { writeSave } from '../../core/save.js';
+import { addSigns } from '../signs.js';
+import { Routes, startGuide, signsFor } from '../../systems/wayfinder.js';
 
 // Overcast late afternoon: a flat grey sky and light that is already fading.
 export const QUIET = {
@@ -30,6 +32,10 @@ const GREY_OUT = {
 };
 // glTF-space rectangle the lamp map covers (the lane, the alley, the square and the fog street)
 const LAMP_RECT = { minX: -26, minZ: -24, maxX: 26, maxZ: 50 };
+
+// The lane from the ferry to the fog, with the alley off it, for the guide (systems/wayfinder.js): [x, z].
+const NODES = { ferry: [0, -24], plaza: [0, -16], laneN: [0, -11], bridge: [0, 0], laneM: [0, 13], alley0: [4.6, 13], alley1: [12, 13], laneS: [0, 21], square: [0, 27], fogN: [0, 35], fog: [0, 39] };
+const EDGES = ['ferry plaza laneN bridge laneM laneS square fogN fog', 'laneM alley0 alley1'];
 
 export async function create() {
   const z = new Zone('quiet');
@@ -170,6 +176,27 @@ export async function create() {
     }
   });
 
+  // ---- signs: the ferry, and the forgotten shops, whose names are faded until their memory comes back
+  const routes = new Routes(z, NODES, EDGES);
+  const faded = (id) => () => !flag('mem_' + id);
+  const W = -Math.PI / 2;
+  addSigns(z, [
+    ...signsFor(z, routes, [['Ferry', '⛴️', 4.6, -20.8, 0]]),
+    { kind: 'post', text: 'Noticeboard', icon: '📜', at: new Vector3(-7.7, 0, -15.2), facing: 0, dim: faded('notice'), place: false },
+    { kind: 'board', text: 'Post Office', icon: '✉️', at: new Vector3(4.07, 3.4, -5), facing: W, w: 2.4, dim: faded('post') },
+    { kind: 'board', text: 'Sweet Shop', icon: '🍋', at: new Vector3(-4.07, 3.4, 5), facing: -W, w: 2.4, dim: faded('sweets') },
+    { kind: 'board', text: 'Teahouse', icon: '🍵', at: new Vector3(-11.91, 3.3, 26), facing: -W, w: 2.3, dim: faded('teahouse') },
+    { kind: 'board', text: 'Thread Shop', icon: '🧵', at: new Vector3(14.84, 3.3, 13), facing: W, w: 1.9, dim: faded('thread') },
+  ]);
+  z.on('flag', ({ name }) => name.startsWith('mem_') && z.signs.redraw());
+  startGuide(z, routes);
+
+  // the pause menu's "Things to do here"
+  z.todo = () => [
+    ['🚪 Neighbours checked on', Object.keys(NEIGHBOURS).filter((k) => flag('kind_' + k)).length, 3],
+    ['🌫️ Grey Grumblings kept company', G.save.sprites.grey || 0, z.markersBy('GRUMB_grey_').length],
+  ];
+
   // ---- the fog wall: too thick to go further (Chapter 4 begins here)
   z.onTrigger('TRIGGER_fogwall', () => {
     const p = G.player;
@@ -206,6 +233,7 @@ export async function create() {
       G.audio.play('drip');
       G.ui.floaty(p.position.clone().setY(0.4), 'Splash!');
       p.teleport(p.safe);
+      G.events.emit('splash');
     }
   });
   z.start = () => district(z);

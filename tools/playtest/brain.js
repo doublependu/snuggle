@@ -12,7 +12,7 @@ const now = () => Date.now();
 // the keys the game's hints show (the default bindings)
 const KEYS = { interact: 'KeyF', hum: 'KeyE', assist: 'KeyQ', jump: 'Space', book: 'Tab', sprint: 'ShiftLeft' };
 // prompts a curious player tries once when walking past
-const CURIOUS = /^(Tuck in the sleepy sprite|Read the note|Thirsty lotus buds|Water the lotus buds|Float lanterns|Talk)$/;
+const CURIOUS = /^(Tuck in the sleepy sprite|Read the note|Look at the lotus buds|Water the lotus buds|Float lanterns|Talk)$/;
 // clue words and what they bring to mind (for "Which Charm Sprite remembers this?")
 const IDEAS = [
   ['read', 'faded', 'word', 'paper', 'noticeboard', 'notice', 'sign', 'letter', 'note'],
@@ -270,7 +270,7 @@ export class Brain {
     const err = yawTo(s, t.pos[0], t.pos[2]);
     if (Math.abs(err) > 0.12) await this.hands.turn(-err / RAD_PER_PX);
   }
-  // Walk toward (x, z): steer by the camera, sprint on long open stretches, tiptoe near shy Grumblings, step
+  // Walk toward (x, z): steer by the camera, run (Shift) when there's room, walk near shy Grumblings, step
   // round what's in the way, pick up a lemon candy seen close by, and try something interesting once.
   async travel(s, x, z, { radius = 1, tiptoe = false, goal = null } = {}) {
     const [px, , pz] = s.me.pos;
@@ -321,9 +321,9 @@ export class Brain {
     if (Math.abs(err) < 1.3) keys.push('KeyW');
     const dodge = this.dodge(s);
     if (dodge) keys.push(dodge);
-    if (!tiptoe && !shy && dist > 7 && this.clearAhead(s) > 4 && Math.abs(err) < 0.4) keys.push(this.key('sprint'));
-    // keyboard has no walk key: tiptoe by letting go of W now and then
-    if ((tiptoe || shy) && s.me.speed > 1.7) keys.splice(keys.indexOf('KeyW'), 1);
+    // W walks and Shift runs: run when there's some way to go and room ahead; walk the last steps, and near
+    // shy Grumblings (the game says running startles them)
+    if (!tiptoe && !shy && dist > 3.5 && this.clearAhead(s) > 3 && Math.abs(err) < 0.5) keys.push(this.key('sprint'));
     await this.hands.move(keys);
     this.bumpCheck(s, keys.includes('KeyW') && Math.abs(err) < 0.5, dist);
     return { arrived: false, dist };
