@@ -4,11 +4,15 @@
 // Caching and security headers are in public/_headers (copied into dist/ by the build).
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "snuggle-sorcery",
+  "name": "snuggle",
   "compatibility_date": "2026-09-26",
   "assets": {
     "directory": "./dist",
     // a missing file is a real 404, not index.html (a missing model would otherwise fail as a GLB parse error)
     "not_found_handling": "none"
-  }
+  }, 
+  "observability": {
+    "enabled": true
+  },
+  "preview_urls": false
 }
