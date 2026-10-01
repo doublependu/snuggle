@@ -28,7 +28,7 @@ the static build in `dist/`, so every request is a (free) static-asset request.
 
 ```bash
 npx wrangler login   # once: opens a browser to connect your Cloudflare account
-npm run deploy       # build + budget check + wrangler deploy -> https://snuggle-sorcery.<your-subdomain>.workers.dev
+npm run deploy       # build + budget check + wrangler deploy -> https://snuggle.<your-subdomain>.workers.dev
 npm run cf:dev       # the same asset server locally (http://localhost:8787), no account needed
 npm run cf:check     # checks headers, caching and types on wrangler dev; or: npm run cf:check -- <your URL>
 URL=<your URL> npm run perf   # time to interaction from Cloudflare's edge, throttled like the local test
