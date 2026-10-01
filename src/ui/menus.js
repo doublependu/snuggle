@@ -367,6 +367,7 @@ export function bugReport() {
   const f = (n) => (n ?? 0).toFixed(2);
   return [
     'Snuggle Sorcery bug report',
+    'version: ' + (document.getElementById('ver')?.textContent || '?'),
     'time: ' + new Date().toISOString(),
     'url: ' + location.href,
     'ua: ' + navigator.userAgent,

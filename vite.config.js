@@ -2,6 +2,7 @@
 import { defineConfig } from 'vite';
 import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 
 // Content revision of every model (public/assets/models/*.glb). Production builds add it to each model URL
 // as ?v=<hash> (the preload map in index.html exposes it as window.__modelRev; core/assets.js reads it), so
@@ -26,6 +27,33 @@ function modelRevisions() {
       const marker = 'var rev = {};';
       if (!html.includes(marker)) throw new Error(`index.html: "${marker}" not found for model revisions`);
       return html.replace(marker, `var rev = ${JSON.stringify(revs)};`);
+    },
+  };
+}
+
+// The game's version (production builds): "v." + the first 4 characters of the commit the build came from,
+// written into index.html's #ver (the corner label; the bug report reads it). Cloudflare Workers Builds says
+// which commit it checked out; a local build asks git and adds "+" when the working tree has uncommitted
+// changes (the build isn't exactly that commit). A build that knows neither shows "v.????"; the dev server
+// keeps index.html's "v.dev".
+function gameVersion() {
+  let version = '';
+  const git = (...args) => execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+  return {
+    name: 'snuggle-version',
+    apply: 'build',
+    buildStart() {
+      const ci = process.env.WORKERS_CI_COMMIT_SHA;
+      try {
+        version = 'v.' + (ci ? ci.slice(0, 4) : git('rev-parse', 'HEAD').slice(0, 4) + (git('status', '--porcelain') ? '+' : ''));
+      } catch {
+        version = 'v.????';
+      }
+    },
+    transformIndexHtml(html) {
+      const marker = '<div id="ver">v.dev</div>';
+      if (!html.includes(marker)) throw new Error(`index.html: "${marker}" not found for the version`);
+      return html.replace(marker, `<div id="ver">${version}</div>`);
     },
   };
 }
@@ -59,7 +87,7 @@ const revisions = modelRevisions();
 export default defineConfig({
   // relative base: the build runs from any static host path (Cloudflare, GitHub Pages, maize.live, a sub-folder)
   base: './',
-  plugins: [revisions, serviceWorker(() => revisions.revs)],
+  plugins: [revisions, gameVersion(), serviceWorker(() => revisions.revs)],
   build: {
     target: 'es2022',
     assetsInlineLimit: 0,

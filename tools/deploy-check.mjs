@@ -99,6 +99,12 @@ for (const m of models) {
   if (!revServed[m]) problems.push(`index.html: no revision for ${m}.glb (it could be served stale)`);
   else if (revServed[m] !== revLocal[m]) problems.push(`${m}.glb: the site's revision differs from your local build (deployed a different build?)`);
 }
+// the version in the corner (vite.config.js): the commit the site was built from
+const verServed = html.match(/<div id="ver">([^<]*)<\/div>/)?.[1];
+const verLocal = readFileSync(join(DIST, 'index.html'), 'utf8').match(/<div id="ver">([^<]*)<\/div>/)?.[1];
+if (!/^v\.[0-9a-f]{4}\+?$/.test(verServed || '')) problems.push(`index.html: version "${verServed}", want v.<4 hex>`);
+else if (verServed !== verLocal) problems.push(`index.html: the site is ${verServed}, your local build is ${verLocal} (deployed a different build?)`);
+else console.log(`✓ version ${verServed}${verServed.endsWith('+') ? ' (built with uncommitted changes)' : ''}`);
 
 // every JS chunk and model, then the files that must not be served
 for (const f of readdirSync(join(DIST, 'assets')).filter((f) => f.endsWith('.js'))) await check(`assets/${f}`, { status: 200, type: /javascript/, cache: IMMUTABLE });

@@ -324,9 +324,63 @@ export const TESTS = [
       await h.eval(() => window.__G.menus.togglePause());
       await h.page.click('#menu-pause [data-a="report"]');
       const text = await h.eval(() => document.querySelector('#menu-report textarea').value);
-      for (const k of ['ua:', 'gpu:', 'quality:', 'zone: train', 'errors:', 'save: {']) h.assert(text.includes(k), 'report is missing ' + k);
+      for (const k of ['version: v.dev', 'ua:', 'gpu:', 'quality:', 'zone: train', 'errors:', 'save: {']) h.assert(text.includes(k), 'report is missing ' + k);
     },
   },
+
+  // The version label (index.html #ver): above the loading screen, then under the UI in a corner nothing
+  // else uses (bottom-right; bottom-left on touch screens, where Hum is), clear of every HUD and touch control.
+  ...[{ name: 'desktop' }, ...PHONES.map((ph) => ({ ...ph, touch: true }))].map((d) => ({
+    name: 'version-corner-' + d.name,
+    touch: d.touch,
+    viewport: d.viewport,
+    async run(h) {
+      const where = () =>
+        h.eval(() => {
+          const el = document.getElementById('ver');
+          const s = getComputedStyle(el);
+          const v = el.getBoundingClientRect();
+          // every HUD and touch control on screen, with the optional ones filled in
+          const covered = [];
+          for (const c of document.querySelectorAll('.hud-tl, .objective, .hud-tr, .helper, .tbtn, .dialogue')) {
+            const cs = getComputedStyle(c);
+            const b = c.getBoundingClientRect();
+            if (cs.visibility === 'hidden' || +cs.opacity === 0 || !b.width || !b.height) continue;
+            if (b.left < v.right && v.left < b.right && b.top < v.bottom && v.top < b.bottom) covered.push(c.className);
+          }
+          return {
+            text: el.textContent,
+            z: +s.zIndex,
+            taps: s.pointerEvents !== 'none',
+            shown: s.display !== 'none' && +s.opacity > 0 && v.width > 0,
+            left: v.left,
+            right: innerWidth - v.right,
+            bottom: innerHeight - v.bottom,
+            covered,
+          };
+        });
+      await h.open('?zone=train', base({ story: { train_intro: true } }));
+      let r = await where();
+      h.assert(r.text === 'v.dev', 'version label says ' + JSON.stringify(r.text));
+      h.assert(r.shown && !r.taps, 'version label hidden or takes taps: ' + JSON.stringify(r));
+      h.assert(r.z > 50, 'version label is under the loading screen: z ' + r.z);
+      await h.begin();
+      await h.eval(() => {
+        const G = window.__G;
+        G.ui.setHelper('Charm Sprite', '', 'A helper');
+        G.ui.setObjective('Find the version label');
+        G.ui.say('tangtang', 'Is the corner still free?');
+        for (const b of document.querySelectorAll('.tbtn')) b.textContent ||= 'Act';
+      });
+      await h.until(() => window.__G.ui.dialogueOpen, { timeout: 3000 });
+      r = await where();
+      h.assert(r.shown && !r.taps, 'version label hidden or takes taps: ' + JSON.stringify(r));
+      h.assert(r.z > 0 && r.z < 20, 'version label is not under the UI (#ui is 20): z ' + r.z);
+      h.assert(r.bottom >= 0 && r.bottom <= 10 && (d.touch ? r.left >= 0 && r.left <= 10 : r.right >= 0 && r.right <= 10), `version label not in its corner: ${JSON.stringify(r)}`);
+      h.assert(!r.covered.length, 'version label overlaps ' + r.covered.join(', '));
+      await h.page.screenshot({ path: `${h.OUT}/version-${d.name}.png` });
+    },
+  })),
 
   // Friends following Pip through the academy: they keep up, turn corners and never get lost.
   {

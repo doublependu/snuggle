@@ -38,6 +38,10 @@ URL=<your URL> npm run perf   # time to interaction from Cloudflare's edge, thro
   have content hashes in their names, and production builds add each model's content revision to its URL
   (`xiaopei.glb?v=…`, from `vite.config.js`), so a changed model is never served stale. `index.html` always
   revalidates, so a new deploy shows up on the next load.
+- **Version:** the corner of the screen (and the bug report) shows `v.` and the first 4 characters of the
+  commit the build came from, e.g. `v.9305`. A `+` (`v.9305+`) means it was built with uncommitted changes;
+  the dev server shows `v.dev`. Workers Builds passes its commit in `WORKERS_CI_COMMIT_SHA`; a local build asks
+  git (`vite.config.js`).
 - **Custom domain:** add it in the Cloudflare dashboard, or a `routes` entry with `"custom_domain": true` in
   `wrangler.jsonc`. **Deploy on every push:** connect the GitHub repo under Workers Builds in the dashboard
   (build command `npm run build`, deploy command `npx wrangler deploy`).
