@@ -9,10 +9,11 @@ import { materialFor, stylize } from '../render/materials.js';
 
 let protos = null;
 
-export async function loadCreatures() {
-  if (protos) return protos;
-  const gltf = await loadGLB('creatures');
-  protos = {};
+// file: 'creatures' (Bean and the species of the story so far), or a later set added to it ('creatures2').
+export async function loadCreatures(file = 'creatures') {
+  if (protos && file === 'creatures') return protos;
+  const gltf = await loadGLB(file);
+  protos ||= {};
   for (const child of [...gltf.scene.children]) {
     child.position.set(0, 0, 0);
     stylize(child, { shadows: true });
@@ -32,6 +33,7 @@ export function makeCreature(id, { glow = null } = {}) {
     if (o.name.startsWith(id + '_wing')) (c.userData.wings ||= []).push(o); // the sparrow's flapping wings
     else if (o.name.startsWith(id + '_') && !/_(body|eyes)/.test(o.name)) (c.userData.parts ||= {})[o.name.slice(id.length + 1)] = o;
   }
+  if (c.userData.parts?.open) c.userData.parts.open.visible = false; // Bean's open eyes (systems/bean.js)
   if (glow && c.userData.body) {
     c.userData.body.traverse((m) => {
       if (m.isMesh) m.material = materialFor(m.material.name, { emissive: '#' + new Color(glow).multiplyScalar(0.3).getHexString() });

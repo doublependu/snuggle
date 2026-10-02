@@ -15,7 +15,7 @@ import { seatDoudou } from '../actors/player.js';
 import { materialFor, shared } from '../render/materials.js';
 import { TIERS } from '../core/quality.js';
 
-const CAST = ['xiaopei', 'tangtang', 'weibao', 'fang', 'folk_a', 'folk_b', 'folk_c', 'folk_kid'];
+const CAST = ['xiaopei', 'xiaopei_cardigan', 'tangtang', 'weibao', 'fang', 'folk_a', 'folk_b', 'folk_c', 'folk_kid'];
 const CLIPS = ['bind', 'idle', 'walk', 'run', 'air', 'land', 'hum', 'throw', 'talk', 'wave', 'sit', 'overwhelmed', 'celebrate', 'shy', 'puppet', 'stir', 'pat'];
 const FACES = ['neutral', 'happy', 'sad', 'surprised', 'sleepy', 'blink', 'talk'];
 const SPACING = 1.1;

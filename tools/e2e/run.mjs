@@ -2,11 +2,16 @@
 // End-to-end tests in headless Chrome (SwiftShader WebGL): boots the dev server, plays story paths with
 // scripted input and checks the touch UI at phone sizes. Usage: npm run e2e [-- name-filter ...]
 //   CHROME=/path/to/chrome  HEADED=1  npm run e2e -- train
+//   GPU=1 npm run e2e -- chapter4     on the machine's GPU (Vulkan) instead of software rendering: the long
+//                                     story tests run several times faster (the fog's zones are slow in software)
 // The game exposes window.__G in dev builds only (src/main.js). Screenshots go to tools/e2e/out/.
 import { createServer } from 'vite';
 import { chromium } from 'playwright-core';
 import { existsSync, mkdirSync } from 'node:fs';
-import { TESTS } from './tests.mjs';
+import { TESTS as TESTS1 } from './tests.mjs';
+import { TESTS as TESTS8 } from './tests8.mjs';
+
+const TESTS = [...TESTS1, ...TESTS8];
 
 const PORT = +process.env.E2E_PORT || 5199;
 const OUT = 'tools/e2e/out';
@@ -22,9 +27,12 @@ await server.listen();
 const browser = await chromium.launch({
   executablePath,
   headless: !process.env.HEADED,
-  args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--autoplay-policy=no-user-gesture-required'],
+  args: [...(process.env.GPU ? ['--use-angle=vulkan', '--enable-gpu', '--ignore-gpu-blocklist'] : ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader']), '--autoplay-policy=no-user-gesture-required'],
 });
 
+// Software rendering draws the fog chapters at a few frames a second, and a slow frame only counts as 1/20 s
+// of game time: every wait is given four times as long there (a test that fails takes longer to say so).
+const PATIENCE = process.env.GPU ? 1 : 4;
 const filter = process.argv.slice(2);
 const tests = TESTS.filter((t) => !filter.length || filter.some((f) => t.name.includes(f)));
 let failed = 0;
@@ -92,7 +100,7 @@ function helpers(page, t) {
     eval: (fn, arg) => page.evaluate(fn, arg),
     // Poll a page predicate (a function string or function) until true; optional per-tick action.
     async until(pred, { timeout = 60000, tick = null, every = 150 } = {}) {
-      const end = Date.now() + timeout;
+      const end = Date.now() + timeout * PATIENCE;
       for (;;) {
         const v = await page.evaluate(pred);
         if (v) return v;
@@ -124,11 +132,19 @@ function helpers(page, t) {
         return { ok: !!top && (top === el || el.contains(top)), top: top ? top.className || top.tagName : null };
       }, selector);
     },
-    // Hold a key for ms (real input): how far she went, and her feet against the floor afterwards.
+    // Wait for game time to pass (not the clock: see walk()).
+    async gwait(seconds) {
+      const until = (await page.evaluate(() => window.__G.time)) + seconds;
+      await page.waitForFunction((t) => window.__G.time >= t, until, { timeout: seconds * 20000 + 10000, polling: 50 });
+    },
+    // Hold a key for ms of game time (real input): how far she went, and her feet against the floor afterwards.
+    // (Game time, not the clock: software rendering may draw a few frames a second, and a slow frame only
+    // counts as 1/20 s, so a walk timed by the clock gets a fraction of the way.)
     async walk(key, ms) {
       const a = await page.evaluate(() => window.__G.player.position.toArray());
+      const until = (await page.evaluate(() => window.__G.time)) + ms / 1000;
       await page.keyboard.down(key);
-      await page.waitForTimeout(ms);
+      await page.waitForFunction((t) => window.__G.time >= t, until, { timeout: ms * 15 + 5000, polling: 50 }).catch(() => {});
       await page.keyboard.up(key);
       await page.waitForTimeout(300);
       return { moved: await page.evaluate((a) => Math.hypot(window.__G.player.position.x - a[0], window.__G.player.position.z - a[2]), a), ...(await h.feet()) };

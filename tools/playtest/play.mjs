@@ -5,7 +5,8 @@
 //
 //   npm run playtest                      play from a fresh game to the end of the story so far
 //   npm run playtest -- --record          ...and record it (tools/playtest/out/<run>/playthrough.mp4)
-//   npm run playtest -- --from market     start from a saved point (development only: station ch1 lesson ch2 market ch3 quiet dusk)
+//   npm run playtest -- --from market     start from a saved point (development only: station ch1 lesson ch2 market ch3 quiet dusk
+//                                         ch4 fog heart ch5 epilogue free)
 //   npm run playtest -- --until "Chapter 2"   stop at the first card/objective matching this
 //   HEADED=1 npm run playtest             watch it in a window
 // Options: --retries N (recording: start again from scratch if a run fails), --minutes N (give up after),
@@ -55,6 +56,19 @@ const FROMS = {
   quiet: base({ zone: 'quiet', spawn: 'SPAWN_ferry', cozy: 70, sprites: { ...SP1, sparrow: 12 }, story: { ...C2, ch3_start: true, ch3_greys: true } }),
   dusk: base({ zone: 'academy', spawn: 'SPAWN_gate', cozy: 90, sprites: { ...SP1, sparrow: 12, grey: 1 }, story: { ...C2, ch3_start: true, ch3_greys: true, ch3_arrive: true, mem_notice: true, mem_post: true, mem_sweets: true, mem_teahouse: true, mem_thread: true, mem_kitchen: true, ch3_return: true } }),
 };
+// the story's later parts (to watch the autoplayer try them, and to start it in the Epilogue or free roam)
+const C3 = { ...C2, ch3_start: true, ch3_greys: true, ch3_arrive: true, mem_notice: true, mem_post: true, mem_sweets: true, mem_teahouse: true, mem_thread: true, mem_kitchen: true, kind_barber: true, kind_oldman: true, ch3_return: true, ch3_story: true, ch3Done: true };
+const C4 = { ...C3, ch4_start: true, ch4_friends: true, ch4_note: true, ch4_ferry: true, ch4_sigh: true, ch4_lost: true, ch4_garden: true, ch4_gap: true, ch4_secret: true, ch4_thread: true, ch4_threadTold: true, ch4_followed: true, stitch_bell: true, stitch_letter: true, stitch_lantern: true, stitch_sunny: true, stitch_bo: true, ch4Done: true };
+const C5 = { ...C4, ch5_arrive: true, ch5_tier: 3, ch5_score: 12, ch5_p1: true, ch5_heard: 6, ch5_p2: true, ch5_called: true, ch5_p3: true, ch5_kitchen: 3, ch5_p4: true, ch5_golden: 9, ch5_sewn: true, ch5Done: true };
+const SP3 = { ...SP1, sparrow: 12, grey: 2 };
+Object.assign(FROMS, {
+  ch4: base({ zone: 'academy', spawn: 'SPAWN_gate', cozy: 60, tarts: 2, sprites: SP3, story: C3 }),
+  fog: base({ zone: 'quiet', spawn: 'SPAWN_ferry', cozy: 60, tarts: 2, sprites: SP3, story: { ...C3, ch4_start: true, ch4_friends: true, ch4_note: true } }),
+  heart: base({ zone: 'heart', spawn: 'SPAWN_garden', cozy: 60, tarts: 2, sprites: SP3, story: { ...C3, ch4_start: true, ch4_friends: true, ch4_note: true, ch4_ferry: true, ch4_sigh: true, ch4_lost: true } }),
+  ch5: base({ zone: 'heart', spawn: 'SPAWN_cross', cozy: 60, tarts: 2, sprites: SP3, story: C4 }),
+  epilogue: base({ zone: 'heart', spawn: 'SPAWN_square', cozy: 0, sprites: SP3, story: C5 }),
+  free: base({ zone: 'academy', spawn: 'SPAWN_gate', cozy: 30, tarts: 2, sprites: SP3, story: { ...C5, ep_dawn: true, ep_walk: true, ep_breakfast: true, ep_fishing: true, ep_cardigan: true, epilogueDone: true } }),
+});
 if (FROM && !FROMS[FROM]) throw new Error('--from: one of ' + Object.keys(FROMS).join(' '));
 
 const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
@@ -64,7 +78,7 @@ mkdirSync(OUT, { recursive: true });
 const server = await createServer({ server: { port: PORT, strictPort: true, host: '127.0.0.1' }, logLevel: 'warn' });
 await server.listen();
 const executablePath = process.env.CHROME || ['/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find(existsSync);
-const gpu = opt('swiftshader') ? ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] : ['--use-angle=vulkan', '--enable-features=Vulkan', '--ignore-gpu-blocklist', '--enable-gpu'];
+const gpu = opt('swiftshader') ? ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] : ['--use-angle=vulkan', '--ignore-gpu-blocklist', '--enable-gpu'];
 const browser = await chromium.launch({ executablePath, headless: !process.env.HEADED, args: [...gpu, '--autoplay-policy=no-user-gesture-required', '--mute-audio', '--window-size=1280,720'] });
 
 let result = null;
@@ -125,8 +139,9 @@ async function playOnce(dir, attempt) {
         if (Date.now() > deadline) throw Object.assign(new Error(`out of time (${MINUTES} min)`), { fatal: true });
         const seen = [...b.cards].concat(b.objective || '');
         if (UNTIL && seen.some((t) => t.includes(UNTIL))) return true;
-        // the end of the story so far: the "Chapter 4 … coming soon" card, then a few seconds of free roam
-        if (!endAt && [...b.cards].some((t) => /^Chapter 4/.test(t))) endAt = Date.now() + 12000;
+        // where the playbook ends: "Chapter 3 complete" (Chapters 4 and 5 need goals it doesn't have yet:
+        // sheltering from a sigh, stitching), or THE END when started from the Epilogue
+        if (!endAt && [...b.cards].some((t) => /^Chapter 3 complete|^The End/.test(t))) endAt = Date.now() + 12000;
         return endAt && Date.now() > endAt && !s.ui.card;
       },
       finishing: () => !!endAt, // the story so far is over: just enjoy the view

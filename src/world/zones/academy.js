@@ -16,7 +16,7 @@ import { chapter1, wireAcademy, refreshObjective } from '../../story/chapter1.js
 import { chapter3Academy, placeCast3 } from '../../story/chapter3.js';
 import { Grumbling } from '../../actors/grumbling.js';
 import '../../systems/greys.js'; // the grey Grumblings' behaviour (Chapter 3's morning)
-import { talk, ask, offerHelper } from '../../story/helpers.js';
+import { talk, ask, offerHelper, era, runStory } from '../../story/helpers.js';
 import { writeSave } from '../../core/save.js';
 
 // Golden-pink evening before the night market: low sun over the harbour, long shadows.
@@ -37,6 +37,19 @@ const GREY_MORNING = {
   skyTop: '#8b97a8', horizon: '#d2d4d6', ground: '#8f9a8c', fog: '#c6c9cd', fogNear: 40, fogFar: 180,
   hemiSky: '#dfe4ec', hemiGround: '#88907a', hemi: 1.8, sunColor: '#efe8dc', sunI: 1.5, sun: new Vector3(-0.35, 0.55, 0.6),
   clouds: 18, cloudColor: '#dadde2', cloudShade: '#a7adb6', skyline: { from: 1.2, to: 1.9 }, peakColor: '#9aa3ad', shadows: false,
+};
+
+// The white morning of Chapters 4 and 5: the fog has crossed the harbour, and the far shore is gone.
+const WHITE_MORNING = {
+  skyTop: '#c3c8cf', horizon: '#e6e7e8', ground: '#a2a79c', fog: '#e2e4e5', fogNear: 9, fogFar: 62,
+  hemiSky: '#e6eaf0', hemiGround: '#8e9484', hemi: 1.75, sunColor: '#f1ece2', sunI: 0.9, sun: new Vector3(-0.35, 0.55, 0.6),
+  clouds: 22, cloudColor: '#e9ebed', cloudShade: '#c2c7cd', peaks: false, shadows: false,
+};
+// The morning after, and every day since: clear and bright, the first sun on the roofs.
+const BRIGHT_MORNING = {
+  skyTop: '#6fa8dc', horizon: '#ffe9c8', ground: '#9fb59a', fog: '#f1e3cb', fogNear: 55, fogFar: 220,
+  hemiSky: '#fff0d2', hemiGround: '#8f9a6a', hemi: 2.0, sunColor: '#ffdca6', sunI: 2.8, sun: new Vector3(0.5, 0.5, 0.5),
+  clouds: 10, cloudColor: '#fff6ea', cloudShade: '#e8cdb8', skyline: { from: 1.2, to: 1.9 }, peakColor: '#8aa0b3',
 };
 
 // The paths, as a graph for the guide and the fingerposts (systems/wayfinder.js): [x, z] of each path point
@@ -65,13 +78,17 @@ export async function create() {
   const z = new Zone('academy');
   // after Chapter 1 it is evening, and the night market (Chapter 2) is next; after Chapter 2, the grey
   // morning of Chapter 3, then dusk again when the friends come home from the Quiet District
+  // after Chapter 3 (story/helpers.js era): a white morning while the fog holds the Quiet District (Chapters 4
+  // and 5), then a bright one (the Epilogue and free roam)
+  const story = era();
+  const white = story === 'ch4' || story === 'ch5';
   const ch3 = flag('ch2Done');
-  const evening = flag('ch1Done') && (!ch3 || flag('ch3_return'));
-  const grey = ch3 && !flag('ch3_return');
+  const evening = !story && flag('ch1Done') && (!ch3 || flag('ch3_return'));
+  const grey = white || (ch3 && !flag('ch3_return'));
   z.next = ch3 ? ['quiet', 'quiet_kit', 'folk_kid'] : evening ? ['market', 'market_kit', 'folk_kid'] : [];
   await z.addGLB('academy');
   await z.placeKit('kit');
-  z.setupEnvironment(grey ? GREY_MORNING : evening ? DUSK : {
+  z.setupEnvironment(white ? WHITE_MORNING : story ? BRIGHT_MORNING : grey ? GREY_MORNING : evening ? DUSK : {
     skyTop: '#6f9fcc', horizon: '#f3e2c6', ground: '#9fb59a', fog: '#eadfcb', fogNear: 50, fogFar: 210,
     hemiSky: '#ffeccc', hemiGround: '#8f9a6a', hemi: 2.0, sunColor: '#ffdcaa', sunI: 2.7, sun: new Vector3(-0.55, 0.5, 0.45),
     clouds: 12, cloudColor: '#fff6ea', cloudShade: '#e2c9b8', skyline: { from: 1.2, to: 1.9 }, peakColor: '#8aa0b3',
@@ -305,9 +322,9 @@ export async function create() {
       }
     }
   });
-  G.audio.mix(grey ? 'academy-grey' : evening ? 'academy-dusk' : 'academy');
+  G.audio.mix(grey ? 'academy-grey' : evening ? 'academy-dusk' : story ? 'morning' : 'academy');
   // ---- Chapter 3's morning: three grey Grumblings drift across the courtyard toward the gate
-  if (grey && !flag('ch3_greys')) {
+  if (grey && !story && !flag('ch3_greys')) {
     const c = z.marker('POINT_fang_court').position;
     z.morningGreys = [[2.5, 3.5], [-1.5, 5.5], [4.5, 7.0]].map(([dx, dz], i) =>
       z.addGrumbling(new Grumbling('grey', c.clone().add(new Vector3(dx, 0, dz)), { id: 'morning' + i, aloof: true, wander: 1.2, heart: z.marker('SPAWN_gate').position })));
@@ -332,8 +349,47 @@ export async function create() {
   ];
   z.killY = -12;
   z.stepFx = '#d6c6a4'; // dust on the paths
-  if (ch3) placeCast3(z);
-  z.start = () => (ch3 ? chapter3Academy(z) : chapter1(z));
+  if (story) placeCastAfter(z, story);
+  else if (ch3) placeCast3(z);
+  z.start = () => (story ? runStory(z) : ch3 ? chapter3Academy(z) : chapter1(z));
   refreshObjective();
   return z;
+}
+
+// Where everyone is at the Academy after Chapter 3 (the scripts load after Begin; this is how the place looks
+// before it): Master Fang is gone on the white morning, and back at her pavilion afterwards.
+function placeCastAfter(z, story) {
+  const fang = G.npcs.get('fang'),
+    tt = G.npcs.get('tangtang'),
+    wb = G.npcs.get('weibao');
+  const stand = (n, pos, facing) => {
+    if (!n) return;
+    n.base = 'idle';
+    n.h.play('idle', 0);
+    n.lookAtPlayer = true;
+    n.place(pos, facing, z.collision);
+  };
+  const court = z.marker('POINT_fang_court').position;
+  const gate = z.marker('SPAWN_gate').position;
+  const pav = z.marker('POINT_fang_lesson');
+  if (story === 'ch4' || story === 'ch5') {
+    fang?.hide();
+    if (flag('ch4_note')) {
+      stand(wb, gate.clone().add(new Vector3(1.6, 0, -1.8)), Math.PI);
+      stand(tt, gate.clone().add(new Vector3(-1.4, 0, -1.6)), Math.PI);
+    } else {
+      stand(tt, court.clone().add(new Vector3(1.3, 0, 1.2)), 0);
+      stand(wb, court.clone().add(new Vector3(-1.4, 0, 1.4)), 0);
+    }
+    return;
+  }
+  stand(fang, pav.position, pav.facing);
+  if (story === 'epilogue' && !flag('ep_cardigan')) {
+    // waiting for her by the pavilion
+    stand(tt, pav.position.clone().add(new Vector3(2.4, 0, 2.6)), pav.facing);
+    stand(wb, pav.position.clone().add(new Vector3(-2.2, 0, 2.8)), pav.facing);
+  } else {
+    stand(tt, z.marker('POINT_kitchen').position, Math.PI / 2);
+    stand(wb, gate.clone().add(new Vector3(1.6, 0, -1.8)), Math.PI);
+  }
 }

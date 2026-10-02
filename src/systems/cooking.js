@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Sunny's kitchen mini-game: three timing steps (knead, fill, bake). Press Hum / Interact / tap
 // when the marker is in the green zone. Returns the score (0-6: 1 per good step, 2 per perfect).
+// Chapter 5 bakes with it too, in the street: title (the panel's heading), speed (the marker's pace, 1 = as in
+// the kitchen) and gust (the Great Sulk's sighing blows the marker along now and then).
 import { G } from '../game.js';
 
 const STEPS = [
@@ -9,7 +11,7 @@ const STEPS = [
   { label: 'Bake until golden', speed: 1.45, zone: [0.2, 0.4], perfect: [0.27, 0.33] },
 ];
 
-export function cookingGame() {
+export function cookingGame({ title = '🥧 Custard tarts with Sunny', speed = 1, gust = false } = {}) {
   return new Promise((resolve) => {
     const el = document.createElement('div');
     el.className = 'cook panel show';
@@ -21,10 +23,11 @@ export function cookingGame() {
       pos = 0,
       dir = 1,
       wait = 0,
-      clicked = false;
+      clicked = false,
+      gustT = 1.2 + Math.random() * 1.5;
     const render = () => {
       const s = STEPS[step];
-      el.innerHTML = `<h3>🥧 Custard tarts with Sunny</h3><div>${step + 1}/3 · <b>${s.label}</b></div>
+      el.innerHTML = `<h3>${title}</h3><div>${step + 1}/3 · <b>${s.label}</b></div>
         <div class="meter"><div class="zone" style="left:${s.zone[0] * 100}%;width:${(s.zone[1] - s.zone[0]) * 100}%"></div>
         <div class="zone perfect" style="left:${s.perfect[0] * 100}%;width:${(s.perfect[1] - s.perfect[0]) * 100}%"></div><div class="mark"></div></div>
         <div class="res" style="min-height:1.4em;font-weight:800"></div><div class="small">Press Hum / Interact or tap when the marker is in the green.</div>`;
@@ -56,7 +59,16 @@ export function cookingGame() {
         return;
       }
       const s = STEPS[step];
-      pos += dir * s.speed * dt;
+      pos += dir * s.speed * speed * dt;
+      // a sigh across the street: the marker is blown a little way along
+      if (gust && (gustT -= dt) < 0) {
+        gustT = 1.6 + Math.random() * 1.8;
+        pos += dir * 0.14;
+        G.audio.play('whoosh');
+        el.classList.remove('gust');
+        void el.offsetWidth;
+        el.classList.add('gust');
+      }
       if (pos > 1) {
         pos = 1;
         dir = -1;

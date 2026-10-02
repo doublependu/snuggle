@@ -695,6 +695,81 @@ export class Brain {
     if (p.kind === 'cooking') return this.cook(p);
     if (p.kind === 'chestnuts') return this.chestnuts(s, p);
     if (p.kind === 'lanterns') return this.lanterns(s, p);
+    if (p.kind === 'fishing') return this.fish(s, p);
+    if (p.kind === 'card' || p.kind === 'board') return this.readPanel(p);
+  }
+  // Something to read (a catch held up, the worry board, the credits): read it, then carry on.
+  async readPanel(p) {
+    await this.hands.releaseAll();
+    if (this.reading !== p.text) {
+      this.reading = p.text;
+      this.readT = now();
+      this.think(p.kind === 'board' ? `The worry board: ${(p.notes || []).filter((n) => !n.done).map((n) => n.text.slice(0, 70)).join(' / ')}` : `“${p.text.slice(0, 110)}”`);
+      this.log.event('read', { text: p.text.slice(0, 300) });
+      if (p.kind === 'board') this.mem.worries = (p.notes || []).filter((n) => !n.done).map((n) => n.text);
+    }
+    if (now() - this.readT < Math.min(6000, 900 + (p.text.length / this.opts.readCps) * 1000)) return this.hands.wait(120);
+    await this.hands.tap(this.key('interact'));
+    this.reading = null;
+    await this.hands.wait(400);
+  }
+  // Thread fishing, as the panel says: hold Hum to send the thread out and let go; hum on the beat to call
+  // it closer; press at the bite; hold to wind in, and ease off while it tugs or the bar is nearly full.
+  async fish(s, p) {
+    const hum = this.key('hum');
+    const f = (this.fishing ||= { t: now(), caught: 0, said: '' });
+    const say = (t) => f.said !== t && ((f.said = t), this.think(t));
+    // a few catches are enough for one visit
+    if (f.caught >= (this.opts.catches || 2) && /Pack up/.test(p.buttons.join(' ')) && /send the thread out/.test(p.hint)) {
+      await this.hands.up(hum);
+      this.think('That will do for now. I pack up.');
+      await this.hands.tap(this.key('interact'));
+      this.fishing = null;
+      this.fished = now();
+      return this.hands.wait(600);
+    }
+    if (/send the thread out/.test(p.hint)) {
+      f.reeling = false;
+      say('I hold Hum to send the thread out over the water, and let go.');
+      if (!f.cast) {
+        f.cast = now();
+        await this.hands.down(hum);
+      } else if (now() - f.cast > 900 + Math.random() * 900) {
+        await this.hands.up(hum);
+        f.cast = 0;
+        await this.hands.wait(700);
+      }
+      return this.hands.wait(40);
+    }
+    f.cast = 0;
+    if (p.bite || /A bite/.test(p.hint)) {
+      say('A bite! I press Hum.');
+      await this.hands.wait(120 + Math.random() * 160);
+      await this.hands.tap(hum, 40);
+      return this.hands.wait(150);
+    }
+    if (/on the beat/.test(p.hint)) {
+      say('The float is down. I hum on the beat to call it closer.');
+      await this.hands.up(hum);
+      if (!this.lastBeatPress || now() - this.lastBeatPress > 500) await this.onBeat(s, () => this.hands.tap(hum, 30));
+      return this.hands.wait(30);
+    }
+    if (/pulling|Ease off/i.test(p.hint) || p.tug || p.tension > 0.72) {
+      say('It’s pulling: I ease off, and wind again when it rests.');
+      await this.hands.up(hum);
+      return this.hands.wait(40);
+    }
+    if (/wind it in/.test(p.hint)) {
+      if (!f.reeling) {
+        f.reeling = true;
+        f.caught++;
+        f.said = '';
+      }
+      await this.hands.down(hum);
+      return this.hands.wait(40);
+    }
+    f.reeling = false;
+    return this.hands.wait(60);
   }
   // A marker swings across a meter: press when it's in the middle of the green.
   async cook(p) {

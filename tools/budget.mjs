@@ -32,6 +32,11 @@ const MODEL_BUDGET = {
   market_kit: [150, 30000], // planned 130 KB; 145 KB with every stall's lanterns (ai/next_2.md)
   quiet: [200, 60000], // Chapter 3 (ai/plan_4.md §3.4)
   quiet_kit: [150, 30000],
+  heart: [200, 60000], // Chapters 4 and 5 (ai/plan_8.md §10)
+  sulk: [60, 5000],
+  creatures2: [45, 3 * 800],
+  xiaopei_cardigan: [130, 7000],
+  anim_humanoid: [85, 0],
 };
 
 if (!existsSync(DIST)) {
@@ -43,10 +48,12 @@ const kb = (n) => (n / 1024).toFixed(1).padStart(7) + ' KB';
 const manifest = JSON.parse(readFileSync(join(DIST, '.vite', 'manifest.json'), 'utf8'));
 const html = gz(join(DIST, 'index.html'));
 
-// the preload map is the inline script in index.html: var zones = { train: [...], ... }
+// the preload map is the inline script in index.html: var zones = { train: [...], ... }. It reads the save's
+// story flags (st): after the Epilogue Pip's model is the one in the cardigan, and the square has no Great Sulk.
 const src = readFileSync('index.html', 'utf8');
-const always = JSON.parse(src.match(/\[('xiaopei'[^\]]*)\]\.concat/)[1].replace(/'/g, '"').replace(/^/, '[') + ']');
-const zones = Function('return ' + src.match(/var zones = (\{[\s\S]*?\n\s*\});/)[1])();
+const alwaysFor = Function('st', 'return [' + src.match(/\[([^\[\]]*'anim_humanoid'[^\]]*)\]\.concat/)[1] + ']');
+const zonesFor = Function('st', 'return ' + src.match(/var zones = (\{[\s\S]*?\n\s*\});/)[1]);
+const STATES = [['', {}], [' (after the Epilogue)', { ep_dawn: true, ep_cardigan: true, epilogueDone: true }]];
 
 // JS files reachable (statically) from a manifest entry
 function chunks(key, seen = new Set()) {
@@ -59,12 +66,23 @@ function chunks(key, seen = new Set()) {
 const entryKey = Object.keys(manifest).find((k) => manifest[k].isEntry);
 
 let ok = true;
+// The main bundle must stay one file: a lazy chunk that imports shared modules the wrong way makes the bundler
+// split it (three.js moves out into a file of its own), and the first load then makes more round trips.
+const mainFiles = [...chunks(entryKey)].map((k) => manifest[k].file);
+if (mainFiles.length > 1) {
+  ok = false;
+  console.log(`✗ the main bundle is split into ${mainFiles.length} files: ${mainFiles.join(', ')}`);
+}
 const check = (name, v, max) => {
   const pass = v <= max;
   ok &&= pass;
   return `${pass ? '✓' : '✗'} ${name} ${kb(v).trim()} / ${kb(max).trim()}`;
 };
-for (const zone of Object.keys(zones)) {
+for (const [label, st] of STATES) for (const zone of Object.keys(zonesFor(st))) {
+  const zones = zonesFor(st),
+    always = alwaysFor(st);
+  // (after the Epilogue: only the rows that differ)
+  if (label && JSON.stringify([always, zones[zone]]) === JSON.stringify([alwaysFor({}), zonesFor({})[zone]])) continue;
   const keys = chunks(entryKey);
   const zoneKey = `src/world/zones/${zone}.js`;
   if (!manifest[zoneKey]) {
@@ -83,9 +101,9 @@ for (const zone of Object.keys(zones)) {
     mb += b;
     rows.push(`${m} ${(b / 1024).toFixed(0)}`);
   }
-  const b = zone === 'train' ? BUDGET.first : BUDGET.returning;
+  const b = zone === 'train' && !label ? BUDGET.first : BUDGET.returning;
   const total = html + js + mb;
-  console.log(`${zone === 'train' ? 'First visit' : 'Returning'} -> ${zone}: ${check('js', js, b.js)}  ${check('models', mb, b.models)}  ${check('total', total, b.total)}`);
+  console.log(`${zone === 'train' && !label ? 'First visit' : 'Returning'} -> ${zone}${label}: ${check('js', js, b.js)}  ${check('models', mb, b.models)}  ${check('total', total, b.total)}`);
   console.log(`    models (KB): ${rows.join(', ')}`);
 }
 

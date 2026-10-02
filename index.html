@@ -14,8 +14,8 @@
     (function () {
       var rev = {};
       window.__modelRev = rev;
-      var z = 'train';
-      try { z = (JSON.parse(localStorage.getItem('snuggle-sorcery-save')) || {}).zone || z; } catch (e) {}
+      var z = 'train', st = {};
+      try { var s = JSON.parse(localStorage.getItem('snuggle-sorcery-save')) || {}; z = s.zone || z; st = s.story || st; } catch (e) {}
       var qs = new URLSearchParams(location.search);
       if (qs.has('viewer')) return;
       var q = qs.get('zone');
@@ -26,9 +26,11 @@
         station: ['station', 'kit', 'tangtang'],
         academy: ['academy', 'kit', 'fang', 'tangtang', 'weibao'],
         market: ['market', 'market_kit', 'tangtang', 'weibao'],
-        quiet: ['quiet', 'quiet_kit', 'tangtang', 'weibao'],
+        quiet: st.epilogueDone ? ['quiet', 'quiet_kit'] : ['quiet', 'quiet_kit', 'tangtang', 'weibao'],
+        heart: st.ep_dawn ? ['heart', 'quiet_kit'] : ['heart', 'quiet_kit', 'sulk', 'tangtang', 'weibao'],
       };
-      ['xiaopei', 'anim_humanoid', 'creatures'].concat(zones[z] || []).forEach(function (n) {
+      // (after the Epilogue Pip wears the cardigan Master Fang gave her: a model of its own)
+      [st.ep_cardigan ? 'xiaopei_cardigan' : 'xiaopei', 'anim_humanoid', 'creatures'].concat(zones[z] || []).forEach(function (n) {
         var l = document.createElement('link');
         l.rel = 'preload'; l.as = 'fetch'; l.crossOrigin = 'anonymous'; l.href = './assets/models/' + n + '.glb' + (rev[n] ? '?v=' + rev[n] : '');
         document.head.appendChild(l);

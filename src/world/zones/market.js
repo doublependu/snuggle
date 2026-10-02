@@ -14,7 +14,7 @@ import { setupChestnuts } from '../../systems/chestnuts.js';
 import { setupLanterns } from '../../systems/lanterns.js';
 import { setupGuide } from '../../systems/guide.js';
 import { chapter2, refreshObjective2 } from '../../story/chapter2.js';
-import { talk } from '../../story/helpers.js';
+import { talk, runStory } from '../../story/helpers.js';
 import { addSigns } from '../signs.js';
 import { Routes, startGuide, signsFor } from '../../systems/wayfinder.js';
 
@@ -230,7 +230,10 @@ export async function create() {
       G.events.emit('splash');
     }
   });
-  z.start = () => chapter2(z);
+  z.start = () => {
+    chapter2(z);
+    runStory(z);
+  };
   refreshObjective2();
   return z;
 }

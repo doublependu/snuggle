@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Greybox test zone (?zone=test): ramps, steps and boxes for tuning movement, plus one of each Grumbling.
 // ?zone=test&night: the greybox under lantern light. ?zone=test&quiet: the Quiet District's grey-out, height
-// fog and fog wall, grey Grumblings to keep company, and a Charm Sprite memory (Chapter 3).
+// fog and fog wall, grey Grumblings to keep company, and a Charm Sprite memory (Chapter 3). ?zone=test&fog:
+// Chapter 4's pieces: the deep fog, the Great Sulk's sighs (from the south, +z), a warm spot, Bean awake
+// with his circle of colour, two loose ends to stitch, and a sleeper.
 import { BoxGeometry, Mesh, PlaneGeometry, Vector3 } from 'three';
 import { G } from '../../game.js';
 import { Zone } from '../zone.js';
@@ -11,14 +13,19 @@ import { NPC } from '../../actors/npc.js';
 import { CreatureBatch } from '../../actors/creatures.js';
 import { Greys } from '../../systems/greys.js';
 import { Memories } from '../../systems/memories.js';
+import { FOG_ENV, FOG_LOOK, usePockets } from '../../systems/fog.js';
+import { Sighs } from '../../systems/sigh.js';
+import { Bean } from '../../systems/bean.js';
+import { Stitch } from '../../systems/stitch.js';
 
 export async function create() {
   const z = new Zone('test');
   const qs = new URLSearchParams(location.search);
   const night = qs.has('night');
   const quiet = qs.has('quiet');
-  const fade = quiet ? { fade: 1 } : {};
-  z.setupEnvironment(night ? NIGHT : quiet ? QUIET_TEST : {});
+  const fog = qs.has('fog');
+  const fade = quiet || fog ? { fade: 1 } : {};
+  z.setupEnvironment(night ? NIGHT : quiet ? QUIET_TEST : fog ? FOG_ENV : {});
   const ground = new Mesh(new PlaneGeometry(80, 80).rotateX(-Math.PI / 2), materialFor('cloth', { color: 0x9dbb7a, vertexColors: false, ...fade }));
   ground.receiveShadow = true;
   z.group.add(ground);
@@ -65,7 +72,12 @@ export async function create() {
     for (const l of lamps) G.fx.glows.add(l.position, l.color, 1.2);
   }
   if (quiet) await quietTest(z);
-  z.start = () => G.ui.setObjective(night ? 'Greybox test zone (night)' : quiet ? 'Greybox test zone (the Quiet District)' : 'Greybox test zone');
+  if (fog) fogTest(z);
+  const start = z.start;
+  z.start = () => {
+    G.ui.setObjective(night ? 'Greybox test zone (night)' : quiet ? 'Greybox test zone (the Quiet District)' : fog ? 'Greybox test zone (the fog)' : 'Greybox test zone');
+    start?.();
+  };
   G.save.tarts = Math.max(G.save.tarts, 3); // dev zone: tarts to test assists
   return z;
 }
@@ -110,4 +122,24 @@ async function quietTest(z) {
     },
   });
   for (const g of greys) g.opts.helped = () => z.memories.near(g.position);
+}
+
+// Chapter 4's pieces on the greybox. The sighs come from the south (+z); the long wall at z = -8 is shelter
+// (stand north of it), the lamp at (-9, 4) is a warm spot.
+function fogTest(z) {
+  setGreyOut(FOG_LOOK);
+  const pockets = usePockets(z);
+  z.sighs = new Sighs(z, { source: new Vector3(0, 0, 60), period: 14, first: 8, home: new Vector3(0, 0, 0) });
+  const lamp = new Vector3(-9, 0, 4);
+  z.sighs.warm.push({ position: lamp, radius: 3 });
+  pockets.push({ position: lamp, radius: 4 });
+  G.fx.glows.add(lamp.clone().setY(1.6), '#ffb45c', 1.6);
+  const bean = new Bean(z);
+  z.stitch = new Stitch(z, { sighs: z.sighs });
+  z.stitch.add({ id: 'test_bell', icon: '🔔', what: 'the door', from: new Vector3(4, 0, 2), to: new Vector3(-4, 0, -5), free: true });
+  z.stitch.add({ id: 'test_letter', icon: '✉️', what: 'the letterbox', from: new Vector3(-6, 0, 8), to: new Vector3(6, 0, 16) });
+  const sleeper = z.addGrumbling(new Grumbling('grey', new Vector3(9, 0, -3), { id: 'sleeper', asleep: true, wander: 0 }));
+  z.greys = new Greys(z, [sleeper]);
+  z.on('grey-woke', () => z.sighs.send(12, Math.max(3, z.sighs.distance(G.player.position) - 14)));
+  z.start = () => bean.climbOut();
 }

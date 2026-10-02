@@ -2,7 +2,7 @@
 // Test cases for tools/e2e/run.mjs. Each gets helpers (see run.mjs): open, begin, eval, until,
 // skipDialogue, hit, assert. Saves are plain objects in the save.js v2 format.
 
-const base = (over = {}) => ({
+export const base = (over = {}) => ({
   v: 2, zone: 'train', spawn: 'SPAWN_start', story: {}, sprites: {}, soothed: {}, seen: {}, helper: null,
   cozy: 0, tarts: 0, chestnuts: 0, candies: {}, settings: { volume: 0, music: 0, sensitivity: 1, invertY: false, reducedMotion: true, humToggle: false, quality: 'low' },
   ...over,
@@ -19,7 +19,7 @@ async function playUntilZone(h, zone, act = async () => {}, timeout = 240000) {
   });
 }
 
-const PHONES = [
+export const PHONES = [
   { name: 'portrait', viewport: { width: 390, height: 844 } },
   { name: 'landscape', viewport: { width: 844, height: 390 } },
 ];
@@ -271,7 +271,8 @@ export const TESTS = [
       }
       // Begin: the train intro plays from the very start
       await h.begin();
-      await h.until(() => window.__G.ui.dialogueOpen, { timeout: 15000 });
+      // (the intro's card is 3.4 s of game time, which is several times that in software rendering)
+      await h.until(() => window.__G.ui.dialogueOpen, { timeout: 60000 });
       h.assert(!(await h.eval(() => window.__G.save.story.train_intro)), 'intro already seen');
     },
   })),
@@ -457,7 +458,7 @@ export const TESTS = [
         G.player.teleport(G.zone.marker('SPAWN_gate').position, 0);
         G.cam.snapBehind(G.player);
       });
-      await h.page.waitForTimeout(1500);
+      await h.gwait(1.5);
       const back = Object.fromEntries((await h.heads()).map((r) => [r.id, r.neck]));
       h.assert(back.xiaopei <= 1 && back.tangtang <= 1, 'necks did not come back: ' + JSON.stringify(back));
       // friends at her elbows look at her the whole walk
@@ -778,11 +779,12 @@ export const TESTS = [
 
   // After the first lesson she stands up on the pavilion floor, and walks off down its steps. (She used to stand
   // up at the seat marker's height, ground level: inside the pavilion's stone platform, sunk to the waist and
-  // walled in.) The same bench ends Chapter 3, with Master Fang's story.
+  // walled in.) The same bench ends Chapter 3, with Master Fang's story; after it she sleeps, and wakes at the
+  // gate on Chapter 4's morning (ch4_start): on her feet there, and free to walk.
   ...[
-    ['lesson-stand', () => ({ train_intro: true, prologueTrain: true, prologueDone: true, ch1_welcome: true }), 'ch1_lesson'],
-    ['story-stand', () => ({ ...CH3_ARRIVED, mem_notice: true, mem_post: true, mem_sweets: true, mem_teahouse: true, mem_thread: true, mem_kitchen: true, ch3_return: true }), 'ch3Done'],
-  ].map(([name, story, done]) => ({
+    ['lesson-stand', () => ({ train_intro: true, prologueTrain: true, prologueDone: true, ch1_welcome: true }), 'ch1_lesson', true],
+    ['story-stand', () => ({ ...CH3_ARRIVED, mem_notice: true, mem_post: true, mem_sweets: true, mem_teahouse: true, mem_thread: true, mem_kitchen: true, ch3_return: true }), 'ch4_start', false],
+  ].map(([name, story, done, pavilion]) => ({
     name,
     async run(h) {
       await h.open('?zone=academy', base({ zone: 'academy', spawn: 'SPAWN_gate', cozy: 40, sprites: { ...CH2_SPRITES, grey: 1 }, story: story() }));
@@ -799,9 +801,9 @@ export const TESTS = [
       await h.page.keyboard.up('KeyW');
       await h.until(`window.__G.save.story.${done} && !window.__G.frozen`, { timeout: 150000, tick: () => h.skipDialogue() });
       const f = await h.feet();
-      h.assert(Math.abs(f.y - 0.45) < 0.03 && f.under < 0.03, 'not on the pavilion floor: ' + JSON.stringify(f));
+      h.assert((!pavilion || Math.abs(f.y - 0.45) < 0.03) && f.under < 0.03, 'not on the floor: ' + JSON.stringify(f));
       const w = await h.walk('KeyW', 5000);
-      h.assert(w.moved > 2 && w.y < 0.1, 'could not walk off the pavilion: ' + JSON.stringify(w));
+      h.assert(w.moved > 2 && w.y < 0.1, 'could not walk off: ' + JSON.stringify(w));
     },
   })),
 
@@ -1093,9 +1095,11 @@ export const TESTS = [
       await h.page.waitForTimeout(1500);
       await h.page.screenshot({ path: `${h.OUT}/chapter3-story.png` });
       await h.headsUpright('during the story');
-      await skipUntil(() => window.__G.save.story.ch3Done && !window.__G.frozen, 120000);
+      // the chapter ends, she sleeps, and the next morning (Chapter 4) begins at the gate
+      await skipUntil(() => window.__G.save.story.ch3Done, 120000);
+      await skipUntil(() => window.__G.save.story.ch4_start && window.__G.zone?.id === 'academy' && !window.__G.frozen, 120000);
       const obj = await h.eval(() => window.__G.ui.objective.textContent);
-      h.assert(/Free roam/.test(obj), 'objective after Chapter 3: ' + obj);
+      h.assert(obj.length > 8 && !/Free roam/.test(obj), 'objective on the morning after Chapter 3: ' + obj);
       const w = await h.walk('KeyW', 1000);
       h.assert(w.moved > 0.5 && w.under < 0.05, 'stuck after the story: ' + JSON.stringify(w));
     },
@@ -1458,12 +1462,16 @@ export const TESTS = [
         }, side);
         h.assert(ok, `${zone}: no clear spot at the ${side} wall`);
         await h.page.keyboard.down('KeyW');
-        for (let last = null, still = 0; still < 10; ) {
+        // until she gets no nearer the wall (on a slope she may go on sliding along it, so it is the distance
+        // to the wall that is watched, not whether she has stopped; and never for longer than 40 s)
+        for (let last = null, still = 0, n = 0; still < 10 && n < 200; n++) {
           await h.page.waitForTimeout(200);
           const p = await h.eval(() => window.__G.player.position.toArray());
-          still = last && Math.hypot(p[0] - last[0], p[2] - last[2]) < 0.02 ? still + 1 : 0;
-          last = p;
+          const to = side === 'north' ? p[2] : p[0];
+          still = last !== null && Math.abs(to - last) < 0.02 ? still + 1 : 0;
+          last = to;
         }
+        await h.gwait(1.2); // (the word about the woods comes after 0.8 s of pushing, in game time)
         await h.page.keyboard.up('KeyW');
         const r = await h.eval((side) => {
           const G = window.__G;
@@ -1484,6 +1492,7 @@ export const TESTS = [
     ['academy', () => ({ ...CH1_DONE }), 'SPAWN_gate'],
     ['market', () => ({ ...CH1_DONE, ch2_start: true, ch2_tutorial: true }), 'SPAWN_start'],
     ['quiet', () => CH3_ARRIVED, 'SPAWN_ferry'],
+    ['heart', () => HEART_FOG, 'SPAWN_start'],
   ].map(([zone, story, spawn]) => ({
     name: 'routes-' + zone,
     async run(h) {
@@ -1596,6 +1605,7 @@ export const TESTS = [
     ['academy', () => ({ ...CH1_DONE }), 'SPAWN_gate', ['Library', 'Kitchen', 'Lesson Pavilion', 'Great Hall', 'Dormitories', 'Old Pagoda', 'Laundry Yard', 'Practice Field', 'Harbour Overlook', 'Lotus Pond']],
     ['market', () => ({ ...CH1_DONE, ch2_start: true, ch2_tutorial: true }), 'SPAWN_start', ['Lanterns', 'Toys', 'Jasmine Tea', 'Sweets', 'Fish Balls', 'Dumplings', 'Lantern Pier', 'Mistbloom Academy', 'Stairs to the Academy']],
     ['quiet', () => CH3_ARRIVED, 'SPAWN_ferry', ['Ferry', 'Post Office', 'Sweet Shop', 'Teahouse', 'Thread Shop', 'Noticeboard']],
+    ['heart', () => HEART_FOG, 'SPAWN_start', ['Persimmon Courtyard', 'Laundry Alley', 'Pump Yard', 'Lantern-makers’ Row', 'The Arcade', 'Thread Street', 'The Old Square']],
   ].map(([zone, story, spawn, names]) => ({
     name: 'signs-' + zone,
     async run(h) {
@@ -1720,7 +1730,7 @@ export const TESTS = [
       await h.page.waitForTimeout(1600);
       await h.eval(() => (window.__G.save.settings.textSpeed = 0));
       await start(1);
-      await h.page.waitForTimeout(250);
+      await h.gwait(0.25); // (a quarter of a second of game time: typed out, it would be a dozen letters)
       const shown = await h.eval(() => window.__G.ui.dlgText.textContent.length);
       h.assert(shown > 60, 'with text speed "All at once" only ' + shown + ' letters showed after a quarter of a second');
       await h.until(() => window.__done, { timeout: 5000, tick: () => h.skipDialogue() });
@@ -1793,12 +1803,14 @@ export const TESTS = [
   },
 ];
 
-const CH2_SPRITES = { doudou: 1, cloud: 1, sock: 1, homework: 1, pompom: 1, sparrow: 12 };
-const CH3_ARRIVED = { prologueTrain: true, prologueDone: true, ch1Done: true, weibaoFriend: true, ch2_start: true, ch2Done: true, ch3_start: true, ch3_greys: true, ch3_arrive: true };
+export const CH2_SPRITES = { doudou: 1, cloud: 1, sock: 1, homework: 1, pompom: 1, sparrow: 12 };
+export const CH3_ARRIVED = { prologueTrain: true, prologueDone: true, ch1Done: true, weibaoFriend: true, ch2_start: true, ch2Done: true, ch3_start: true, ch3_greys: true, ch3_arrive: true };
+// the Old Quarter under the fog (Chapter 4, once Pip is lost in it)
+const HEART_FOG = { ...CH3_ARRIVED, ch3_return: true, ch3Done: true, ch4_start: true, ch4_friends: true, ch4_note: true, ch4_ferry: true, ch4_sigh: true, ch4_lost: true, ch4_garden: true };
 
 // Walk up to a Chapter 3 memory spot, Look closer, and choose a Charm Sprite (by its button label). A friend's
 // comment on the last memory may open just as F is pressed; then the press only advances it, so try again.
-async function remember(h, id, pick) {
+export async function remember(h, id, pick) {
   for (let tries = 0; tries < 5; tries++) {
     await h.until(() => !window.__G.frozen && !window.__G.ui.dialogueOpen, { timeout: 30000, tick: () => h.skipDialogue() });
     await h.eval((id) => {
@@ -1822,8 +1834,8 @@ async function remember(h, id, pick) {
   throw new Error('could not look closer at memory ' + id);
 }
 
-const LESSON_DONE = { prologueTrain: true, prologueDone: true, ch1_welcome: true, ch1_lesson: true, weibaoFriend: true };
-const CH1_DONE = { prologueTrain: true, prologueDone: true, ch1_welcome: true, ch1_lesson: true, sockDone: true, homeworkDone: true, cookDone: true, pompomDone: true, ch1Done: true, weibaoFriend: true };
+export const LESSON_DONE = { prologueTrain: true, prologueDone: true, ch1_welcome: true, ch1_lesson: true, weibaoFriend: true };
+export const CH1_DONE = { prologueTrain: true, prologueDone: true, ch1_welcome: true, ch1_lesson: true, sockDone: true, homeworkDone: true, cookDone: true, pompomDone: true, ch1Done: true, weibaoFriend: true };
 
 // Walk Pip up to a flock's seat and choose "Sit with them".
 async function sitAt(h, id) {

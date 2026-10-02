@@ -9,7 +9,7 @@ import { addFlowers } from '../../procgen/flowers.js';
 import { addSigns } from '../signs.js';
 import { Routes, startGuide, signsFor } from '../../systems/wayfinder.js';
 import { prologueStation } from '../../story/prologue.js';
-import { talk } from '../../story/helpers.js';
+import { talk, runStory } from '../../story/helpers.js';
 
 // The way from the platform up the hill, for the guide and the fingerposts (systems/wayfinder.js): [x, z, y?].
 const NODES = { plat: [-6, -1.3, 0.9], p1: [8, -3.2, 0.9], p2: [16.6, -3.7], pz: [18.5, -13.5], plaza: [30, -17], h1: [24, -32], h2: [36, -46], h3: [28, -60], h4: [30, -70] };
@@ -98,7 +98,10 @@ export async function create() {
     };
   }
   z.killY = -6;
-  z.start = () => prologueStation(z);
+  z.start = () => {
+    prologueStation(z);
+    runStory(z);
+  };
   return z;
 }
 

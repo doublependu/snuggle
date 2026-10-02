@@ -34,12 +34,28 @@ const ZONES = {
   academy: () => import('./world/zones/academy.js'),
   market: () => import('./world/zones/market.js'),
   quiet: () => import('./world/zones/quiet.js'),
+  heart: () => import('./world/zones/heart.js'),
   test: () => import('./world/zones/test.js'),
 };
 
+// What comes after Chapter 3 loads when it is needed, after Begin (story/helpers.js runStory): the scripts of
+// Chapters 4 and 5 and the Epilogue, and free-roam Lantern Bay with its fishing.
+const LATER = {
+  ch4: () => import('./story/chapter4.js'),
+  ch5: () => import('./story/chapter5.js'),
+  epilogue: () => import('./story/epilogue.js'),
+  free: () => import('./story/freeroam.js'),
+  fishing: () => import('./systems/fishing.js'),
+};
+G.later = (id) => LATER[id]();
+
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
-if (import.meta.env.DEV) window.__G = G; // for tools/e2e and the console; not in production builds
+// for tools/e2e and the console; not in production builds
+if (import.meta.env.DEV) {
+  window.__G = G;
+  G.shared = shared; // (the shaders' shared uniforms: the grey-out, the fog, the Domain)
+}
 
 // keep the last errors for the in-game bug report
 addEventListener('error', (e) => logError(e.message + (e.filename ? ` (${e.filename.split('/').pop()}:${e.lineno})` : '')));
@@ -108,7 +124,7 @@ async function boot() {
   const status = $('status');
 
   const zoneId = ZONES[params.get('zone')] ? params.get('zone') : ZONES[save.zone] ? save.zone : 'train';
-  const [, h] = await Promise.all([loadCreatures(), Humanoid.load('xiaopei'), ZONES[zoneId]()]);
+  const [, h] = await Promise.all([loadCreatures(), Humanoid.load(save.story.ep_cardigan ? 'xiaopei_cardigan' : 'xiaopei'), ZONES[zoneId]()]);
   status.textContent = 'Tucking Bean into the hood…';
   const doudou = makeCreature('doudou');
   G.player = new Player(h, doudou);
@@ -165,6 +181,7 @@ async function enterZone(id, spawn) {
   if (m) G.player.teleport(m.position, m.facing);
   G.cam.snapBehind(G.player);
   G.sprites.rebuild();
+  G.collection.refreshHud(); // (the lemon-candy count belongs to the zone)
   if (id !== 'test') {
     G.save.zone = id;
     G.save.spawn = spawn;

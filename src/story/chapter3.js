@@ -29,7 +29,7 @@ export function chapter3Objective() {
     return 'Something warm is hidden in the fog at the end of the street…';
   }
   if (!f('ch3Done')) return G.zone?.id === 'academy' ? 'Master Fang is waiting at the pavilion' : 'It’s getting dark: take the ferry home to the Academy';
-  return 'Free roam: keep the grey Grumblings company, and check on the neighbours';
+  return ''; // (what comes next is set by the later chapters' own scripts: story/helpers.js runStory)
 }
 
 // Where that objective is, for the guide (systems/wayfinder.js).
@@ -444,12 +444,10 @@ async function fangStory(z) {
   G.cam.clearShot();
   G.frozen = true;
   await G.ui.card('Chapter 3 complete', 'The Quiet District', 3);
-  await G.ui.card('Chapter 4: Bean’s Secret', 'Coming soon — keep the grey Grumblings company, and check on the neighbours', 3.6);
+  await G.ui.card('Sleep well', 'Tomorrow, the neighbours.', 2.6);
   p.stand(seat.position.clone().add(new Vector3(0, 0, 1.6)));
-  G.cam.snapBehind(p);
-  G.frozen = false;
-  G.audio.mix('academy-dusk');
-  refreshObjective3();
+  // the next morning: Chapter 4 begins at the gate (the Academy loads again, under a white sky)
+  await G.goto('academy', 'SPAWN_gate');
 }
 
 // The courtyard fills with a cold grey fog while Master Fang tells the story, then it clears.

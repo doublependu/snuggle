@@ -336,7 +336,10 @@ export class Player {
     s.baseScale = s.baseScale || d.scale.x;
     const br = 1 + Math.sin(G.time * 2.1) * 0.035;
     d.scale.set(s.baseScale * (1 + (br - 1) * 0.6), s.baseScale * br, s.baseScale);
-    if (s.eyes) s.eyes.scale.y = s.awake ? 3.2 : 1;
+    // awake: his open eyes (the slits are his sleeping ones)
+    const open = s.parts?.open;
+    if (open) open.visible = !!s.awake;
+    if (s.eyes) s.eyes.visible = !(open && s.awake);
   }
 
   setCameraNear(near) {

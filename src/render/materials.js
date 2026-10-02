@@ -20,6 +20,11 @@ export const shared = {
   uPocketN: { value: 0 },
   uHFog: { value: new Vector4() }, // on, top y, falloff (m), strength
   uHFogWall: { value: new Vector4() }, // toward a fog wall: dir x, dir z, start (m along dir), 1 / length
+  // The deep fog of Chapter 4: inside a colour pocket the air is clear too (0 = pockets only bring colour back)
+  uFogClear: { value: 0 },
+  // A Domain of Comfort (Chapter 5): a circle on the ground, centre xyz and radius (0 = none). Scenery made with
+  // { domain: 1 } (the street) is not drawn inside it, { domain: 2 } (the Domain's own set) only inside it.
+  uDomain: { value: new Vector4() },
   // The mist beyond a map's walls (the forest round the station and the Academy, procgen/forest.js): fog by
   // distance outside a rectangle on the ground, so the grounds stay clear and the forest fades out. See setMist().
   uMistRect: { value: new Vector4() }, // centre x, centre z, half size x, half size z
@@ -49,26 +54,41 @@ const LAMP_FRAG = `if (uLampOn > 0.5) {
     float face = 0.55 + 0.45 * saturate(normal.y * 0.5 + 0.7);
     outgoingLight += diffuseColor.rgb * lamp * lh * face * uLampOn;
   }\n`;
-const lampUniforms = (sh, fade = 0) => {
+const lampUniforms = (sh, fade = 0, domain = 0) => {
   sh.uniforms.uLampMap = shared.uLampMap;
   sh.uniforms.uLampRect = shared.uLampRect;
   sh.uniforms.uLampOn = shared.uLampOn;
   sh.uniforms.uLampTop = shared.uLampTop;
-  for (const k of ['uFade', 'uFadeTint', 'uPockets', 'uPocketN', 'uHFog', 'uHFogWall', 'uMistRect', 'uMistP', 'uMistSea']) sh.uniforms[k] = shared[k];
+  for (const k of ['uFade', 'uFadeTint', 'uPockets', 'uPocketN', 'uHFog', 'uHFogWall', 'uFogClear', 'uMistRect', 'uMistP', 'uMistSea']) sh.uniforms[k] = shared[k];
   sh.uniforms.uFadeOn = { value: fade };
+  if (domain) {
+    sh.uniforms.uDomain = shared.uDomain;
+    sh.uniforms.uDomainSide = { value: domain };
+  }
 };
+// A Domain's edge: the street's pixels inside the circle are dropped, the Domain's own outside it, and a line
+// of warm light runs along the edge. Only materials made with { domain } compile this (a discard costs phones
+// their early depth test, so it stays out of every other zone's shaders).
+const DOMAIN_HEAD = 'uniform vec4 uDomain; uniform float uDomainSide;\n';
+const DOMAIN_CUT = `float dEdge = 9.0;
+  if (uDomain.w > 0.0) { dEdge = distance(vLampWorld.xz, uDomain.xz) - uDomain.w; if ((uDomainSide < 1.5) == (dEdge < 0.0)) discard; }
+  else if (uDomainSide > 1.5) discard;\n`;
+const DOMAIN_GLOW = 'outgoingLight += vec3(1.0, 0.78, 0.4) * (1.0 - smoothstep(0.0, 0.3, abs(dEdge)));\n';
 
 // Grey-out with colour pockets (after the lamp light), and three's fog plus the height fog / fog wall.
 // W is the world-position varying of the shader it goes into.
-const FADE_HEAD = 'uniform float uFade, uFadeOn, uPocketN; uniform vec3 uFadeTint; uniform vec4 uPockets[8], uHFog, uHFogWall, uMistRect, uMistP; uniform float uMistSea;\n';
-const FADE_FRAG = `if (uFade > 0.0 && uFadeOn > 0.5) {
-    float keep = 0.0;
+const FADE_HEAD = 'uniform float uFade, uFadeOn, uPocketN, uFogClear; uniform vec3 uFadeTint; uniform vec4 uPockets[8], uHFog, uHFogWall, uMistRect, uMistP; uniform float uMistSea;\n';
+// How far inside a pocket of colour this pixel is (0 outside all of them): worked out once, and used by both
+// the grey-out and the fog. W is the world-position varying of the shader it goes into.
+export const pocketGLSL = (W) => `float pKeep = 0.0;
+  if (uPocketN > 0.5 && (uFade > 0.0 || uFogClear > 0.0)) {
     for (int i = 0; i < 8; i++) {
       if (float(i) >= uPocketN) break;
-      keep = max(keep, 1.0 - smoothstep(uPockets[i].w * 0.55, uPockets[i].w, distance(vLampWorld, uPockets[i].xyz)));
+      pKeep = max(pKeep, 1.0 - smoothstep(uPockets[i].w * 0.55, uPockets[i].w, distance(${W}, uPockets[i].xyz)));
     }
-    outgoingLight = mix(outgoingLight, vec3(dot(outgoingLight, vec3(0.3, 0.59, 0.11))) * uFadeTint, uFade * (1.0 - keep));
   }\n`;
+const FADE_FRAG = `if (uFade > 0.0 && uFadeOn > 0.5)
+    outgoingLight = mix(outgoingLight, vec3(dot(outgoingLight, vec3(0.3, 0.59, 0.11))) * uFadeTint, uFade * (1.0 - pKeep));\n`;
 export const fogGLSL = (W) => `#ifdef USE_FOG
   #ifdef FOG_EXP2
     float fogFactor = 1.0 - exp(-fogDensity * fogDensity * vFogDepth * vFogDepth);
@@ -79,6 +99,7 @@ export const fogGLSL = (W) => `#ifdef USE_FOG
     float low = saturate((uHFog.y - ${W}.y) / uHFog.z) * saturate(vFogDepth / 30.0);
     float wall = saturate((dot(${W}.xz, uHFogWall.xy) - uHFogWall.z) * uHFogWall.w);
     fogFactor = saturate(fogFactor + low * uHFog.w + wall * wall);
+    fogFactor *= 1.0 - pKeep * uFogClear;
   }
   if (uMistP.w > 0.5) {
     float out_ = length(max(abs(${W}.xz - uMistRect.xy) - uMistRect.zw, 0.0));
@@ -128,7 +149,7 @@ export function materialFor(kind, opts = {}) {
   } else {
     m = new MeshLambertMaterial({ vertexColors: o.vertexColors !== false, color: o.color ?? 0xffffff, flatShading: !!o.flat });
     if (o.emissive) m.emissive = new Color(o.emissive);
-    if (o.mixed) patchMixed(m, null, o.fade ? 1 : 0);
+    if (o.mixed) patchMixed(m, null, o.fade ? 1 : 0, o.domain || 0);
     else patch(m, o);
   }
   if (o.side === 'double') m.side = DoubleSide;
@@ -137,17 +158,17 @@ export function materialFor(kind, opts = {}) {
   return m;
 }
 
-const SHADER_FLAGS = ['grid', 'gridStrength', 'fiber', 'fiberScale', 'tiles', 'rim', 'warm', 'sheen', 'sway'];
+const SHADER_FLAGS = ['grid', 'gridStrength', 'fiber', 'fiberScale', 'tiles', 'rim', 'warm', 'sheen', 'sway', 'domain'];
 
 function patch(m, o) {
   const needObj = o.grid || o.fiber || o.tiles;
   // program key from shader-affecting flags only, so colour / emissive variants share one program
-  const progKey = SHADER_FLAGS.map((k) => o[k] ?? '').join('|');
+  const progKey = SHADER_FLAGS.map((k) => (k === 'domain' ? +!!o[k] : o[k] ?? '')).join('|');
   m.customProgramCacheKey = () => progKey;
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uTime = shared.uTime;
     sh.uniforms.uWind = shared.uWind;
-    lampUniforms(sh, o.fade ? 1 : 0);
+    lampUniforms(sh, o.fade ? 1 : 0, o.domain || 0);
     let vHead = LAMP_VERT_HEAD;
     let vBody = '';
     if (needObj) {
@@ -162,8 +183,8 @@ function patch(m, o) {
       .replace('#include <begin_vertex>', '#include <begin_vertex>\n' + vBody + (o.sway ? swayGLSL(o.sway) : ''))
       .replace('#include <project_vertex>', LAMP_VERT + '#include <project_vertex>');
 
-    let fHead = LAMP_FRAG_HEAD + FADE_HEAD;
-    let fColor = '';
+    let fHead = LAMP_FRAG_HEAD + FADE_HEAD + (o.domain ? DOMAIN_HEAD : '');
+    let fColor = (o.domain ? DOMAIN_CUT : '') + pocketGLSL('vLampWorld');
     let fOut = '';
     if (needObj) fHead += 'varying vec3 vObjPos; varying vec3 vObjN;\n' + NOISE;
     if (o.grid) {
@@ -186,7 +207,7 @@ function patch(m, o) {
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', '#include <common>\n' + fHead)
       .replace('#include <color_fragment>', '#include <color_fragment>\n' + fColor)
-      .replace('#include <opaque_fragment>', fOut + LAMP_FRAG + FADE_FRAG + '#include <opaque_fragment>')
+      .replace('#include <opaque_fragment>', fOut + LAMP_FRAG + FADE_FRAG + (o.domain ? DOMAIN_GLOW : '') + '#include <opaque_fragment>')
       .replace('#include <fog_fragment>', fogGLSL('vLampWorld'));
   };
 }
@@ -208,21 +229,21 @@ export function atlasMaterial(map) {
 
 // One program for every Blender mesh. Codes (alpha * 10): 1 plain/wood/stone, 2 cloth, 3 skin, 4 hair,
 // 5 eye/glow (unlit), 6 roof tiles, 7 paper (faceted), 8 ground, 9 / 10 face eyes / mouth (atlas only).
-function patchMixed(m, face = null, fade = 0) {
-  m.customProgramCacheKey = () => (face ? 'mixedAtlas' : 'mixed');
+function patchMixed(m, face = null, fade = 0, domain = 0) {
+  m.customProgramCacheKey = () => (face ? 'mixedAtlas' : domain ? 'mixedDomain' : 'mixed');
   m.onBeforeCompile = (sh) => {
     if (face) Object.assign(sh.uniforms, face);
-    lampUniforms(sh, fade);
+    lampUniforms(sh, fade, domain);
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vObjPos; varying vec3 vObjN;\n' + LAMP_VERT_HEAD)
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvObjPos = position; vObjN = objectNormal;')
       .replace('#include <project_vertex>', LAMP_VERT + '#include <project_vertex>');
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vObjPos; varying vec3 vObjN;\n' + LAMP_FRAG_HEAD + FADE_HEAD + (face ? 'uniform vec2 uEye; uniform vec2 uMouth;\n' : '') + NOISE + GRID)
+      .replace('#include <common>', '#include <common>\nvarying vec3 vObjPos; varying vec3 vObjN;\n' + LAMP_FRAG_HEAD + FADE_HEAD + (domain ? DOMAIN_HEAD : '') + (face ? 'uniform vec2 uEye; uniform vec2 uMouth;\n' : '') + NOISE + GRID)
       .replace('#include <map_fragment>', '')
       .replace(
         '#include <color_fragment>',
-        `#include <color_fragment>
+        `${domain ? DOMAIN_CUT : ''}${pocketGLSL('vLampWorld')}#include <color_fragment>
         int sCode = 1;
         #ifdef USE_COLOR_ALPHA
           sCode = int(vColor.a * 10.0 + 0.5);
@@ -261,7 +282,7 @@ function patchMixed(m, face = null, fade = 0) {
           if (sCode == 5) outgoingLight = diffuseColor.rgb + totalEmissiveRadiance; }
         if (sCode != 5) ${LAMP_FRAG}
         if (sCode != 5) ${FADE_FRAG}
-        #include <opaque_fragment>`,
+        ${domain ? DOMAIN_GLOW : ''}#include <opaque_fragment>`,
       )
       .replace('#include <fog_fragment>', fogGLSL('vLampWorld'));
   };
@@ -306,12 +327,16 @@ float clothGrid(vec3 p, vec3 n, float cell) {
 
 // Replace glTF materials with the stylized family; returns the root for chaining.
 // fade: a zone's static scenery, which greys out in the Quiet District (see shared.uFade).
-export function stylize(root, { shadows = true, receive = true, overrides = {}, fade = false } = {}) {
+// domain: (mesh) => 1 (the street) or 2 (a Domain's own set), for a zone where a Domain of Comfort opens.
+export function stylize(root, { shadows = true, receive = true, overrides = {}, fade = false, domain = null } = {}) {
   root.traverse((o) => {
     if (!o.isMesh) return;
     const name = (o.material?.name || 'plain').split('.')[0];
     const kind = overrides[name] || name;
-    o.material = kind === 'mixed' && o.material.map ? atlasMaterial(o.material.map) : materialFor(kind, fade ? { fade: 1 } : {});
+    const opts = fade ? { fade: 1 } : {};
+    const side = domain?.(o);
+    if (side) opts.domain = side;
+    o.material = kind === 'mixed' && o.material.map ? atlasMaterial(o.material.map) : materialFor(kind, opts);
     const basic = KINDS[kind]?.basic;
     o.castShadow = shadows && !basic;
     o.receiveShadow = receive && !basic;
@@ -321,8 +346,11 @@ export function stylize(root, { shadows = true, receive = true, overrides = {}, 
 
 // The Quiet District's look (Chapter 3): grey-out amount and tint, the height fog and the fog wall.
 // setGreyOut() with no argument turns it all off (zones do on dispose).
-export function setGreyOut({ fade = 0, tint = '#ffffff', fog = null, wall = null } = {}) {
+// clear: how much of the fog a colour pocket clears as well (Chapter 4's deep fog).
+export function setGreyOut({ fade = 0, tint = '#ffffff', fog = null, wall = null, clear = 0 } = {}) {
   shared.uFade.value = fade;
+  shared.uFogClear.value = clear;
+  shared.uDomain.value.set(0, 0, 0, 0);
   shared.uFadeTint.value.set(tint);
   const h = shared.uHFog.value;
   if (fog) h.set(1, fog.top, fog.falloff, fog.strength);

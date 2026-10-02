@@ -6,7 +6,7 @@ import { Vector3 } from 'three';
 import { G } from '../game.js';
 import { Ribbon } from '../render/vfx.js';
 
-const RANGE = 7.5;
+const RANGE = 7.5; // 10 once the thread is stitched brighter (Chapter 4)
 const _a = new Vector3();
 const _b = new Vector3();
 const PTS = Array.from({ length: 96 }, () => new Vector3());
@@ -23,6 +23,10 @@ export class Soothe {
     this.show = 0;
   }
 
+  range() {
+    return G.save.story.ch4_thread ? 10 : RANGE;
+  }
+
   attach(scene) {
     scene.add(this.ribbon.mesh, this.cocoonRibbon.mesh);
   }
@@ -30,7 +34,7 @@ export class Soothe {
   pickTarget() {
     const p = G.player;
     let best = null,
-      bd = RANGE;
+      bd = this.range();
     for (const g of G.grumblings) {
       if (!g.active) continue;
       const d = g.position.distanceTo(p.position);
@@ -80,14 +84,15 @@ export class Soothe {
     const p = G.player;
     if (!p) return;
     this.sinceHit += dt;
-    if (this.sinceHit > 4 && this.calm < this.maxCalm) {
+    // (in the fog of Chapter 4 Calm only comes back in a warm spot: systems/sigh.js sets noRegen)
+    if (this.sinceHit > 4 && this.calm < this.maxCalm && !this.noRegen) {
       this.calm++;
       this.sinceHit = 2.5;
     }
     const humming = p.humming && p.state === 'move';
     G.audio.setHumming(humming);
     if (humming) {
-      if (!this.target || !this.target.active || this.target.position.distanceTo(p.position) > RANGE + 1) this.target = this.pickTarget();
+      if (!this.target || !this.target.active || this.target.position.distanceTo(p.position) > this.range() + 1) this.target = this.pickTarget();
     } else if (this.target && !this.target.active) this.target = null;
 
     const t = humming ? this.target : null;

@@ -29,6 +29,8 @@ const AMBIENCE = {
   'academy-grey': { wind: 0.3, water: 0.3, pad: 0.6, music: 'grey' },
   market: { water: 0.6, crowd: 1, insects: 1, music: 'market' },
   quiet: { wind: 0.7, water: 0.35, pad: 0.6, music: 'quiet' },
+  fog: { wind: 1, pad: 0.4, music: 'fog' }, // Chapters 4 and 5, under the fog
+  morning: { birds: 1, water: 0.4, pad: 1, music: 'morning' }, // the Epilogue, and the district ever after
 };
 // The noise beds: filter type, frequency, Q, and the gain at level 1.
 const NOISE_BEDS = {

@@ -67,6 +67,14 @@ function attachAtlas(doc, name) {
   return true;
 }
 
+// Collision meshes (COL_*) are only ever read for their positions: their normals and colours are dead weight.
+function stripColliders(doc) {
+  for (const node of doc.getRoot().listNodes()) {
+    if (!node.getName().startsWith('COL_') || !node.getMesh()) continue;
+    for (const prim of node.getMesh().listPrimitives()) for (const name of ['NORMAL', 'COLOR_0', 'TEXCOORD_0']) prim.setAttribute(name, null);
+  }
+}
+
 // Materials only carry a name (the runtime shader family); drop PBR extras.
 function simplifyMaterials(doc) {
   for (const m of doc.getRoot().listMaterials()) {
@@ -82,6 +90,7 @@ for (const f of files) {
   const doc = await io.read(join(SRC, f));
   if (f === 'anim_humanoid.glb') stripAnimChannels(doc);
   simplifyMaterials(doc);
+  stripColliders(doc);
   const atlas = attachAtlas(doc, basename(f, '.glb'));
   await doc.transform(
     dedup({ keepUniqueNames: true }),

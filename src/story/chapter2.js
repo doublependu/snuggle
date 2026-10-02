@@ -50,7 +50,9 @@ export async function chapter2(z) {
   wb?.follow({ x: -1.3, z: 0.8 });
   wireFriends(z);
   z.on('flock-done', (f) => flockDone(z, f));
-  if (flag('ch2Done')) hookAftermath(z, true);
+  // (the cold that fell over the bay at the end of that evening lifts with the fog: after the story the
+  // lanterns across the water are lit again)
+  if (flag('ch2Done') && !flag('epilogueDone')) hookAftermath(z, true);
   if (!flag('ch2_tutorial')) await tutorial(z);
   z.enableFlock(1);
   if (flag('flock1Done')) {

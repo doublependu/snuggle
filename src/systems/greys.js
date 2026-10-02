@@ -19,7 +19,9 @@ const turn = (o, want, k) => (o.rotation.y += Math.atan2(Math.sin(want - o.rotat
 
 // opts: heart (Vector3 it drifts toward), wander (m around home), echo (its forgotten feeling, for Echo
 // Friend), helped() (a restored memory nearby), aloof (it never lets anyone near: the Academy's morning
-// greys), path ([Vector3]: a scripted grey that only drifts along it, e.g. out of the Academy's gate).
+// greys), path ([Vector3]: a scripted grey that only drifts along it, e.g. out of the Academy's gate),
+// asleep (the Old Quarter's sleepers, Chapter 4: curled up until someone keeps it company, which wakes it
+// gently; run near it and it wakes with a start and sighs).
 registerBehaviour('heavy', (g) => {
   const home = g.home.clone();
   const wanderTo = home.clone();
@@ -76,6 +78,20 @@ registerBehaviour('heavy', (g) => {
       }
       const humAt = p.humming && G.soothe.target === g;
       const running = p.rushing && dist < 4;
+      const asleep = g.opts.asleep && !g.awake;
+      if (asleep) {
+        if (g.obj.userData.eyes) g.obj.userData.eyes.scale.y = 0.12;
+        if (p.rushing && dist < 5) {
+          // woken with a start: it sighs, there and then
+          g.awake = true;
+          sighT = 0;
+          say('!', 1.4);
+          G.events.emit('grey-woke', g);
+        } else if (g.company > 0.25) {
+          g.awake = true;
+          say('…?', 1.6);
+        } else if (dist < 7 && Math.random() < dt * 0.25) say('z z z…', 1.6);
+      }
       // scripted greys only drift along their path, and never let anyone near
       if (path) {
         if (humAt) {
@@ -141,7 +157,7 @@ registerBehaviour('heavy', (g) => {
             G.fx.sparkles.emit(_v.copy(o).setY(o.y + 0.4), 18, '#ffe7a8', { speed: 0.8, size: 0.1, life: 1.2 });
             G.events.emit('grey-ready', g);
           }
-        } else {
+        } else if (!g.opts.asleep) {
           // drifting: slow wandering around its spot, always leaning toward the heart of the district
           wanderT -= dt;
           if (wanderT < 0) {
@@ -163,7 +179,7 @@ registerBehaviour('heavy', (g) => {
       ground(o, dt);
       g.obj.userData.tint.lerpColors(WHITE, WARM, g.company * 0.6);
       // its sigh: a slow grey ring; if it reaches her she wants to curl up for a moment (walks slowly)
-      sighT -= dt;
+      if (!asleep) sighT -= dt;
       if (sighT < 0 && dist < 9) {
         sighT = 7 + Math.random() * 3;
         waveT = 0;

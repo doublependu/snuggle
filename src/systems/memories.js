@@ -7,7 +7,7 @@
 // gets a friendly line: there is nothing to lose. Loaded only with the zones that use it.
 import { AdditiveBlending, MeshBasicMaterial, Vector3 } from 'three';
 import { G, flag, wait } from '../game.js';
-import { talk, ask } from '../story/helpers.js';
+import { talk, ask, tween } from '../story/helpers.js';
 import { SPECIES, BOOK_ORDER } from '../content/species.js';
 import { MEMORY_BOOK } from '../content/memories.js';
 import { Humanoid } from '../actors/humanoid.js';
@@ -27,25 +27,8 @@ const _v = new Vector3();
 
 let ghostMat = null;
 // The golden memory figures: one shared additive material (they fade in and out together).
-function ghost() {
+export function ghost() {
   return (ghostMat ||= new MeshBasicMaterial({ color: '#f7c98e', transparent: true, opacity: 0, blending: AdditiveBlending, depthWrite: false }));
-}
-
-// Resolves after `seconds` of game time, calling fn(k) with k going 0..1 every frame.
-function tween(seconds, fn) {
-  return new Promise((res) => {
-    let t = 0;
-    const u = (dt) => {
-      t += dt;
-      const k = Math.min(1, t / seconds);
-      fn(k);
-      if (k >= 1) {
-        G.updaters.delete(u);
-        res();
-      }
-    };
-    G.updaters.add(u);
-  });
 }
 
 export class Memories {
@@ -55,7 +38,7 @@ export class Memories {
     this.zone = zone;
     this.defs = defs;
     this.spots = [];
-    this.pockets = [];
+    this.pockets = zone.pockets || []; // the zone's own list, if it keeps one (systems/fog.js usePockets)
     this.busy = false;
     for (const m of zone.markersBy('POINT_mem_')) {
       const id = m.name.slice(10);
@@ -172,13 +155,7 @@ export class Memories {
 
   // One golden figure, placed in the spot's frame (x = its right, z = in front of it).
   async figure(spot, f) {
-    const h = await Humanoid.load(f.model, { fresh: true });
-    h.root.traverse((o) => {
-      if (o.isMesh) {
-        o.material = ghost();
-        o.castShadow = o.receiveShadow = false;
-      }
-    });
+    const h = await goldenFigure(f.model);
     const fa = spot.marker.facing;
     const x = spot.position.x + Math.cos(fa) * (f.x || 0) + Math.sin(fa) * (f.z || 0);
     const z = spot.position.z - Math.sin(fa) * (f.x || 0) + Math.cos(fa) * (f.z || 0);
@@ -206,4 +183,16 @@ export class Memories {
       h.root.removeFromParent();
     }, 600);
   }
+}
+
+// A townsperson in the golden memory material (not yet in the scene; the caller places and updates it).
+export async function goldenFigure(model) {
+  const h = await Humanoid.load(model, { fresh: true });
+  h.root.traverse((o) => {
+    if (o.isMesh) {
+      o.material = ghost();
+      o.castShadow = o.receiveShadow = false;
+    }
+  });
+  return h;
 }

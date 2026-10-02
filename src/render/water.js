@@ -3,7 +3,7 @@
 // No render-to-texture, so it is cheap on every tier (the tier only toggles one noise octave).
 // Optional vertex colour red channel = "shallowness" painted near shores in Blender.
 import { Color, ShaderMaterial, UniformsLib, UniformsUtils, Vector3 } from 'three';
-import { shared, fogGLSL } from './materials.js';
+import { shared, fogGLSL, pocketGLSL } from './materials.js';
 
 export function makeWater(opts = {}) {
   const o = { deep: '#1f5a5c', shallow: '#4a948a', top: '#6fa7d8', horizon: '#dcebf2', sun: new Vector3(0.4, 0.5, -0.6), detail: 1, ...opts };
@@ -37,7 +37,7 @@ export function makeWater(opts = {}) {
       #include <common>
       #include <fog_pars_fragment>
       uniform float uTime; uniform vec3 deep, shallow, skyTop, skyHorizon, sunDir; uniform float grey;
-      uniform sampler2D uLampMap; uniform vec4 uLampRect; uniform float uLampOn; uniform vec4 uHFog, uHFogWall, uMistRect, uMistP; uniform float uMistSea;
+      uniform sampler2D uLampMap; uniform vec4 uLampRect; uniform float uLampOn; uniform vec4 uHFog, uHFogWall, uMistRect, uMistP, uPockets[8]; uniform float uMistSea, uPocketN, uFogClear;
       varying vec3 vWorld; varying float vShore;
       float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float n2(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
@@ -71,6 +71,7 @@ export function makeWater(opts = {}) {
         c = mix(c, vec3(dot(c, vec3(0.3, 0.59, 0.11))), grey);
         gl_FragColor = vec4(c, 1.0);
         #include <colorspace_fragment>
+        ${pocketGLSL('vWorld').replace('uFade > 0.0', 'grey > 0.0')}
         ${fogGLSL('vWorld')}
       }`,
   });
@@ -82,6 +83,9 @@ export function makeWater(opts = {}) {
   m.uniforms.grey = shared.uFade;
   m.uniforms.uHFog = shared.uHFog;
   m.uniforms.uHFogWall = shared.uHFogWall;
+  m.uniforms.uPockets = shared.uPockets;
+  m.uniforms.uPocketN = shared.uPocketN;
+  m.uniforms.uFogClear = shared.uFogClear;
   m.uniforms.uMistRect = shared.uMistRect;
   m.uniforms.uMistP = shared.uMistP;
   m.uniforms.uMistSea = shared.uMistSea;

@@ -53,13 +53,15 @@ if (!REMOTE && !existsSync(join(DIST, 'index.html'))) {
 if (!REMOTE) await new Promise((r) => server.listen(0, r));
 const base = REMOTE || `http://localhost:${server.address().port}/`;
 if (REMOTE) console.log('Measuring ' + REMOTE + ' (network throttling is added on top of the real connection)');
-const ZONES = (process.env.ZONES || 'train,station,academy,market,quiet').split(',');
+const ZONES = (process.env.ZONES || 'train,station,academy,market,quiet,heart').split(',');
 // a save in each zone, as a returning player would have (story flags only matter after Begin)
 const SAVES = {
   station: { prologueTrain: true },
   academy: { prologueTrain: true, prologueDone: true },
   market: { prologueTrain: true, prologueDone: true, ch1Done: true, ch2_start: true },
   quiet: { prologueTrain: true, prologueDone: true, ch1Done: true, ch2_start: true, ch2Done: true, ch3_start: true, ch3_greys: true, ch3_arrive: true },
+  // the Old Quarter at its heaviest: Chapter 5, with the Great Sulk in the square
+  heart: { prologueTrain: true, prologueDone: true, ch1Done: true, ch2_start: true, ch2Done: true, ch3_start: true, ch3_greys: true, ch3_arrive: true, ch3_return: true, ch3Done: true, ch4_start: true, ch4_lost: true, ch4_garden: true, ch4_secret: true, ch4_thread: true, ch4Done: true },
 };
 const browser = await chromium.launch({
   executablePath,

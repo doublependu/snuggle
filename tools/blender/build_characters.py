@@ -11,7 +11,7 @@ import os, sys, importlib
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-CHARACTERS = ['xiaopei', 'tangtang', 'weibao', 'fang', 'folk_a', 'folk_b', 'folk_c', 'folk_kid']
+CHARACTERS = ['xiaopei', 'xiaopei_cardigan', 'tangtang', 'weibao', 'fang', 'folk_a', 'folk_b', 'folk_c', 'folk_kid']
 
 
 def build(name):

@@ -3,7 +3,8 @@
 import os
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-for name in ('build_characters.py', 'build_anims.py', 'build_creatures.py', 'build_kit.py', 'build_zones.py', 'build_market.py', 'build_quiet.py'):
+for name in ('build_characters.py', 'build_anims.py', 'build_creatures.py', 'build_creatures2.py', 'build_kit.py', 'build_zones.py', 'build_market.py', 'build_quiet.py',
+             'build_heart.py', 'build_sulk.py'):
     path = os.path.join(HERE, name)
     print('==>', name)
     exec(compile(open(path).read(), path, 'exec'), {'__file__': path, '__name__': '__main__'})

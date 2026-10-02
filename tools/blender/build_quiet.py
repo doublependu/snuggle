@@ -53,9 +53,13 @@ def dead_lantern(name, c, r=0.16):
 
 # ---------------------------------------------------------------- kit pieces
 
-def qshop(x, name, w=5.6, h=6.2, col='#d8d0c2', trim='#5e4a3c', sign='#8a6a52', shut=SHUTTER, balcony=True, cloth=('#b7a792', '#9aa7b0')):
+def qshop(x, name, w=5.6, h=6.2, col='#d8d0c2', trim='#5e4a3c', sign='#8a6a52', shut=SHUTTER, balcony=True, cloth=('#b7a792', '#9aa7b0'),
+          open=False, goods=('#e0662c', '#f6c56a', '#2f8a8f', '#f3e6d3')):
     """A two-storey tong-lau shopfront, shut: a roll-down shutter over the shop, a faded signboard with no
-    words left on it, closed wooden window shutters upstairs, a balcony with a laundry pole, a dead lantern."""
+    words left on it, closed wooden window shutters upstairs, a balcony with a laundry pole, a dead lantern.
+    open: the same shop on the morning after the story (the zone swaps the pieces): the shutter rolled up, a lit
+    shop behind a counter with things on it, a bright awning, the signboard repainted, a window open upstairs,
+    the lantern lit."""
     V, K = [], []
     V.append(box('wall', (0, 0.4, h / 2), (w, 0.8, h), 'plain', C(col), noise=0.03))
     V.append(box('plinth', (0, -0.02, 0.2), (w + 0.04, 0.1, 0.4), 'stone', C(STONE_D)))
@@ -64,22 +68,47 @@ def qshop(x, name, w=5.6, h=6.2, col='#d8d0c2', trim='#5e4a3c', sign='#8a6a52', 
         V.append(box('pil%d' % sx, (sx * (w / 2 - 0.15), -0.04, h / 2), (0.3, 0.12, h), 'stone', mix(C(col), (0.4, 0.38, 0.36), 0.25)))
     # the shutter, pulled all the way down: corrugated metal and its housing
     sw = w * 0.72
-    V.append(box('shutter', (0, -0.04, 1.35), (sw, 0.06, 2.7), 'stone', C(shut)))
-    for i in range(10):
-        V.append(box('rib%d' % i, (0, -0.075, 0.18 + i * 0.26), (sw, 0.02, 0.05), 'stone', mix(C(shut), (0, 0, 0), 0.25)))
+    if open:
+        # rolled up under its housing; behind it the shop, lit, with a counter across the doorway
+        V.append(box('shutter', (0, -0.04, 2.55), (sw, 0.06, 0.3), 'stone', C(shut)))
+        V.append(box('rib0', (0, -0.075, 2.48), (sw, 0.02, 0.05), 'stone', mix(C(shut), (0, 0, 0), 0.25)))
+        V.append(box('inside', (0, -0.015, 1.2), (sw, 0.03, 2.4), 'glow', C('#f2b261')))
+        for i in range(2):  # shelves on the back wall, with jars and boxes
+            V.append(box('shelf%d' % i, (0, -0.07, 1.45 + i * 0.5), (sw * 0.86, 0.1, 0.05), 'wood', C(trim)))
+            for k in range(6):
+                V.append(box('jar%d%d' % (i, k), (-sw * 0.36 + k * sw * 0.145, -0.08, 1.59 + i * 0.5), (0.2, 0.1, 0.22 - (k % 2) * 0.06), 'paper', C(goods[(i + k) % 4])))
+        V.append(box('counter', (0, -0.3, 0.5), (sw * 0.82, 0.46, 1.0), 'wood', C(trim)))
+        V.append(box('counter_top', (0, -0.32, 1.03), (sw * 0.86, 0.56, 0.06), 'wood', mix(C(sign), (1, 0.9, 0.7), 0.3)))
+        K.append(col_box('counter', (0, -0.32, 0.55), (sw * 0.86, 0.6, 1.1)))
+        for k in range(4):  # what is for sale, set out on the counter
+            V.append(ellipsoid('ware%d' % k, (-sw * 0.3 + k * sw * 0.2, -0.36, 1.14), (0.15, 0.13, 0.1), 'paper', C(goods[k]), (6, 3), smooth=False))
+        # a striped awning over it
+        for k in range(6):
+            V.append(box('awn%d' % k, (-sw * 0.5 + (k + 0.5) * (sw + 0.3) / 6 - 0.15, -0.62, 2.92), ((sw + 0.3) / 6, 1.0, 0.04), 'cloth',
+                         C(goods[0] if k % 2 else goods[3]), rot=(-16, 0, 0)))
+    else:
+        V.append(box('shutter', (0, -0.04, 1.35), (sw, 0.06, 2.7), 'stone', C(shut)))
+        for i in range(10):
+            V.append(box('rib%d' % i, (0, -0.075, 0.18 + i * 0.26), (sw, 0.02, 0.05), 'stone', mix(C(shut), (0, 0, 0), 0.25)))
+        V.append(box('lock', (0, -0.08, 0.1), (0.25, 0.04, 0.14), 'stone', C('#4a4a4a')))
     V.append(box('housing', (0, -0.14, 2.85), (sw + 0.16, 0.3, 0.32), 'stone', mix(C(shut), (0, 0, 0), 0.35)))
-    V.append(box('lock', (0, -0.08, 0.1), (0.25, 0.04, 0.14), 'stone', C('#4a4a4a')))
-    # faded signboard: the words have long since weathered into pale shapes
-    V.append(box('sign', (0, -0.16, 3.4), (w * 0.72, 0.08, 0.62), 'wood', C(sign)))
+    # faded signboard: the words have long since weathered into pale shapes (repainted, on the open shop)
+    V.append(box('sign', (0, -0.16, 3.4), (w * 0.72, 0.08, 0.62), 'wood', mix(C(sign), C(goods[0]), 0.35) if open else C(sign)))
     V.append(box('sign_rim', (0, -0.12, 3.4), (w * 0.72 + 0.14, 0.04, 0.74), 'wood', C(trim)))
     for k in (-1, 0, 1):
-        V.append(box('glyph%d' % k, (k * 0.85, -0.205, 3.4), (0.42, 0.02, 0.34), 'wood', mix(C(sign), (0.92, 0.9, 0.86), 0.35)))
-    # upstairs: two windows behind closed wooden shutters
+        V.append(box('glyph%d' % k, (k * 0.85, -0.205, 3.4), (0.42, 0.02, 0.34), 'wood', C('#fbf4e8') if open else mix(C(sign), (0.92, 0.9, 0.86), 0.35)))
+    # upstairs: two windows behind closed wooden shutters (one of them thrown open, on the open shop)
     for sx in (-1, 1):
         cx = sx * w * 0.25
         V.append(box('win%d' % sx, (cx, -0.03, 4.9), (1.25, 0.06, 1.35), 'wood', C(trim)))
+        thrown = open and sx > 0
+        if thrown:
+            V.append(box('pane%d' % sx, (cx, -0.065, 4.9), (1.1, 0.02, 1.2), 'glow', C('#ffd9a0')))
         for k in (-1, 1):
-            V.append(box('shut%d%d' % (sx, k), (cx + k * 0.3, -0.07, 4.9), (0.56, 0.04, 1.22), 'wood', mix(C(sign), (0.3, 0.3, 0.3), 0.3)))
+            leaf = (cx + k * 0.82, -0.2, 4.9) if thrown else (cx + k * 0.3, -0.07, 4.9)
+            V.append(box('shut%d%d' % (sx, k), leaf, (0.56, 0.04, 1.22), 'wood', mix(C(sign), (0.3, 0.3, 0.3), 0.3), rot=(0, 0, -62 * k) if thrown else (0, 0, 0)))
+            if thrown:
+                continue
             for j in range(4):
                 V.append(box('slat%d%d%d' % (sx, k, j), (cx + k * 0.3, -0.095, 4.45 + j * 0.3), (0.52, 0.02, 0.05), 'wood', C(trim)))
     if balcony:
@@ -95,27 +124,44 @@ def qshop(x, name, w=5.6, h=6.2, col='#d8d0c2', trim='#5e4a3c', sign='#8a6a52', 
         V.append(box('eave', (0, -0.35, 3.95), (w + 0.2, 0.8, 0.08), 'roof', C(TILE), rot=(-12, 0, 0)))
     V.append(box('roofedge', (0, 0.1, h + 0.1), (w + 0.3, 1.0, 0.2), 'roof', C(TILE)))
     V.append(box('ridge', (0, 0.4, h + 0.3), (w + 0.3, 0.3, 0.2), 'roof', C('#3b4045')))
-    V += dead_lantern('lan', (w * 0.43, -0.4, 2.35), 0.15)
+    if open:
+        V += build_market.lantern('lan', (w * 0.43, -0.4, 2.35), 0.15, '#ff9a4a')
+    else:
+        V += dead_lantern('lan', (w * 0.43, -0.4, 2.35), 0.15)
     V.append(tube('lanhook', (w * 0.43, -0.4, 2.62), (w * 0.43, 0.0, 2.62), 0.015, 0.015, 'wood', C('#3a2e28'), segs=4, rings=1))
     LIGHTS[name] = [(w * 0.43, -0.4, 2.35, '#ffb45c', 4.2, 0.9, 0.9)]
     return piece(name, V, K, x)
 
 
-def qhouse(x, name, w=4.2, h=5.4, col='#cfc6b6', trim='#55443a'):
-    """A narrow house front: a plank door, a boarded-up window, a small tiled eave."""
+def qhouse(x, name, w=4.2, h=5.4, col='#cfc6b6', trim='#55443a', open=False, flowers=('#e0662c', '#f6c56a', '#f3e6d3')):
+    """A narrow house front: a plank door, a boarded-up window, a small tiled eave.
+    open: the same house on the morning after the story: the boards are off the window, there is a light on
+    behind it and a box of flowers under it, the door stands ajar, and the window upstairs is lit."""
     V, K = [], []
     V.append(box('wall', (0, 0.4, h / 2), (w, 0.8, h), 'plain', C(col), noise=0.03))
     V.append(box('plinth', (0, -0.02, 0.2), (w + 0.04, 0.1, 0.4), 'stone', C(STONE_D)))
     K.append(col_box('wall', (0, 0.45, h / 2), (w, 1.0, h)))
-    V.append(box('door', (-w * 0.22, -0.04, 1.05), (1.0, 0.06, 2.1), 'wood', C(trim)))
-    for k in range(5):
-        V.append(box('plank%d' % k, (-w * 0.22 - 0.4 + k * 0.2, -0.075, 1.05), (0.02, 0.02, 2.0), 'wood', mix(C(trim), (0, 0, 0), 0.3)))
+    if open:
+        # ajar: the doorway lit from inside, the door swung a little way in on its hinge
+        V.append(box('doorway', (-w * 0.22, -0.02, 1.05), (1.0, 0.03, 2.1), 'glow', C('#f2b261')))
+        V.append(box('door', (-w * 0.22 - 0.16, -0.26, 1.05), (0.72, 0.06, 2.1), 'wood', mix(C(trim), (1, 0.8, 0.6), 0.2), rot=(0, 0, 58)))
+    else:
+        V.append(box('door', (-w * 0.22, -0.04, 1.05), (1.0, 0.06, 2.1), 'wood', C(trim)))
+        for k in range(5):
+            V.append(box('plank%d' % k, (-w * 0.22 - 0.4 + k * 0.2, -0.075, 1.05), (0.02, 0.02, 2.0), 'wood', mix(C(trim), (0, 0, 0), 0.3)))
     V.append(box('lintel', (-w * 0.22, -0.08, 2.18), (1.2, 0.1, 0.12), 'wood', C(TIMBER_D)))
     V.append(box('win', (w * 0.2, -0.03, 1.6), (1.1, 0.06, 1.0), 'wood', C(trim)))
-    for k, a in ((0, 30), (1, -30)):
-        V.append(box('board%d' % k, (w * 0.2, -0.08, 1.6), (1.2, 0.03, 0.14), 'wood', C('#8a7458'), rot=(0, a, 0)))
+    if open:
+        V.append(box('winp', (w * 0.2, -0.065, 1.6), (0.95, 0.02, 0.85), 'glow', C('#ffd9a0')))
+        V.append(box('wbar', (w * 0.2, -0.08, 1.6), (0.05, 0.02, 0.85), 'wood', C(trim)))
+        V.append(box('fbox', (w * 0.2, -0.16, 1.02), (1.1, 0.22, 0.16), 'wood', C('#8a5a3c')))
+        for k in range(5):
+            V.append(ellipsoid('fl%d' % k, (w * 0.2 - 0.42 + k * 0.21, -0.17, 1.16 + (k % 2) * 0.03), (0.09, 0.09, 0.08), 'paper', C(flowers[k % 3]), (5, 3), smooth=False))
+    else:
+        for k, a in ((0, 30), (1, -30)):
+            V.append(box('board%d' % k, (w * 0.2, -0.08, 1.6), (1.2, 0.03, 0.14), 'wood', C('#8a7458'), rot=(0, a, 0)))
     V.append(box('win2', (0, -0.03, 3.9), (1.3, 0.06, 1.1), 'wood', C(trim)))
-    V.append(box('win2p', (0, -0.05, 3.9), (1.15, 0.03, 0.95), 'plain', C('#a89a82')))
+    V.append(box('win2p', (0, -0.05, 3.9), (1.15, 0.03, 0.95), 'glow' if open else 'plain', C('#ffd9a0' if open else '#a89a82')))
     V.append(box('eave', (0, -0.3, 2.65), (w + 0.1, 0.6, 0.07), 'roof', C(TILE), rot=(-14, 0, 0)))
     V.append(box('roofedge', (0, 0.1, h + 0.1), (w + 0.3, 1.0, 0.2), 'roof', C(TILE)))
     return piece(name, V, K, x)
@@ -157,8 +203,16 @@ def planter(x, name='planter'):
 PIECES = [lambda x: qshop(x, 'qshop_a'),
           lambda x: qshop(x, 'qshop_b', col='#c9cfc8', trim='#3f4a48', sign='#5f7a74', shut='#7d7466', balcony=False),
           lambda x: qshop(x, 'qshop_c', col='#e0d4c4', trim='#6a3e32', sign='#9a5a4a', shut='#687480', cloth=('#c9b8a0', '#a8a0b8')),
+          # the same three on the morning after the story (src/world/zones/quiet.js swaps them in)
+          lambda x: qshop(x, 'qshop_a_open', open=True, cloth=('#e0662c', '#f3e6d3')),
+          lambda x: qshop(x, 'qshop_b_open', col='#c9cfc8', trim='#3f4a48', sign='#5f7a74', shut='#7d7466', balcony=False, open=True,
+                          goods=('#2f8a8f', '#f3e6d3', '#e2a13a', '#b5483a')),
+          lambda x: qshop(x, 'qshop_c_open', col='#e0d4c4', trim='#6a3e32', sign='#9a5a4a', shut='#687480', cloth=('#f6c56a', '#8fcaff'), open=True,
+                          goods=('#b5483a', '#f6c56a', '#f3e6d3', '#6e8b5a')),
           lambda x: qhouse(x, 'qhouse_a'),
           lambda x: qhouse(x, 'qhouse_b', col='#c4c9c6', trim='#3f4a48'),
+          lambda x: qhouse(x, 'qhouse_a_open', open=True),
+          lambda x: qhouse(x, 'qhouse_b_open', col='#c4c9c6', trim='#3f4a48', open=True, flowers=('#dba6ff', '#f3e6d3', '#ff9d86')),
           dead_post, dead_string, planter, bench_m, stool, bollard, boat, crate]
 
 

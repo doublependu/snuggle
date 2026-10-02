@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Small helpers shared by the story scripts.
 import { Vector3 } from 'three';
-import { G, until, wait } from '../game.js';
+import { G, flag, until, wait } from '../game.js';
 import { SPEAKERS } from '../ui/ui.js';
 import { SPECIES } from '../content/species.js';
 
@@ -23,11 +23,47 @@ export async function chat(lines) {
     const name = SPEAKERS[who]?.[0];
     if (!who) G.ui.toast(text, life);
     else if (who === 'xiaopei') G.ui.bubble(G.player.root, text, life, 1.6);
+    else if (who === 'doudou' && G.zone?.bean?.out) G.ui.bubble(G.player.doudou, text, life, 0.3); // Bean, awake
     else if (n && !n.hidden) G.ui.bubble(n.root, who === 'honk' ? '🪿 ' + text : text, life, 1.55);
     else if (sprite) G.ui.bubble(sprite.obj, text, life, 0.55);
     else G.ui.bubble(G.player.root, `<b>${name || who}:</b> ${text}`, life, 1.6);
     await wait(life + 0.4);
   }
+}
+
+// Which part of the story a save is in, once Chapter 3 is over: 'ch4' (Bean's Secret), 'ch5' (The Great Sulk),
+// 'epilogue' (Morning in Lantern Bay) or 'free' (free-roam Lantern Bay). null before that.
+export function era() {
+  if (!flag('ch3Done')) return null;
+  return flag('epilogueDone') ? 'free' : flag('ch5Done') ? 'epilogue' : flag('ch4Done') ? 'ch5' : 'ch4';
+}
+
+// After Chapter 3 the story's scripts are loaded when a zone starts (src/main.js G.later), not with the zone:
+// each exports a function per zone it plays in (chapter4.academy, chapter4.quiet, chapter4.heart, ...).
+export async function runStory(z) {
+  const e = era();
+  if (!e) return false;
+  const m = await G.later(e);
+  if (G.zone !== z) return true;
+  await m[z.id]?.(z);
+  return true;
+}
+
+// Resolves after `seconds` of game time, calling fn(k) with k going 0..1 every frame.
+export function tween(seconds, fn) {
+  return new Promise((res) => {
+    let t = 0;
+    const u = (dt) => {
+      t += dt;
+      const k = Math.min(1, t / seconds);
+      fn(k);
+      if (k >= 1) {
+        G.updaters.delete(u);
+        res();
+      }
+    };
+    G.updaters.add(u);
+  });
 }
 
 // Ask a question; resolves to the chosen index (dialogue stays open for the reply).

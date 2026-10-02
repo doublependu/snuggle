@@ -44,7 +44,7 @@ export class Menus {
     this.controls = this.menu('controls', `<div class="panel"><h2>Controls</h2><table class="controls"><tbody></tbody></table>
       <div class="col" style="margin-top:14px"><button class="btn alt" data-a="remap">Change controls</button><button class="btn" data-a="back">Back</button></div></div>`);
     this.book = this.menu('book', `<div class="panel"><h2>Sprite Book</h2><p class="small" style="margin:-8px 0 12px">Every soothed Grumbling becomes a Charm Sprite. Equip one as your helper.</p>
-      <div class="grid"></div><div class="mems"></div><div class="col" style="margin-top:14px"><button class="btn" data-a="close">Close</button></div></div>`);
+      <div class="grid"></div><div class="mems"></div><div class="mems pages"></div><div class="col" style="margin-top:14px"><button class="btn" data-a="close">Close</button></div></div>`);
     this.book.classList.add('book');
     this.stack = [];
     this.bindSettings();
@@ -279,13 +279,14 @@ export class Menus {
     const save = G.save;
     for (const id of BOOK_ORDER) {
       const sp = SPECIES[id];
-      const count = save.sprites[id] || 0;
+      // (an entry with no sprite of its own, the Great Sulk's, opens with a story flag: content/species2.js)
+      const count = save.sprites[id] || (sp.story && save.story[sp.story] ? 1 : 0);
       const known = count > 0 || save.seen[id];
       const e = document.createElement('div');
       e.className = 'entry' + (count ? '' : ' unknown');
-      const img = thumb(id);
-      e.innerHTML = `${count ? `<span class="count">×${count}</span>` : ''}<img alt="" src="${img}">
-        <h3>${known ? sp.name : '???'}</h3><div class="feelq">${known ? '“' + sp.feeling + '”' : sp.chapter > 1 ? 'Chapter ' + sp.chapter : 'Not yet met'}</div>
+      const img = thumb(sp.look || id);
+      e.innerHTML = `${count && !sp.story ? `<span class="count">×${count}</span>` : ''}<img alt="" src="${img}">
+        <h3>${known ? sp.name : '???'}</h3><div class="feelq">${known ? '“' + sp.feeling + '”' : sp.where || (sp.chapter > 1 ? 'Chapter ' + sp.chapter : 'Not yet met')}</div>
         ${count && sp.ability ? `<div class="ability">${sp.abilityName}: ${sp.abilityDesc}</div>` : count ? `<div class="ability">${sp.about}</div>` : ''}`;
       if (count && sp.ability) {
         const b = document.createElement('button');
@@ -305,6 +306,8 @@ export class Menus {
     mems.innerHTML = save.story.ch3_arrive
       ? `<h3>Memories of the Quiet District</h3><div class="memrow">${MEMORY_BOOK.map(([id, icon, title]) => (save.story['mem_' + id] ? `<span class="mem">${icon}<small>${title}</small></span>` : '<span class="mem unknown">?<small>Not yet remembered</small></span>')).join('')}</div>`
       : '';
+    // pages added by what loads later (G.bookPages: the Harbour Book, systems/fishing.js; Lantern Bay, story/freeroam.js)
+    this.book.querySelector('.pages').innerHTML = [...(G.bookPages?.values() || [])].map((page) => page()).join('');
     if (this.stack.at(-1) !== this.book) this.show(this.book);
   }
 }

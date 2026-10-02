@@ -176,6 +176,7 @@ const KEEP = [
   [/pom-pom/, [0, 5]],
   [/sparrow/, [2.2, 5]],
   [/grey/, [1.8, 5]],
+  [/butterflies/, [0.8, 2.0]], // they loop round a person: stand right with them
 ];
 
 // Soothe a Grumbling: get within humming range, face it, hold Hum; step out of rain rings and away from
@@ -237,6 +238,28 @@ export class Soothe extends Goal {
       b.think('This is slow going. I toss it a tart.');
       await b.hands.tap(b.key('assist'));
     }
+  }
+}
+
+// Walk up to something that can be used (a board to read, a spot to fish from) and use it: Interact, when the
+// prompt says so.
+export class Use extends Goal {
+  constructor(b, desc, want, label, place = []) {
+    super(b, desc);
+    Object.assign(this, { want, label, place });
+  }
+  async tick(s) {
+    const b = this.b;
+    if (s.ui.prompt && this.label.test(s.ui.prompt.label)) {
+      await b.hands.stop();
+      await b.hands.tap(b.key('interact'));
+      await b.hands.wait(700);
+      return this.finish();
+    }
+    const t = b.find(s, { kind: 'object', want: this.want });
+    if (!t) return b.explore(s, this, this.place);
+    this.progress(t.dist);
+    await b.travel(s, t.pos[0], t.pos[2], { radius: 0.9, goal: this });
   }
 }
 

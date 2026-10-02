@@ -35,6 +35,7 @@ export class Zone {
     this.interactables = [];
     this.sun = new Vector3(0.45, 0.7, -0.4).normalize();
     this.fade = false; // static scenery greys out with shared.uFade (the Quiet District); set before loading
+    this.domain = false; // a Domain of Comfort can open here (Chapter 5): scenery named DOMAIN_* is its own set
     this.stepFx = null; // colour of the little puff under each footstep (null: none, e.g. inside the train)
     G.zone = this; // actors created while the zone builds attach their effects here
   }
@@ -58,7 +59,11 @@ export class Zone {
       c.removeFromParent();
     }
     const shadows = castShadows ?? G.quality.tier.shadowSize >= 2048;
-    stylize(root, { shadows, receive: true, fade: this.fade });
+    const inDomain = (o) => {
+      for (let p = o; p; p = p.parent) if (p.name.startsWith('DOMAIN_')) return 2;
+      return 1;
+    };
+    stylize(root, { shadows, receive: true, fade: this.fade, domain: this.domain ? inDomain : null });
     root.traverse((o) => {
       o.matrixAutoUpdate = false;
     });
@@ -95,16 +100,20 @@ export class Zone {
   }
 
   // Instance kit pieces for every PLACE_<piece>[.nnn] marker. Kit GLB roots are named <piece>.
-  async placeKit(kitName) {
+  // pick(piece) -> [pieces]: other pieces to stand at that marker instead (the Quiet District's open shops).
+  async placeKit(kitName, pick = null) {
     const gltf = await loadGLB(kitName);
     const pieces = new Map();
     for (const child of gltf.scene.children) pieces.set(child.name, child);
     const groups = new Map();
     for (const m of this.markersBy('PLACE_')) {
-      const piece = m.name.slice(6).replace(/[._]?\d+$/, ''); // three strips the '.' from 'name.001'
-      if (!pieces.has(piece)) continue;
-      if (!groups.has(piece)) groups.set(piece, []);
-      groups.get(piece).push(new Matrix4().compose(m.position, m.quaternion, m.scale));
+      const at = new Matrix4().compose(m.position, m.quaternion, m.scale);
+      const named = m.name.slice(6).replace(/[._]?\d+$/, ''); // three strips the '.' from 'name.001'
+      for (const piece of pick?.(named) || [named]) {
+        if (!pieces.has(piece)) continue;
+        if (!groups.has(piece)) groups.set(piece, []);
+        groups.get(piece).push(at);
+      }
     }
     const shadows = G.quality.tier.shadowSize >= 2048;
     for (const [piece, mats] of groups) {
@@ -121,7 +130,7 @@ export class Zone {
           this.collision.addInstanced(o.geometry, mats.map((mm) => new Matrix4().multiplyMatrices(mm, o.matrixWorld)));
           return;
         }
-        stylize(o, { shadows, fade: this.fade });
+        stylize(o, { shadows, fade: this.fade, domain: this.domain ? () => 1 : null });
         const im = new InstancedMesh(o.geometry, o.material, mats.length);
         mats.forEach((mm, i) => im.setMatrixAt(i, _m.multiplyMatrices(mm, o.matrixWorld)));
         im.castShadow = o.castShadow;

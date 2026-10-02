@@ -12,6 +12,15 @@ const CHORDS = `D3 - - - - - - - B2 - - - - - - - G2 - - - - - - - A2 - - - - - 
 const FIFTHS = `A3 - - - - - - - F#3 - - - - - - - D3 - - - - - - - E3 - - - - - - -
   A3 - - - - - - - D3 - - - - - - - F#3 - - - - - - - E3 - - - A3 - - -`;
 
+// a note held for n steps, and n steps of rest (for the slow tracks, where counting dashes would go wrong)
+const hold = (note, n) => note + ' -'.repeat(n - 1);
+const rest = (n) => Array(n).fill('.').join(' ');
+const seq = (...parts) => parts.join(' ');
+// the lullaby in B minor (the relative minor: every note a third lower)
+const MINOR = ['F#5', 'D5', 'C#5', 'B4', 'C#5', 'D5', 'F#5', 0, 'G5', 'F#5', 'D5', 'C#5', 'B4', 'C#5', 'B4', 0];
+const ARP = `D4 . A4 . D4 . A4 . B3 . F#4 . B3 . F#4 . G3 . D4 . G3 . D4 . A3 . E4 . A3 . E4 .
+  D4 . A4 . D4 . A4 . G3 . D4 . G3 . D4 . B3 . F#4 . B3 . F#4 . A3 . E4 . D4 . A4 .`;
+
 export const SCORES = {
   // the rainy train: the lullaby slowly on a plucked string, rain-soft pad underneath
   train: {
@@ -86,6 +95,57 @@ export const SCORES = {
         B5 - - - A5 - - - F#5 - - - E5 - - - D5 - - - E5 - - - D5 - - - - - - -` },
       { voice: 'pad', gain: 0.6, notes: `D3 - - - - - - - - - - - - - - - B2 - - - - - - - - - - - - - - -
         G2 - - - - - - - - - - - - - - - A2 - - - - - - - D3 - - - - - - -` },
+    ],
+  },
+  // ---- Chapters 4 and 5, the Epilogue and free roam
+  // under the fog: the Quiet District's fragments, slower, with long gaps (the layers are of different
+  // lengths, so they drift against each other and it never quite repeats)
+  fog: {
+    layers: [
+      { voice: 'pluck', gain: 0.6, notes: seq(hold('F#5', 4), hold('D5', 6), rest(30), hold('C#5', 4), hold('B4', 8), rest(44), hold('D5', 4), hold('F#5', 6), rest(54)) },
+      { voice: 'pad', gain: 0.9, notes: seq(hold('B2', 32), hold('G2', 32), hold('E2', 32), hold('F#2', 32)) },
+      { voice: 'bell', gain: 0.35, notes: seq('B5', rest(75), 'F#5', rest(60)) },
+    ],
+  },
+  // Bean's secret: the lullaby on one soft plucked voice, as if half remembered
+  bean: {
+    layers: [
+      { voice: 'pluck', gain: 0.65, notes: seq(hold('A5', 4), hold('F#5', 4), hold('E5', 4), hold('D5', 4), hold('E5', 4), rest(4), hold('A5', 8), hold('B5', 4), hold('A5', 4), rest(4), hold('E5', 4), hold('D5', 4), hold('E5', 4), hold('D5', 8), rest(8)) },
+      { voice: 'pad', gain: 0.5, notes: seq(hold('D3', 32), hold('G2', 16), hold('A2', 16), hold('D3', 8)) },
+    ],
+  },
+  // the Great Sulk: a low drone, and the lullaby in the minor, very slowly. A voice joins with each phase of
+  // the finale (core/music.js level, set by story/chapter5.js)
+  sulk: {
+    layers: [
+      { voice: 'pad', gain: 1.2, notes: seq(hold('B1', 32), hold('B1', 32)) },
+      { voice: 'pad', gain: 0.8, notes: seq(hold('F#2', 48), hold('G2', 16)) },
+      { voice: 'pluck', gain: 0.6, from: 1, notes: MINOR.map((n) => (n ? hold(n, 4) : rest(4))).join(' ') },
+      { voice: 'bell', gain: 0.45, from: 2, notes: seq('F#6', rest(31), 'D6', rest(31)) },
+      { voice: 'pluck', gain: 0.4, from: 3, notes: 'B2 . F#3 . B3 . F#3 . G2 . D3 . G3 . D3 . E2 . B2 . E3 . B2 . F#2 . C#3 . F#3 . C#3 .' },
+      { voice: 'bow', gain: 0.7, from: 4, notes: seq(hold('D5', 16), hold('C#5', 16), hold('B4', 24), rest(8)) },
+    ],
+  },
+  // the Everyone Blanket: the whole lullaby, every voice, in the major
+  blanket: {
+    layers: [
+      { voice: 'pluck', notes: LULLABY },
+      { voice: 'bow', gain: 0.6, notes: seq(hold('A5', 16), hold('B5', 8), hold('A5', 8), hold('F#5', 16), hold('E5', 8), hold('D5', 8)) },
+      { voice: 'pad', notes: CHORDS },
+      { voice: 'pad', gain: 0.7, notes: FIFTHS },
+      { voice: 'pluck', gain: 0.45, notes: ARP },
+      { voice: 'bell', gain: 0.7, notes: seq('D6', rest(7), 'A5', rest(7), 'F#6', rest(7), 'A5', rest(7)) },
+    ],
+  },
+  // the morning after, and Lantern Bay ever since: the Academy's daytime tune, brighter, with bells
+  morning: {
+    layers: [
+      { voice: 'pluck', notes: `A5 F#5 E5 D5 E5 F#5 A5 . B5 A5 F#5 E5 D5 E5 D5 . F#5 A5 B5 A5 F#5 E5 F#5 . A5 F#5 E5 D5 E5 F#5 D5 .
+        D5 . E5 F#5 A5 . F#5 . E5 . D5 E5 F#5 . E5 . A4 . B4 D5 E5 . D5 . B4 . A4 B4 D5 - - .` },
+      { voice: 'pad', gain: 0.8, notes: CHORDS },
+      { voice: 'pluck', gain: 0.45, notes: ARP },
+      { voice: 'bell', gain: 0.7, notes: seq('A6', rest(3), 'F#6', rest(3), 'D6', rest(7), 'B5', rest(3), 'A5', rest(11), 'D6', rest(7), 'F#6', rest(23)) },
+      { voice: 'wood', gain: 0.6, notes: 'C4 . . C4 . . C4 . C4 . . C4 . . C4 .' },
     ],
   },
 };

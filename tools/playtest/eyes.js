@@ -40,6 +40,9 @@ export function installEyes() {
     sparrow: 'a small round sparrow with big eyes',
     grey: 'a heavy grey blanket-lump with a face',
     doudou: 'a little bun with ears',
+    jitters: 'a knot of paper butterflies looping round someone',
+    letter: 'an envelope with paper wings, flying in circles',
+    bottled: 'a corked bottle with a note in it',
   };
   // kit pieces, as you'd describe them
   const PLACES = {
@@ -118,6 +121,12 @@ export function installEyes() {
     'Sit down': 'a bench',
     'Look at the lotus buds': 'drooping lotus buds in the pond',
     'Water the lotus buds': 'drooping lotus buds in the pond',
+    'Read the worry board': 'a wooden board with three paper notes pinned to it',
+    'Cast the thread': 'a glint on the water, a spot to fish from',
+    'Turn in for the night': 'a dormitory door',
+    'Sit down to breakfast': 'an empty place on the bench of a long table laid for breakfast',
+    'Take the loose end': 'a frayed, glowing end of thread hanging in the air',
+    'Take the letter’s thread': 'a frayed, glowing end of thread under a flying envelope',
   };
   const HAZARD = { 0x8fc3e8: 'a rain ring on the ground', 0x4a3428: 'a shadow on the ground where something will land', 0xb69ccf: 'a sighing ripple', 0x9aa6bf: 'a grey ripple' };
 
@@ -169,8 +178,15 @@ export function installEyes() {
     out.goodChips = [...document.querySelectorAll('.goodchip')].map((b) => ({ text: text(b), selected: b.classList.contains('sel') }));
     const menu = [...document.querySelectorAll('.menu')].find((m) => shown(m));
     if (menu) out.menu = { id: menu.id.replace('menu-', ''), title: text(menu.querySelector('h2')), text: text(menu), buttons: [...menu.querySelectorAll('button')].filter(shown).map(text) };
-    const cook = q('.cook');
-    if (cook) {
+    const cook = [...document.querySelectorAll('.cook')].find(shown);
+    const over = q('.fcard') || q('.credits'); // a catch held up to read, or the credits: a press carries on
+    if (over) out.panel = { kind: 'card', title: text(over.querySelector('h3, h2')), text: text(over) };
+    else if (cook?.classList.contains('wboard')) out.panel = { kind: 'board', title: text(cook.querySelector('h3')), text: text(cook), notes: [...cook.querySelectorAll('.wnote')].map((n) => ({ text: text(n), done: n.classList.contains('done') })) };
+    else if (cook?.classList.contains('fish')) {
+      // thread fishing: what the panel says to do, how taut the thread is, and whether it is tugging
+      const meter = cook.querySelector('.meter');
+      out.panel = { kind: 'fishing', title: text(cook.querySelector('h3')), text: text(cook), hint: text(cook.querySelector('.fhint')), tension: parseFloat(cook.querySelector('.fill')?.style.width || '0') / 100, tug: !!meter?.classList.contains('tug'), bite: !!cook.querySelector('.beatring.bite'), buttons: [...cook.querySelectorAll('button')].filter(shown).map(text) };
+    } else if (cook) {
       const mark = cook.querySelector('.mark');
       const zones = [...cook.querySelectorAll('.meter .zone')].map((z) => [parseFloat(z.style.left) / 100, (parseFloat(z.style.left) + parseFloat(z.style.width)) / 100]);
       out.panel = {

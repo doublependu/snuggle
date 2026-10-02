@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Reading the objective the way a player does: what it asks for, and where. Every rule works from the words on
 // screen (the objective banner, and tips the game has shown); none of them knows how the game is built.
-import { Wander, Reach, Talk, Notice, Soothe, Lead, Company, SitWith, LookCloser, Follow, Sequence } from './goals.js';
+import { Wander, Reach, Talk, Notice, Soothe, Lead, Company, SitWith, LookCloser, Follow, Sequence, Use } from './goals.js';
 import { tokens } from './words.js';
 
 // Split "Soothe the Lost Sock (laundry yard) and the Homework (under the library stairs)" into its items.
@@ -22,6 +22,11 @@ function person(b, name) {
 }
 
 export const RULES = [
+  // (free roam's outing with the first-years: these come before the general "Meet … at the …" below)
+  [/^Meet the first-years’ train at Lantern Bay station/i, (b) => new Talk(b, 'The first-years’ train comes in at the station. Bo at the gate knows the way down.', { want: person(b, 'Bo'), place: ['gate'], hint: 'station hill' })],
+  [/^The first-years’ train is due/i, (b) => new Reach(b, 'I wait on the platform for the train.', { place: ['platform', 'station'], radius: 3 })],
+  [/^Each first-year has the Jitters/i, (b) => new Soothe(b, 'Each first-year has butterflies looping round them. I stand with one, and hum.', ['butterflies'])],
+  [/^Walk the first-years up the hill/i, (b) => new Reach(b, 'Up the hill to the Academy, with the first-years behind me.', { place: ['path', 'hill'], keepGoing: true })],
   [/^Stretch your legs/i, (b, m) => new Wander(b, 'The objective says to stretch my legs. I walk down the carriage.', 5)],
   [/^Find out why (.+)/i, (b) => new Reach(b, 'Everyone’s shoes are wet. I look around for what’s dripping.', { kind: 'creature', radius: 4 })],
   [/^Notice (.+)/i, (b, m) => new Notice(b, `The objective says to notice ${m[1]}. I walk up to it.`, tokens(m[1]))],
@@ -60,6 +65,36 @@ export const RULES = [
   [/^Keep a grey Grumbling company/i, (b) => new Company(b, 'I keep a grey Grumbling company: close by, no humming.')],
   [/^Something warm is hidden in the fog at the end of the street/i, (b) => new LookCloser(b, 'Something warm in the fog at the end of the street. I go and look.', ['fog', 'end', 'street'])],
   [/take the ferry home/i, (b) => new Talk(b, 'It’s getting dark. I find the ferry home.', { want: ['ferry', 'boat'], place: ['ferry', 'jetty'], hint: 'home academy' })],
+  // ---- the Epilogue, and free-roam Lantern Bay (Chapters 4 and 5 are not in the playbook yet: see README)
+  [/^Breakfast in the street/i, (b) => new Use(b, 'There is a table out in the lane, and people at it. I go and sit down.', ['table', 'breakfast', 'bench'], /breakfast/i, ['lane', 'table'])],
+  [/^Someone is fishing at the end of the ferry jetty$/i, (b) => new Talk(b, 'Someone is fishing at the end of the jetty. I go and say hello.', { place: ['ferry', 'jetty'], hint: 'fishing' })],
+  [/^Take the ferry home to Mistbloom Academy/i, (b) => new Talk(b, 'The ferry home. I find the ferryman.', { want: ['ferry', 'boat'], place: ['ferry', 'jetty'], hint: 'home academy' })],
+  [/^Master Fang is waiting at her pavilion$/i, (b) => new Reach(b, 'Master Fang is waiting at her pavilion. I go.', { kind: 'person', want: person(b, 'Master Fang'), place: ['pavilion'], radius: 3 })],
+  [/^Sunny has a job for you: she’s at the kitchen/i, (b) => new Talk(b, 'Sunny has a job for me. She’s at the kitchen.', { want: person(b, 'Sunny'), place: ['kitchen'], hint: 'job' })],
+  [/^Lantern Bay, day (\d+) · worries soothed (\d)\/3/i, (b, m) => {
+    // the day's worries are on the board at the gate: read it, soothe the one that is here, then try the fishing
+    // (one has been soothed since I read the board: I go back and see what is left)
+    if (b.mem.worries && b.mem.readAt !== m[2]) b.mem.worries = null;
+    if (!b.mem.worries) {
+      b.mem.readAt = m[2];
+      return new Use(b, b.mem.worried ? 'One less worry. I go back to the board to see what is left.' : 'A new day in Lantern Bay. There is a board by the gate with notes on it: I go and read it.', ['board', 'notes'], /worry board/i, ['gate']);
+    }
+    // (each one gets two goes: the first may be cut short when another is soothed and I go back to the board)
+    const tries = (b.mem.worried ||= new Map());
+    const name = { academy: /Mistbloom Academy/, quiet: /Quiet District/, market: /night market/i, station: /station/i, heart: /Old Quarter/ }[b.nav.place] || /Mistbloom Academy/;
+    const here = b.mem.worries.find((n) => name.test(n) && (tries.get(n) || 0) < 2);
+    if (here && +m[2] < 3) {
+      tries.set(here, (tries.get(here) || 0) + 1);
+      const kind = [['cloud', /Cloud/], ['sock', /Sock/], ['homework', /Homework/], ['pom-pom', /Pom-pom/], ['butterflies', /Jitters/], ['envelope', /Letter/]].find(([, re]) => re.test(here));
+      const where = tokens((here.match(/on the (.+?) step|in the (.+?) (?:yard|that)|under the (.+?) stairs|by the (\w+)/) || []).slice(1).filter(Boolean).join(' '));
+      return new Soothe(b, `The board says: “${here.slice(0, 90)}…” I go and find it.`, kind ? [kind[0]] : [], { place: where });
+    }
+    if (!b.fished && b.nav.place === 'academy') return new Use(b, 'Nothing more on the board for here. The water glints by the pond bridge: I try the thread fishing.', ['glint', 'water', 'fish'], /Cast the thread/i, ['bridge', 'pond']);
+    // the rest are somewhere else: Bo at the gate knows every way
+    const next = b.objective.match(/next: ([^,]+)/)?.[1];
+    if (next && b.nav.place === 'academy') return new Talk(b, `The next worry is in ${next}. Bo at the gate knows the way.`, { want: person(b, 'Bo'), place: ['gate'], hint: next });
+    return new Wander(b, 'A quiet day in Lantern Bay. I have a walk round.', 20);
+  }],
   [/^(.+?) is waiting at the (.+)$/i, (b, m) => new Reach(b, `${m[1]} is waiting at the ${m[2]}. I go.`, { place: tokens(m[2]), radius: 0.8 })],
 ];
 
