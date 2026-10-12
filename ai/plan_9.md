@@ -24,7 +24,7 @@ Answers `ai/prompt_9.md`. Builds on `ai/next_8.md`, and on `ai/plan_5.md` / `ai/
   - Each fix gets a test where it fits. The list goes in `ai/playtest_9.md`, as in `playtest_5.md`.
 - **Recordings at YouTube quality (M4, §4).**
   - 1920×1080 with the game's sound, on this PC's RTX 3050. I checked that headless Chrome uses it.
-  - The whole game is recorded as one continuing save, in chapter-sized takes joined at the chapter cards. A take is recorded again until it's clean.
+  - The whole game is recorded as one continuing save, with one uncut take for each part of the playthrough (§4.3). A take is recorded again until it's clean.
   - The Short gets its own takes, recorded in portrait.
 - **Trailer material (M5, §5).**
   - Scenery shots on scripted camera paths with the HUD hidden.
@@ -35,12 +35,12 @@ Answers `ai/prompt_9.md`. Builds on `ai/next_8.md`, and on `ai/plan_5.md` / `ai/
 
   | # | Video | Format | Length |
   |---|---|---|---|
-  | 1 | **Full playthrough for YouTube**, with a spoiler warning first | 16:9, 1080p | about 75–90 min: the train to THE END, then the bonus (free roam) |
+  | 1 | **Full playthrough for YouTube, in four parts** (a playlist), each one or two chapters, each with a spoiler warning first | 16:9, 1080p | about 20 min each, 75–80 min in all: the train to THE END, then the bonus (free roam) |
   | 2 | **Trailer for YouTube** | 16:9, 1080p | 4:00–5:00 |
   | 3 | **YouTube Short** | 9:16, 1080×1920 | 45–60 s |
   | 4 | **Video for X** | 16:9, 1080p, with captions burned in (X plays muted) | 45–60 s |
 
-  Each video gets a thumbnail where the platform takes one, and a draft title, description (with YouTube chapters) and post text in `ai/videos_9.md`.
+  Each video gets a thumbnail where the platform takes one, and a draft title, description (with YouTube chapters) and post text in `ai/videos_9.md`. Every card, end card and description points to the game at **sn0.maize.live**.
 - **I don't upload or post anything.** The files and the text are ready for you to do that.
 
 ## 1. M1: Playing like a person
@@ -122,13 +122,13 @@ Each one is described by how it looks, as now, and the labels are checked agains
 - **Where it stops:** at the end of the bonus (§6.1), not at "Chapter 3 complete" (`play.mjs`).
 
 ### 2.4 How it's developed
-- **One part at a time,** from the existing starting points (`--from ch4`, `fog`, `heart`, `ch5`, `epilogue`, `free`).
-- **Each part must pass three runs in a row** before the recorded run.
+- **One chapter at a time,** from the existing starting points (`--from ch4`, `fog`, `heart`, `ch5`, `epilogue`, `free`).
+- **Each chapter must pass three runs in a row** before the recorded run.
 - **Two new options:**
   - `--save-out FILE` saves the game when a run stops.
   - `--save-in FILE` starts from that save.
 
-  This chains the takes of §4.3, and lets me check that a chapter played on a real save behaves like the hand-written starting points.
+  This chains the four parts' takes (§4.3) on one save, and lets me check that a chapter played on a real save behaves like the hand-written starting points.
 
 ## 3. M3: What confuses a player, fixed (alongside M2)
 
@@ -169,7 +169,7 @@ These are logged with their time, so the frames around them can be looked at:
 - **Phase 3, a patch to the sprite born from that feeling:** whether the Sprite Book gives enough to reason it out.
 - **Free roam, "Lantern Bay, day 1 · worries soothed 0/3"** (`freeroam.js:61`): it doesn't say where the day's worries are written.
 - **Free roam, going to bed:** whether a player finds "Turn in for the night" at the dormitory, and knows that's how the first-years' day comes.
-- **The mix** of the five new tracks, which `next_8.md` says was never levelled. If a chapter measures more than 3 LU off Chapters 1–3, I level its track's gain in `content/music.js`. Otherwise the full video jumps in loudness at Chapter 4.
+- **The mix** of the five new tracks, which `next_8.md` says was never levelled. If a chapter measures more than 3 LU off Chapters 1–3, I level its track's gain in `content/music.js`. Otherwise the playthrough jumps in loudness at Chapter 4, in the middle of Part 2.
 
 ### 3.4 Output
 - **`ai/playtest_9.md`:**
@@ -202,21 +202,26 @@ These are logged with their time, so the frames around them can be looked at:
 - **The game's mix is only changed by §3.3's levelling.**
 - **Loudness is set per video:** −14 LUFS integrated, true peak at most −1 dBTP (ffmpeg `loudnorm`, two passes), which is where YouTube normalises. It's measured again after encoding.
 
-### 4.3 The full playthrough: one save, chapter-sized takes
-- **One continuing save.** Each take starts from the save the previous take ended with (`--save-in`/`--save-out`). So Chapter 5 sees exactly what this playthrough did, and nothing comes from a hand-written save.
-- **The takes:**
+### 4.3 The full playthrough: four parts of about 20 minutes, one save
+- **Each part is one or two chapters,** and parts split only at chapter cards:
 
-  | Take | Covers |
-  |---|---|
-  | 1 | Prologue and Chapter 1 |
-  | 2 | Chapter 2 |
-  | 3 | Chapter 3 |
-  | 4 | Chapter 4 |
-  | 5 | Chapter 5 |
-  | 6 | the Epilogue, THE END and the credits |
-  | 7 | free roam (§6.1) |
+  | Part | Covers | Estimate |
+  |---|---|---|
+  | 1 | Prologue, Chapter 1, Chapter 2 | ~16 min |
+  | 2 | Chapter 3, Chapter 4 | ~21 min |
+  | 3 | Chapter 5, the Epilogue, THE END and the credits | ~21 min |
+  | 4 | Lantern Bay, the bonus: free roam (§6.1) | ~15–20 min |
 
-- **Joins are through black at the chapter cards,** where the game already fades out. The next take's loading screen is trimmed.
+  - **Where the estimates come from:**
+    - Chapters 1–3: `next_8.md`'s run (Prologue 3:00, Chapter 1 6:01, Chapter 2 4:37, Chapter 3 9:24).
+    - Chapters 4, 5 and the Epilogue: plan 8's estimates (about 9, 11 and 7 minutes).
+    - Both get about 15% added for the slower reading (§1.2).
+  - **The Prologue goes with Chapters 1 and 2,** since it's only 3 minutes. The Epilogue goes with Chapter 5, so the ending is one part.
+  - **If a part measures outside 12–25 minutes,** I regroup at other chapter cards and say so in `next_9.md`.
+- **One continuing save.** Each part starts from the save the previous part ended with (`--save-in`/`--save-out`). So Chapter 5 sees exactly what this playthrough did, and nothing comes from a hand-written save.
+- **One uncut take per part.** Inside a part, chapters follow each other as they do in the game, with no join.
+  - Part 1 starts at the loading screen.
+  - Parts 2–4 start by loading the save, and their loading screen is trimmed.
 - **A take is clean when** it has:
   - no page errors
   - no use of the checkpoint
@@ -226,11 +231,8 @@ These are logged with their time, so the frames around them can be looked at:
   
   Being caught by a sigh now and then is fine: players are, and it shows the mechanic.
 - **A take that isn't clean is recorded again,** automatically up to 3 times. After that I look at why.
-- **Why takes rather than one uncut hour:**
-  - A failure late in a 90-minute run costs the whole run.
-  - A game fix in one chapter only needs that take again.
-  
-  Open question 2 offers the uncut version.
+  - A retry costs at most about 20 minutes. A game fix only needs its own part again, plus the parts after it if the fix changes the save.
+  - If a part keeps failing late, it's recorded as two takes, joined through black at its chapter card.
 - **Each take also keeps:**
   - the log
   - the thoughts as subtitles
@@ -298,12 +300,12 @@ These are logged with their time, so the frames around them can be looked at:
   - the same CSS as the game's own chapter cards and loading screen, so they match what's in the game
   - the same fonts (the system's, as the game uses)
 - **What they are:**
-  - the spoiler warning
-  - the title
+  - the spoiler warnings, one for each part
+  - the titles
   - the trailer's text cards
-  - end cards with the links
+  - end cards with sn0.maize.live and the channel
   - the Short's and X's captions (big, inside each platform's safe area)
-  - two thumbnails, 1280×720: the full playthrough and the trailer
+  - five thumbnails, 1280×720: one for each part, with its number, and one for the trailer
 
 ## 6. M6: The four videos (`tools/video/edit.mjs`, `tools/video/edits/*.json`)
 
@@ -319,25 +321,39 @@ These are logged with their time, so the frames around them can be looked at:
 - **What it does:** renders the list with ffmpeg, then writes the chapter list and the YouTube chapter timestamps from the final times.
 - **Why a list:** a re-cut is an edit to a JSON file and a re-render.
 
-### 6.1 The full playthrough (YouTube)
-| Time | What |
-|---|---|
-| 0:00 | **Spoiler warning,** 7 s: "This video plays all of Snuggle Sorcery, from the first train ride to the ending, and the free roam after it. To play it yourself first: free, in your browser, at ‹link›." |
-| ~0:07 | The title, then the loading screen and Begin, trimmed to a few seconds |
-| | Takes 1–6: the Prologue to THE END and the credits, with the game's own chapter cards |
-| | **The bonus,** take 7: the "Lantern Bay" card, then day 1. Read the worry board, soothe three worries (one across town), fish at two spots, take a lost thing home, look at the Sprite Book's last pages, and turn in for the night |
-| | Day 2: Sunny's sign, the first-years' train, their Jitters, the walk up the hill, the tour, the bench |
-| | A last look at the Everyone Blanket over the old square |
-| end | **End card,** 20 s: room for YouTube's end screen, plus the links |
+### 6.1 The full playthrough (YouTube: four parts, one playlist)
+- **A playlist, "Snuggle Sorcery: Full Playthrough",** with the four parts of §4.3 in order. Each part is its own video, about 20 minutes long.
 
-- **Chapters:**
-  - inside the file
-  - in the description as YouTube chapters: Spoiler warning, Prologue, Chapters 1–5, Epilogue, The End, Lantern Bay (free roam)
-- **The autoplayer's thoughts** come as a separate `.srt`, which isn't uploaded by default. As captions they would confuse anyone relying on captions.
-- **Length:** about 75–90 minutes.
-  - Chapters 1–3 took 23 min at 20 characters a second.
-  - Plan 8 estimates 27 more to THE END.
-  - Add the slower reading and about 15–20 min of free roam.
+| Part | Draft title | Opens with | Ends with |
+|---|---|---|---|
+| 1 | The Rainy Train and the Night Market | the loading screen and Begin, trimmed to a few seconds | "Chapter 2 complete" |
+| 2 | The Quiet District and Bean's Secret | the "Chapter 3" card | "Chapter 4 complete" |
+| 3 | The Great Sulk, and Morning in Lantern Bay | the "Chapter 5" card | THE END and the credits |
+| 4 | Lantern Bay: the bonus | the game's "Lantern Bay" card, taken from the end of Part 3's take (the take runs on to it) | a last look at the Everyone Blanket over the old square |
+
+- **Every part opens with:**
+  - **A spoiler warning,** 6 s, saying what this part shows.
+    - Part 1: "Spoiler warning: this series plays all of Snuggle Sorcery, from the first train ride to the ending and the free roam after it. To play it yourself first: it's free, in your browser, at sn0.maize.live."
+    - Parts 2–4 say the same, naming their own chapters. Part 3's says it contains the ending.
+    - Someone can arrive at any part from search, so every part gets one, not only Part 1.
+  - **A title card:** "Snuggle Sorcery · Part N: ‹title›".
+  - **If the game doesn't show a chapter's own card after loading a save,** a card in the same style takes its place.
+- **Part 4, the bonus:**
+  - **Day 1:** read the worry board, soothe the three worries (one across town), fish at two spots, take a lost thing home, look at the Sprite Book's last pages, and turn in for the night.
+  - **Day 2:** Sunny's sign, the first-years' train, their Jitters, the walk up the hill, the tour, and the bench.
+  - **The end:** the Everyone Blanket over the old square.
+- **Every part ends with an end card,** 20 s. It leaves room for YouTube's end screen, which points to the next part (Part 4's points to the trailer), and shows sn0.maize.live.
+- **Chapters,** inside each file and in its description. YouTube needs at least three, each 10 s or longer:
+
+  | Part | Chapters |
+  |---|---|
+  | 1 | Spoiler warning, Prologue, Chapter 1, Chapter 2 |
+  | 2 | Spoiler warning, Chapter 3, Chapter 4 |
+  | 3 | Spoiler warning, Chapter 5, Epilogue, The End |
+  | 4 | Spoiler warning, Day 1: the worry board, Fishing, Day 2: the first-years, The Everyone Blanket (taken from the log's events) |
+
+- **The autoplayer's thoughts** come as a separate `.srt` for each part, which isn't uploaded by default. As captions they would confuse anyone relying on captions.
+- **Length:** about 75–80 minutes in all (§4.3).
 
 ### 6.2 The trailer (YouTube, 4:00–5:00)
 A gameplay overview, cut to the score. The times below are approximate, and the cuts fall on bar lines.
@@ -350,27 +366,29 @@ A gameplay overview, cut to the score. The times below are approximate, and the 
 | 1:55–2:45 | `market` → `quiet` | **Friends and places:** baking, the night market's sparrows, chestnuts and lanterns, the grey Quiet District and its golden memories |
 | 2:45–3:35 | `fog` → `bean` → `sulk` | **The turn:** the fog, a sigh rolling up the street, Bean awake, Stitch, and a glimpse of something very big and very sad. Its face, never what happens |
 | 3:35–4:15 | `morning` | **And it carries on:** thread fishing, the worry board, the fountain |
-| 4:15–4:45 | `blanket` | "Free to play in your browser. No install, no account." The link, "Open source", the channel |
+| 4:15–4:45 | `blanket` | "Free to play in your browser. No install, no account." sn0.maize.live, "Open source", the channel |
 
-- **Spoilers:** none from the ending, Bean's secret or the Epilogue's story. Free roam's fishing is shown without context (open question 3).
+- **Spoilers:** none from the ending, Bean's secret or the Epilogue's story. Free roam's fishing is shown without context (open question 4).
 
 ### 6.3 The Short (9:16, 45–60 s)
 - **Built from the portrait takes (§4.4),** with one caption per beat.
 - **0–2 s, the hook:** the rain cloud mid-tantrum, captioned "You don't fight curses here."
 - **The middle:** "…you hum them to sleep." The yarn wraps, a Charm Sprite pops out, then sparrows, Bean, a catch.
-- **The end:** "Free, in your browser" and the link card. The link also goes in the description.
+- **The end:** "Free, in your browser" and a card with sn0.maize.live. The link also goes in the description.
 - **Text stays inside the Shorts safe area:** clear of the bottom quarter, the right-hand buttons and the top bar.
 
 ### 6.4 The X video (16:9, 45–60 s; X's limit for a free account is 2:20)
 - **X starts videos muted,** so the captions tell it all and the sound is a bonus.
-- **First 3 s:** the most striking moment (the yarn wrap, or a golden memory). The end card has the link.
+- **First 3 s:** the most striking moment (the yarn wrap, or a golden memory). The end card shows sn0.maize.live, and the post links to it.
 - **Encoding:** H.264 High, AAC, `+faststart`, well under 512 MB.
 - **The same material as the trailer,** in a different order with its own captions.
 
 ### 6.5 The text (`ai/videos_9.md`)
-- **For each video:** a title, a description, tags or hashtags, and the chapter list (the full video).
+- **For each video:** a title, a description, tags or hashtags, and the chapter list (each part of the playthrough).
+- **For the playlist:** a title and a description.
+- **Each part's description** links to the playlist and to the parts before and after it. Those addresses only exist once you upload, so they're placeholders for you to fill in.
 - **For X:** a post under 280 characters.
-- **The links:** the game, GitHub, @RadWebGame on YouTube and X, and Maize.Live.
+- **The links:** the game at https://sn0.maize.live, GitHub, @RadWebGame on YouTube and X, and Maize.Live.
 - **One line saying the playthrough was played by the game's own autoplayer** (open question 7).
 
 ## 7. Budgets and risks
@@ -390,7 +408,7 @@ A gameplay overview, cut to the score. The times below are approximate, and the 
     - **The dev build** (the eyes need it). Its slower first load is trimmed, and otherwise it's the same game.
   - **Disk:**
     - About 6–10 GB an hour for the near-lossless recordings, so 20–30 GB with retries and the trailer footage.
-    - The final full playthrough is 4–6 GB.
+    - The four parts of the playthrough are 4–6 GB together.
     - There's 230 GB free. Everything stays in git-ignored folders.
   - **`node_modules` isn't installed in this checkout.** M0 starts with `npm ci`.
 
@@ -417,7 +435,7 @@ A gameplay overview, cut to the score. The times below are approximate, and the 
     - `package.json`: a `video` script
 - **New:**
   - `tools/video/shots.mjs`, `shots.json`, `music.mjs`, `cards.html`, `cards.mjs`, `edit.mjs`
-  - `tools/video/edits/full.json`, `trailer.json`, `short.json`, `x.json`
+  - `tools/video/edits/full.json` (the four parts), `trailer.json`, `short.json`, `x.json`
   - `ai/playtest_9.md` and `ai/videos_9.md`
   - `ai/next_9.md`, at the end
 - **No new npm dependencies.**
@@ -425,7 +443,7 @@ A gameplay overview, cut to the score. The times below are approximate, and the 
   - Chrome's headless WebGL reports the RTX 3050 with the autoplayer's flags (checked).
 
 ## 9. Verification
-- **The autoplayer:** each part passes three runs in a row from its starting point, then the full chain of takes.
+- **The autoplayer:** each chapter passes three runs in a row from its starting point, then the four parts' takes, in order, on one save.
   - The human-look measures (§1.2) are met on every take.
   - The playbook audit (§1.3) leaves no rule without its on-screen source.
 - **Game fixes:**
@@ -434,15 +452,15 @@ A gameplay overview, cut to the score. The times below are approximate, and the 
   - `npm run budget` passes
   - `npm run perf` is no worse than `next_8.md`'s table
 - **Every video, checked with ffprobe and ffmpeg:**
-  - its size, frame rate, codecs and length (the trailer 4:00–5:00, the Short ≤ 60 s and 9:16, the X video ≤ 2:20 and ≤ 512 MB)
+  - its size, frame rate, codecs and length (each part 12–25 min, the trailer 4:00–5:00, the Short ≤ 60 s and 9:16, the X video ≤ 2:20 and ≤ 512 MB)
   - −14 ± 1 LUFS, true peak ≤ −1 dBTP
   - no black stretch I didn't put there
 - **The full playthrough:**
-  - all nine chapter cards in order
-  - the description's chapter times within 1 s of the cards
-  - the take joins land on black
+  - across the four parts, all nine of the game's cards in order (Prologue, Chapters 1–5, Epilogue, The End, Lantern Bay)
+  - nothing missing or repeated between one part and the next: each picks up where the save left off
+  - each description's chapter times within 1 s of the cards
   - no freeze of 20 s or more outside dialogue
-- **I look at the frames** (contact sheets, every card and caption, each join) for anything cut off, misplaced or unreadable, including the Shorts safe area.
+- **I look at the frames** (contact sheets, every card and caption, each part's start and end) for anything cut off, misplaced or unreadable, including the Shorts safe area.
 - **You watch them.** Whether they're good videos is your call, and the edit lists make changes quick.
 
 ## 10. Order of work
@@ -451,10 +469,10 @@ A gameplay overview, cut to the score. The times below are approximate, and the 
 |---|---|---|
 | M0 | `npm ci`, and a 2-minute 1080p capture to measure the frame rate | 30 or 60 fps decided |
 | M1 | Playing like a person (§1) | Chapters 1–3 from a fresh game, meeting §1.2's targets |
-| M2 + M3 | The rest of the game (§2), with the fixes as they turn up (§3) | each part passing three times; the fixes' tests; `ai/playtest_9.md` |
-| M4 | The full chain of takes, and the portrait takes (§4) | clean takes, and their reviews |
+| M2 + M3 | The rest of the game (§2), with the fixes as they turn up (§3) | each chapter passing three times; the fixes' tests; `ai/playtest_9.md` |
+| M4 | The four parts' takes, and the portrait takes (§4) | clean takes, and their reviews |
 | M5 | Scenery, close-ups, the score, cards (§5) | the footage |
-| M6 | The four edits, the thumbnails and the text (§6) | the four files, checked as in §9, and `ai/videos_9.md` |
+| M6 | The edits, the thumbnails and the text (§6) | seven files (four parts, the trailer, the Short, the X video), checked as in §9, and `ai/videos_9.md` |
 | M7 | Everything in §9, the README, `ai/next_9.md` | done |
 
 **Where the files land** (git-ignored):
@@ -469,19 +487,18 @@ A gameplay overview, cut to the score. The times below are approximate, and the 
 - Touch or gamepad play. The portrait takes use a mouse in a narrow window.
 
 ## 12. Open questions (defaults in bold; I'll go ahead with them unless you say otherwise)
-1. **Where the full video starts and ends:**
+1. **Where the playthrough starts and ends:**
    - **It starts at the Prologue** (the train), since that's where the game starts. I read "from chapter 1" as "from the beginning".
-   - **"The bonus game" is free-roam Lantern Bay after the credits.** The video ends after day 1 and the first-years' day 2 (about 15–20 min of it).
+   - **"The bonus game" is free-roam Lantern Bay after the credits.** It's Part 4, and ends after day 1 and the first-years' day 2 (about 15–20 min).
    - Or: start at the "Chapter 1" card, or show more or less of free roam.
-2. **The full video's cuts:** **chapter-sized takes from one continuing save, joined through black at the chapter cards**, or one uncut take of about 90 minutes.
-3. **Trailer spoilers:** **light.**
+2. **How the parts are grouped:** **four parts (Prologue to Chapter 2, Chapters 3–4, Chapter 5 to THE END, the bonus)**. Or strictly one chapter a video: eight videos of 5–12 minutes.
+3. **Spoiler warnings:** **at the start of every part**, since anyone can land on Part 3 from search. Or only on Part 1.
+4. **Trailer spoilers:** **light.**
    - It shows up to the fog, the sighs, Bean awake and a glimpse of the Great Sulk's face.
    - Nothing of the ending, Bean's secret or the Epilogue. Fishing appears without context.
    - Or: no Chapter 4–5 at all, or anything goes.
-4. **The Short:** **recorded in portrait (1080×1920) with the game's narrow layout**, or cropped from the landscape footage (softer, less work).
-5. **The X video:** **16:9, about a minute, captions burned in**, or square (1:1, bigger in the phone feed), or the Short reused.
-6. **The link on the end cards and in the descriptions:** what is the game's public URL?
-   - **Until you say, a placeholder,** plus the GitHub repo and @RadWebGame.
-7. **Say that the playthrough was played by the game's own autoplayer:** **yes, one line in its description**, or no.
+5. **The Short:** **recorded in portrait (1080×1920) with the game's narrow layout**, or cropped from the landscape footage (softer, less work).
+6. **The X video:** **16:9, about a minute, captions burned in**, or square (1:1, bigger in the phone feed), or the Short reused.
+7. **Say that the playthrough was played by the game's own autoplayer:** **yes, one line in each part's description**, or no.
 8. **Frame rate:** **30 fps, or 60 if M0 shows the capture holds 60 cleanly.**
 9. **What changes in the game:** **anything that makes it clearer or more forgiving (§3.2). Bigger design changes are only written down.**
