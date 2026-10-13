@@ -3,14 +3,20 @@
 // and mouse input, deciding only from what's on screen (see eyes.js for exactly what it can see). Optionally
 // records the whole run as one uncut video with the game's sound.
 //
-//   npm run playtest                      play from a fresh game to the end of the story so far
+//   npm run playtest                      play from a fresh game (all the way: stop it with --until or --for)
 //   npm run playtest -- --record          ...and record it (tools/playtest/out/<run>/playthrough.mp4)
-//   npm run playtest -- --from market     start from a saved point (development only: station ch1 lesson ch2 market ch3 quiet dusk
+//   npm run playtest -- --from market     start from a saved point (development only: station ch1 lesson bake ch2 market ch3 quiet dusk
 //                                         ch4 fog heart ch5 epilogue free)
 //   npm run playtest -- --until "Chapter 2"   stop at the first card/objective matching this
 //   HEADED=1 npm run playtest             watch it in a window
-// Options: --retries N (recording: start again from scratch if a run fails), --minutes N (give up after),
+// Options: --for N (stop after N minutes, as a finished run), --retries N (recording: start again from scratch if a run fails), --minutes N (give up after),
 // --quality low|medium|high, --out DIR, --swiftshader (software rendering, as in the e2e tests).
+// The page is 1920×1080 (Chrome's screencast captures CSS pixels, so this is also the video's size), at the
+// high tier with the dev-only ?capture (full resolution all the time) when recording, and the game's largest
+// reading text (--text 1.5), so dialogue reads as well as it would at 1280×720. --portrait is 1080×1920 (a
+// YouTube Short); --view WxH sets any size. --fps 30|60.
+// One playthrough across several runs: --save-out FILE writes the game's save when the run stops, and
+// --save-in FILE starts from it (instead of a fresh game or --from).
 import { createServer } from 'vite';
 import { chromium } from 'playwright-core';
 import { existsSync, mkdirSync, writeFileSync, rmSync, renameSync, readFileSync } from 'node:fs';
@@ -19,7 +25,8 @@ import { installEyes } from './eyes.js';
 import { makeHands } from './hands.js';
 import { makeLog, fmt } from './log.js';
 import { Brain } from './brain.js';
-import { audioTap, startRecording, finish } from './record.mjs';
+import { audioTap, startRecording, finish, smoothness } from './record.mjs';
+import { FROMS } from './saves.mjs';
 
 const args = process.argv.slice(2);
 const opt = (name, def = null) => {
@@ -31,8 +38,16 @@ const FROM = opt('from');
 const UNTIL = opt('until');
 const RETRIES = +opt('retries', RECORD ? 3 : 1);
 const MINUTES = +opt('minutes', 150);
-const QUALITY = opt('quality');
-const PORT = 5198;
+const FOR = +opt('for', 0); // stop (as a finished run) after this many minutes: clips, and measuring
+const PORTRAIT = !!opt('portrait');
+const QUALITY = opt('quality') || (RECORD ? 'high' : null);
+const VIEW = opt('view') ? Object.fromEntries(['width', 'height'].map((k, i) => [k, +opt('view').split('x')[i]])) : PORTRAIT ? { width: 1080, height: 1920 } : { width: 1920, height: 1080 };
+const SCALE = 1;
+const TEXT = +opt('text', 1.5);
+const FPS = +opt('fps', 30);
+const SAVE_IN = opt('save-in');
+const SAVE_OUT = opt('save-out');
+const PORT = +opt('port', 5198); // (another port lets two runs go at once)
 
 // The brain may only see through the eyes and act through the hands: make sure nothing else crept in.
 for (const f of ['brain.js', 'goals.js', 'playbook.js', 'nav.js', 'words.js']) {
@@ -40,46 +55,25 @@ for (const f of ['brain.js', 'goals.js', 'playbook.js', 'nav.js', 'words.js']) {
   if (/__G|\.evaluate\(|page\./.test(src)) throw new Error(`${f} reaches into the game: the decision code may only use the eyes and hands`);
 }
 
-// Development only: start partway through (the recorded run always starts from a fresh game).
-const base = (over = {}) => ({ v: 2, zone: 'train', spawn: 'SPAWN_start', story: {}, sprites: {}, soothed: {}, seen: {}, helper: null, cozy: 0, tarts: 0, chestnuts: 0, candies: {}, settings: {}, ...over });
-const P = { train_intro: true, prologueTrain: true, prologueDone: true };
-const C1 = { ...P, ch1_welcome: true, ch1_lesson: true, sockDone: true, homeworkDone: true, cookDone: true, pompomDone: true, ch1Done: true, weibaoFriend: true };
-const C2 = { ...C1, ch2_start: true, ch2_tutorial: true, flock1Done: true, flock2Done: true, flock3Done: true, ch2_dumplings: true, ch2Done: true };
-const SP1 = { doudou: 1, cloud: 1, sock: 1, homework: 1, pompom: 1 };
-const FROMS = {
-  station: base({ zone: 'station', sprites: { doudou: 1, cloud: 1 }, soothed: { 'train:cloud': true, 'train:doudou': true }, story: { train_intro: true, prologueTrain: true } }),
-  ch1: base({ zone: 'academy', spawn: 'SPAWN_gate', cozy: 20, tarts: 2, sprites: { doudou: 1, cloud: 1 }, soothed: { 'train:cloud': true }, story: P }),
-  lesson: base({ zone: 'academy', spawn: 'SPAWN_gate', cozy: 25, tarts: 2, sprites: { doudou: 1, cloud: 1 }, soothed: { 'train:cloud': true }, story: { ...P, ch1_welcome: true } }),
-  ch2: base({ zone: 'academy', spawn: 'SPAWN_gate', cozy: 50, tarts: 3, sprites: SP1, story: C1 }),
-  market: base({ zone: 'market', cozy: 50, tarts: 3, sprites: SP1, story: { ...C1, ch2_start: true } }),
-  ch3: base({ zone: 'market', cozy: 70, sprites: { ...SP1, sparrow: 12 }, story: C2 }),
-  quiet: base({ zone: 'quiet', spawn: 'SPAWN_ferry', cozy: 70, sprites: { ...SP1, sparrow: 12 }, story: { ...C2, ch3_start: true, ch3_greys: true } }),
-  dusk: base({ zone: 'academy', spawn: 'SPAWN_gate', cozy: 90, sprites: { ...SP1, sparrow: 12, grey: 1 }, story: { ...C2, ch3_start: true, ch3_greys: true, ch3_arrive: true, mem_notice: true, mem_post: true, mem_sweets: true, mem_teahouse: true, mem_thread: true, mem_kitchen: true, ch3_return: true } }),
+// Development only: start partway through (the recorded run always starts from a fresh game or --save-in).
+const CAST = {
+  'a girl in a teal beret': ['sunny', 'lin', 'sunny lin'],
+  'a boy in an orange cap with a white goose puppet on his hand': ['bo', 'captain', 'honk', 'captain honk'],
+  'an old lady with round glasses, a flat cap and an orange cardigan': ['master', 'fang', 'master fang'],
 };
-// the story's later parts (to watch the autoplayer try them, and to start it in the Epilogue or free roam)
-const C3 = { ...C2, ch3_start: true, ch3_greys: true, ch3_arrive: true, mem_notice: true, mem_post: true, mem_sweets: true, mem_teahouse: true, mem_thread: true, mem_kitchen: true, kind_barber: true, kind_oldman: true, ch3_return: true, ch3_story: true, ch3Done: true };
-const C4 = { ...C3, ch4_start: true, ch4_friends: true, ch4_note: true, ch4_ferry: true, ch4_sigh: true, ch4_lost: true, ch4_garden: true, ch4_gap: true, ch4_secret: true, ch4_thread: true, ch4_threadTold: true, ch4_followed: true, stitch_bell: true, stitch_letter: true, stitch_lantern: true, stitch_sunny: true, stitch_bo: true, ch4Done: true };
-const C5 = { ...C4, ch5_arrive: true, ch5_tier: 3, ch5_score: 12, ch5_p1: true, ch5_heard: 6, ch5_p2: true, ch5_called: true, ch5_p3: true, ch5_kitchen: 3, ch5_p4: true, ch5_golden: 9, ch5_sewn: true, ch5Done: true };
-const SP3 = { ...SP1, sparrow: 12, grey: 2 };
-Object.assign(FROMS, {
-  ch4: base({ zone: 'academy', spawn: 'SPAWN_gate', cozy: 60, tarts: 2, sprites: SP3, story: C3 }),
-  fog: base({ zone: 'quiet', spawn: 'SPAWN_ferry', cozy: 60, tarts: 2, sprites: SP3, story: { ...C3, ch4_start: true, ch4_friends: true, ch4_note: true } }),
-  heart: base({ zone: 'heart', spawn: 'SPAWN_garden', cozy: 60, tarts: 2, sprites: SP3, story: { ...C3, ch4_start: true, ch4_friends: true, ch4_note: true, ch4_ferry: true, ch4_sigh: true, ch4_lost: true } }),
-  ch5: base({ zone: 'heart', spawn: 'SPAWN_cross', cozy: 60, tarts: 2, sprites: SP3, story: C4 }),
-  epilogue: base({ zone: 'heart', spawn: 'SPAWN_square', cozy: 0, sprites: SP3, story: C5 }),
-  free: base({ zone: 'academy', spawn: 'SPAWN_gate', cozy: 30, tarts: 2, sprites: SP3, story: { ...C5, ep_dawn: true, ep_walk: true, ep_breakfast: true, ep_fishing: true, ep_cardigan: true, epilogueDone: true } }),
-});
 if (FROM && !FROMS[FROM]) throw new Error('--from: one of ' + Object.keys(FROMS).join(' '));
+if (SAVE_IN && !existsSync(SAVE_IN)) throw new Error('--save-in: no such file ' + SAVE_IN);
 
 const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
-const OUT = opt('out', join('tools/playtest/out', stamp + (FROM ? '-from-' + FROM : '')));
+const OUT = opt('out', join('tools/playtest/out', stamp + (FROM ? '-from-' + FROM : SAVE_IN ? '-from-save' : '')));
 mkdirSync(OUT, { recursive: true });
 
-const server = await createServer({ server: { port: PORT, strictPort: true, host: '127.0.0.1' }, logLevel: 'warn' });
+// (no file watching: an edit to the game while a run goes on must not reload its page)
+const server = await createServer({ server: { port: PORT, strictPort: true, host: '127.0.0.1', hmr: false, watch: null }, logLevel: 'warn' });
 await server.listen();
 const executablePath = process.env.CHROME || ['/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find(existsSync);
 const gpu = opt('swiftshader') ? ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] : ['--use-angle=vulkan', '--ignore-gpu-blocklist', '--enable-gpu'];
-const browser = await chromium.launch({ executablePath, headless: !process.env.HEADED, args: [...gpu, '--autoplay-policy=no-user-gesture-required', '--mute-audio', '--window-size=1280,720'] });
+const browser = await chromium.launch({ executablePath, headless: !process.env.HEADED, args: [...gpu, '--autoplay-policy=no-user-gesture-required', '--mute-audio', `--window-size=${VIEW.width},${VIEW.height}`] });
 
 let result = null;
 for (let attempt = 1; attempt <= RETRIES && !result; attempt++) {
@@ -91,7 +85,7 @@ for (let attempt = 1; attempt <= RETRIES && !result; attempt++) {
   });
   if (result && RECORD) {
     // the uncut recording only lands in the run folder when the whole run completed
-    for (const f of ['playthrough.mp4', 'log.jsonl', 'thoughts.srt', 'summary.md', 'chapters.txt', 'meta.json']) if (existsSync(join(dir, f))) renameSync(join(dir, f), join(OUT, f));
+    for (const f of ['playthrough.mp4', 'log.jsonl', 'thoughts.srt', 'summary.md', 'chapters.txt', 'meta.json', 'save.json']) if (existsSync(join(dir, f))) renameSync(join(dir, f), join(OUT, f));
     rmSync(dir, { recursive: true, force: true });
   }
 }
@@ -101,7 +95,7 @@ console.log(result ? `✔ done: ${OUT}` : '✘ no complete run');
 process.exit(result ? 0 : 1);
 
 async function playOnce(dir, attempt) {
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
+  const ctx = await browser.newContext({ viewport: VIEW, deviceScaleFactor: SCALE });
   const page = await ctx.newPage();
   const log = makeLog(dir);
   log.event('run', { text: `attempt ${attempt}${FROM ? ' from ' + FROM : ''}` });
@@ -115,39 +109,58 @@ async function playOnce(dir, attempt) {
     }
   });
   await page.addInitScript(`(${installEyes})()`);
+  // the reading text's size (as the Settings' Text size does, without touching the save)
+  if (TEXT !== 1) await page.addInitScript((k) => addEventListener('DOMContentLoaded', () => document.head.append(Object.assign(document.createElement('style'), { textContent: `:root{--ts:${k}!important}` }))), TEXT);
   if (RECORD) await page.addInitScript(`(${audioTap})()`);
-  const seed = FROM ? FROMS[FROM] : null;
+  const seed = SAVE_IN ? JSON.parse(readFileSync(SAVE_IN, 'utf8')) : FROM ? FROMS[FROM] : null;
   await page.addInitScript((s) => {
     if (sessionStorage.getItem('__seeded')) return;
     sessionStorage.setItem('__seeded', '1');
     localStorage.clear();
     if (s) localStorage.setItem('snuggle-sorcery-save', JSON.stringify(s));
   }, seed);
-  const rec = RECORD ? await startRecording(page, dir) : null;
+  const rec = RECORD ? await startRecording(page, dir, { fps: FPS, width: Math.round(VIEW.width * SCALE), height: Math.round(VIEW.height * SCALE) }) : null;
   const eyes = { look: () => page.evaluate(() => window.__eyes.look()), peek: () => page.evaluate(() => window.__eyes.peek()) };
-  const hands = makeHands(page, log);
-  const q = QUALITY ? '?quality=' + QUALITY : '';
+  const hands = makeHands(page, log, VIEW);
+  // (diagnosis, outside the decision code: when it stalls, what did the game itself think? frozen, her state, the
+  // keys it believes are held. Logged, never shown to the brain)
+  const event = log.event;
+  log.event = (kind, data) => {
+    event(kind, data);
+    if (/^(still|stuck|confused)$/.test(kind))
+      page
+        .evaluate(() => { const G = window.__G; return G && { frozen: !!G.frozen, paused: !!G.paused, state: G.player?.state, moveScale: G.player?.moveScale, keys: [...(G.input?.keys || [])], dialogue: !!G.ui?.dialogueOpen }; })
+        .then((d) => d && log.saw('diag', { kind, ...d }))
+        .catch(() => {});
+  };
+  const params = new URLSearchParams();
+  if (QUALITY) params.set('quality', QUALITY);
+  if (RECORD) params.set('capture', '');
+  const q = params.size ? '?' + params.toString().replace(/=(&|$)/g, '$1') : '';
   await page.goto(`http://127.0.0.1:${PORT}/${q}`, { waitUntil: 'load' });
   let endAt = null;
-  const deadline = Date.now() + MINUTES * 60000;
+  const t0 = Date.now();
+  const deadline = t0 + MINUTES * 60000;
   const brain = new Brain({
     eyes,
     hands,
     log,
+    // a run that starts partway through knows the main cast by sight, as a player would by then (they're met in
+    // the Prologue and Chapter 1); a playthrough from the start learns them from the dialogue
+    known: SAVE_IN || (FROM && !['station', 'ch1'].includes(FROM)) ? CAST : null,
     opts: {
       stop(s, b) {
+        if (FOR && Date.now() - t0 > FOR * 60000) return true;
+        if (b.ended && !endAt) endAt = Date.now() + 4000; // (the autoplayer's own ending: Part 4's look at the blanket)
         if (Date.now() > deadline) throw Object.assign(new Error(`out of time (${MINUTES} min)`), { fatal: true });
+        // --until: a card or objective containing this text; the run stops once a card has finished showing
         const seen = [...b.cards].concat(b.objective || '');
-        if (UNTIL && seen.some((t) => t.includes(UNTIL))) return true;
-        // where the playbook ends: "Chapter 3 complete" (Chapters 4 and 5 need goals it doesn't have yet:
-        // sheltering from a sigh, stitching), or THE END when started from the Epilogue
-        if (!endAt && [...b.cards].some((t) => /^Chapter 3 complete|^The End/.test(t))) endAt = Date.now() + 12000;
-        return endAt && Date.now() > endAt && !s.ui.card;
+        if (!endAt && UNTIL && seen.some((t) => t.includes(UNTIL))) endAt = Date.now() + 1200;
+        return endAt && Date.now() > endAt && !s.ui.card && !s.ui.fade;
       },
       finishing: () => !!endAt, // the story so far is over: just enjoy the view
     },
   });
-  const t0 = Date.now();
   // --shots N: a screenshot and what the eyes saw every N seconds (for debugging the autoplayer)
   const SHOTS = +opt('shots', 0);
   let shotT = null;
@@ -157,24 +170,40 @@ async function playOnce(dir, attempt) {
       const t = log.now().toFixed(0).padStart(5, '0');
       await page.screenshot({ path: join(dir, 'shots', t + '.jpg'), type: 'jpeg', quality: 70 }).catch(() => {});
       const snap = await eyes.look().catch(() => null);
-      if (snap) writeFileSync(join(dir, 'shots', t + '.json'), JSON.stringify({ ...snap, brain: { goal: brain.goal?.desc, stale: brain.goal?.stale, route: brain.nav.route?.pts?.slice(0, 12) } }, null, 1));
+      const rt = brain.nav.route;
+      if (snap) writeFileSync(join(dir, 'shots', t + '.json'), JSON.stringify({ ...snap, brain: { goal: brain.goal?.desc, stale: brain.goal?.stale, route: rt?.pts?.slice(0, 12), routeTo: rt && [rt.tx, rt.tz], reached: rt?.reached, line: rt && snap.me && brain.nav.line(snap.me.pos[0], snap.me.pos[2], rt.tx, rt.tz), map: rt && snap.me && brain.goal?.stale > 20 ? brain.nav.box(snap.me.pos[0], snap.me.pos[2], rt.tx, rt.tz) : undefined } }, null, 1));
       shotT = setTimeout(shoot, SHOTS * 1000);
     };
     shotT = setTimeout(shoot, SHOTS * 1000);
   }
+  // the same player, carrying on from the take before: what it remembers (tools/playtest/brain.js mind())
+  const mindIn = SAVE_IN && SAVE_IN.replace(/\.json$/, '') + '.mind.json';
+  if (mindIn && existsSync(mindIn)) brain.remind(JSON.parse(readFileSync(mindIn, 'utf8')));
   await brain.run();
   clearTimeout(shotT);
+  // the game's save as it is now, to carry on from in the next run (--save-in)
+  const saved = await page.evaluate(() => localStorage.getItem('snuggle-sorcery-save')).catch(() => null);
+  if (saved) writeFileSync(join(dir, 'save.json'), saved);
+  if (saved && SAVE_OUT) {
+    writeFileSync(SAVE_OUT, saved);
+    writeFileSync(SAVE_OUT.replace(/\.json$/, '') + '.mind.json', JSON.stringify(brain.mind(), null, 1));
+  }
   const duration = (Date.now() - (rec?.t0 ?? t0)) / 1000;
-  let video = null;
+  let video = null,
+    smooth = null;
   if (rec) {
     const r = await rec.stop();
     const chapters = log.events.filter((e) => e.kind === 'chapter').map((e) => ({ t: Math.max(0, e.t - (rec.t0 - log.t0) / 1000), title: e.text }));
     chapters.unshift({ t: 0, title: 'Loading' });
     video = await finish(dir, r, { chapters, srt: shiftSrt(log, (rec.t0 - log.t0) / 1000), duration });
-    writeFileSync(join(dir, 'meta.json'), JSON.stringify({ videoOffset: (rec.t0 - log.t0) / 1000, frames: r.frames, audio: r.audio }, null, 1));
+    smooth = smoothness(r.arrivals, r.fps);
+    writeFileSync(join(dir, 'meta.json'), JSON.stringify({ videoOffset: (rec.t0 - log.t0) / 1000, frames: r.frames, fps: r.fps, size: [Math.round(VIEW.width * SCALE), Math.round(VIEW.height * SCALE)], smoothness: smooth, arrivals: r.arrivals, audio: r.audio }, null, 1));
   } else writeFileSync(join(dir, 'thoughts.srt'), log.srt());
-  writeFileSync(join(dir, 'summary.md'), summary(log, brain, errors, duration, video));
+  writeFileSync(join(dir, 'summary.md'), summary(log, brain, errors, duration, video, smooth, hands));
   await ctx.close();
+  // a recorded take must be clean (plan 9 §4.3): no checkpoint, no stall, no confusion, no page errors
+  const dirty = log.events.filter((e) => /^(checkpoint|confused|stuck|page-error|console-error)$/.test(e.kind));
+  if (RECORD && dirty.length && !opt('accept-dirty')) throw new Error(`not a clean take: ${dirty.map((e) => fmt(e.t) + ' ' + e.kind).join(', ')}`);
   return { dir, video };
 }
 
@@ -185,13 +214,15 @@ function shiftSrt(log, off) {
   return log.srt();
 }
 
-function summary(log, brain, errors, duration, video) {
+function summary(log, brain, errors, duration, video, smooth, hands) {
   const ev = log.events;
   const count = (k) => ev.filter((e) => e.kind === k).length;
   const lines = [`# Playthrough summary`, '', `- Length: ${fmt(duration)} (${(duration / 60).toFixed(1)} min)${video ? `, recorded to \`${video.split('/').pop()}\`` : ''}`];
+  if (smooth) lines.push(`- Picture: ${FPS} fps; new frames each second: median ${smooth.median}, 10th percentile ${smooth.p10}, worst 1% ${smooth.p01}; ${smooth.below} of ${smooth.seconds} s under ${Math.round(FPS * 0.9)}`);
   const tot = Object.values(brain.time).reduce((a, b) => a + b, 0) || 1;
   lines.push('- Time spent: ' + Object.entries(brain.time).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${Math.round((v / tot) * 100)}% (${fmt(v)})`).join(', '));
   lines.push(`- Confused ${count('confused')}×, stuck ${count('stuck')}×, used the checkpoint ${count('checkpoint')}×, out of Calm ${count('overwhelmed')}×, wrong Charm Sprite guesses ${ev.filter((e) => e.kind === 'line' && /didn’t help|nothing but dust|nothing here to read|doesn’t notice|no path to follow|doesn’t remember this/.test(e.text)).length}×, page errors ${errors.length}`);
+  lines.push('', '## How it looked', '', ...looks(brain, hands));
   lines.push('', '## Chapters', '');
   const ch = ev.filter((e) => e.kind === 'chapter');
   ch.forEach((c, i) => lines.push(`- ${fmt(c.t)} ${c.text}${ch[i + 1] ? ` (${fmt(ch[i + 1].t - c.t)})` : ''}`));
@@ -201,4 +232,25 @@ function summary(log, brain, errors, duration, video) {
   lines.push('', '## Things to look at', '');
   for (const e of ev.filter((e) => /confused|stuck|checkpoint|error|overwhelmed/.test(e.kind))) lines.push(`- ${fmt(e.t)} **${e.kind}** ${e.text || e.goal || ''}`);
   return lines.join('\n') + '\n';
+}
+
+// Did it look like a person playing? Camera turning speed, twitches (left-right-left within a second or two),
+// walls walked into, and standing about for no reason (plan 9 §1.2's targets in brackets).
+function looks(brain, hands) {
+  const turns = hands.turns.filter((t) => t.deg > 2);
+  const speed = turns.filter((t) => !t.look).map((t) => t.deg / (t.ms / 1000)).sort((a, b) => a - b);
+  const pct = (xs, f) => (xs.length ? xs[Math.min(xs.length - 1, Math.floor(xs.length * f))] : 0);
+  let twitches = 0;
+  for (let i = 2; i < turns.length; i++) {
+    const [a, b, c] = [turns[i - 2], turns[i - 1], turns[i]];
+    if (a.deg > 4 && b.deg > 4 && c.deg > 4 && a.dir && a.dir === -b.dir && b.dir === -c.dir && c.t - a.t < 2000) twitches++;
+  }
+  const m = brain.metrics;
+  const min = Math.max(1, (brain.time.play || 0) / 60);
+  return [
+    `- Camera turns: ${turns.length}; average speed ${pct(speed, 0.5).toFixed(0)}°/s, 95th percentile ${pct(speed, 0.95).toFixed(0)}°/s (under 120), fastest ${pct(speed, 1).toFixed(0)}°/s (under 240)`,
+    `- Twitches (left-right-left): ${twitches}, ${(twitches / min * 5).toFixed(1)} per 5 min of play (at most 1)`,
+    `- Walked into a wall: ${m.bumps}×, ${(m.bumps / min * 2).toFixed(1)} per 2 min of play (at most 1)`,
+    `- Stood still 8 s or more for no reason: ${m.still.length}× (none)${m.still.length ? ' at ' + m.still.map((t) => fmt(t)).join(', ') : ''}`,
+  ];
 }

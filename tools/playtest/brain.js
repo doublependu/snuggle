@@ -12,7 +12,7 @@ const now = () => Date.now();
 // the keys the game's hints show (the default bindings)
 const KEYS = { interact: 'KeyF', hum: 'KeyE', assist: 'KeyQ', jump: 'Space', book: 'Tab', sprint: 'ShiftLeft' };
 // prompts a curious player tries once when walking past
-const CURIOUS = /^(Tuck in the sleepy sprite|Read the note|Look at the lotus buds|Water the lotus buds|Float lanterns|Talk)$/;
+const CURIOUS = /^(Tuck in the sleepy sprite|Read the note|Look at the lotus buds|Water the lotus buds|Float lanterns|Knock|Talk)$/;
 // clue words and what they bring to mind (for "Which Charm Sprite remembers this?")
 const IDEAS = [
   ['read', 'faded', 'word', 'paper', 'noticeboard', 'notice', 'sign', 'letter', 'note'],
@@ -24,11 +24,13 @@ const IDEAS = [
 ];
 
 export class Brain {
-  constructor({ eyes, hands, log, opts = {} }) {
+  constructor({ eyes, hands, log, opts = {}, known = null }) {
     this.eyes = eyes;
     this.hands = hands;
     this.log = log;
-    this.opts = { readCps: 20, ...opts };
+    // reading: about a subtitle's pace (17 characters a second), and a second more for each line, so someone
+    // watching can read along
+    this.opts = { readCps: 17, linePause: 1000, ...opts };
     this.nav = new Nav();
     this.mem = {
       names: new Map(), // a word from a name -> how that person looks
@@ -45,6 +47,7 @@ export class Brain {
       scanned: new Map(), // place -> [[x, z]] where it looked all around
       abilities: null,
     };
+    for (const [looks, words] of Object.entries(known || {})) for (const w of words) this.mem.names.set(w, looks);
     this.know = { assist: false, beat: false, company: false };
     this.want = { book: false };
     this.goal = null;
@@ -57,17 +60,40 @@ export class Brain {
     this.cards = new Set();
     this.curiosity = new Map(); // place -> how many optional things tried
     this.time = {}; // seconds spent in dialogue, cutscenes, play, mini-games…
+    // how it looked (for the summary): walls walked into, standing about for no reason
+    this.metrics = { bumps: 0, playT: 0, still: [], stillFrom: null, stillAt: null };
   }
 
   key(action) {
     return KEYS[action];
   }
+  // What a player carries from one sitting to the next (one take of a playthrough to the next): who is who, what
+  // they meant to go and see, what the game has taught them. Not the map: that's seen again.
+  mind() {
+    return { names: [...this.mem.names], toSee: this.mem.toSee || null, giveBack: this.mem.giveBack ? { who: this.mem.giveBack.who, place: this.mem.giveBack.place?.source || null } : null, browsed: !!this.mem.browsed, fy: !!this.mem.fy, know: this.know };
+  }
+  remind(m) {
+    if (!m) return;
+    for (const [k, v] of m.names || []) this.mem.names.set(k, v);
+    if (m.toSee) this.mem.toSee = m.toSee;
+    if (m.giveBack) this.mem.giveBack = { who: m.giveBack.who, place: m.giveBack.place ? new RegExp(m.giveBack.place, 'i') : null };
+    this.mem.browsed = m.browsed;
+    this.mem.fy = m.fy;
+    Object.assign(this.know, m.know || {});
+  }
   think(text) {
     this.log.think(text);
   }
   // TRACE=1: what each tick decided (for working on the autoplayer)
+  // (the last few hundred are kept, and written to the log when it gets stuck or stands about)
   trace(...a) {
-    if (process.env.TRACE) console.log('   ·', this.log.now().toFixed(1), ...a);
+    const line = [this.log.now().toFixed(1), ...a].join(' ');
+    (this.traces ||= []).push(line);
+    if (this.traces.length > 300) this.traces.shift();
+    if (process.env.TRACE) console.log('   ·', line);
+  }
+  dumpTrace(why) {
+    this.log.saw('trace', { why, lines: (this.traces || []).slice(-120) });
   }
 
   async run() {
@@ -122,12 +148,22 @@ export class Brain {
       if (/^(Prologue|Chapter \d+)$/.test(u.card.title)) this.log.event('chapter', { text: u.card.title + (u.card.sub ? ': ' + u.card.sub : '') });
       else if (/coming soon/i.test(u.card.sub || '')) this.log.event('chapter', { text: 'The end of the story so far (' + u.card.title + ', coming soon)' });
     }
+    // (a blank objective's wait counts from when it went blank, or from the last card or fade: between two
+    // chapter cards there's nothing to do but watch)
+    if (u.objective) this.blankT = null;
+    else this.blankT ??= now();
+    if (u.card || u.fade) this.cardT = now();
     if (u.objective && u.objective !== this.objective) {
       this.objective = u.objective;
       this.objT = now();
       this.checkpoints = 0;
       this.log.event('objective', { text: u.objective });
       this.goal = null;
+    }
+    // Calm on screen going down (the HUD's dots): what was I doing?
+    if (u.calm != null) {
+      if (this.calmWas != null && u.calm < this.calmWas) this.log.event('calm', { text: `Calm ${this.calmWas} → ${u.calm} while: ${this.sheltering ? 'sheltering' : this.goal?.desc || this.objective || '?'}` });
+      this.calmWas = u.calm;
     }
     for (const tx of u.toasts || []) {
       if (this.mem.toasts.has(tx)) continue;
@@ -245,9 +281,11 @@ export class Brain {
       bs = 0;
     for (const p of (this.mem.places.get(s.place) || new Map()).values()) {
       if (skip?.has(p.looks + '@' + p.pos[0].toFixed(0) + ',' + p.pos[2].toFixed(0))) continue;
-      const sc = overlap(want, p.looks);
+      if (p.arm && this.mem.armsUsed?.has(p.key)) continue; // (followed it already)
+      // (a fingerpost's arm only points the way: the place itself, once seen, is better)
+      const sc = overlap(want, p.looks) * (p.arm ? 0.45 : 1);
       const d = Math.hypot(p.pos[0] - x, p.pos[2] - z);
-      if (sc > bs || (sc === bs && sc > 0 && d < best.d)) {
+      if (sc > 0 && (sc > bs || (sc === bs && d < best.d))) {
         bs = sc;
         best = { ...p, d };
       }
@@ -265,85 +303,204 @@ export class Brain {
   }
 
   // ---------------------------------------------------------------- moving
-  // Turn the camera toward a thing (so W walks at it, and she keeps it in view).
-  async aimAt(s, t) {
+  // Turn the camera toward a thing (so W walks at it, and she keeps it in view), and tilt it so the thing sits
+  // in the middle band of the screen (a cloud overhead, someone up the steps).
+  async aimAt(s, t, opts) {
     const err = yawTo(s, t.pos[0], t.pos[2]);
-    if (Math.abs(err) > 0.12) await this.hands.turn(-err / RAD_PER_PX);
+    const dy = t.y != null && (t.y > 0.5 || t.y < -0.65) ? (-(t.y - 0.15) * 0.48) / RAD_PER_PX : 0;
+    const dx = Math.abs(err) > 0.12 && this.settled(err) ? -err / RAD_PER_PX : 0;
+    if (dx || dy) await this.hands.turn(dx, dy, opts);
+  }
+  // A hand on a mouse doesn't flick back for a few degrees: a small turn the other way from the last one, soon
+  // after it, waits (a little off is fine while walking on). A big one doesn't. Notes the turn when it's made.
+  settled(err) {
+    const dir = Math.sign(-err),
+      t = now();
+    if (this.lastTurn && dir === -this.lastTurn.dir && t - this.lastTurn.t < 1200 && Math.abs(err) < 0.8) return false;
+    this.lastTurn = { dir, t };
+    return true;
+  }
+  // Back to the usual tilt when walking (after looking up at something).
+  async level(s) {
+    const off = (s.view?.pitch ?? 0.3) - 0.3;
+    if (Math.abs(off) > 0.22) await this.hands.turn(0, -off / 1.5 / 0.0024 / 2);
   }
   // Walk toward (x, z): steer by the camera, run (Shift) when there's room, walk near shy Grumblings, step
   // round what's in the way, pick up a lemon candy seen close by, and try something interesting once.
-  async travel(s, x, z, { radius = 1, tiptoe = false, goal = null } = {}) {
+  async travel(s, x, z, { radius = 1, tiptoe = false, goal = null, hurry = false } = {}) {
     const [px, , pz] = s.me.pos;
     let dist = Math.hypot(x - px, z - pz);
+    const realDist = dist,
+      [ox, oz] = [x, z];
     // someone said how to get there ("across the little bridge"): go that way first
     const via = goal && !goal.viaDone && goal.place?.map((w) => this.mem.via.get(w)).find(Boolean);
     if (via && dist > 8) {
       const v = this.findPlace(s, via);
       const dv = v && Math.hypot(v.pos[0] - px, v.pos[2] - pz);
-      if (v && dv > 1.5 && dv < dist + 4) {
+      // (if I can't get any nearer to it for a while, from this side, I find my own way instead)
+      if (v && (goal.viaBest === undefined || dv < goal.viaBest - 0.3)) [goal.viaBest, goal.viaT] = [dv, now()];
+      if (v && now() - goal.viaT > 6000) {
+        goal.viaDone = true;
+        this.think(`I can’t get onto the ${via.join(' ')} from here. I find my own way.`);
+      } else if (v && dv > Math.max(1.5, (v.size || 1) * 0.6) && dv < dist + 4) {
         if (!goal.viaSaid) {
           goal.viaSaid = true;
           this.think(`They said to go by the ${via.join(' ')}. That way first.`);
         }
         x = v.pos[0];
         z = v.pos[2];
-        radius = 1.2;
+        radius = Math.max(1.2, (v.size || 1) * 0.6);
         dist = dv;
       } else if (v) goal.viaDone = true;
     }
+    // walked into things again and again on the way somewhere far (a pier's railing between me and where I'm
+    // going): go back the way I came, along my own trail, to the point on it nearest where I'm going (up to 60 m
+    // back), and try again from there
+    const recent = (this.bumpTimes || []).filter((t) => now() - t < 20000);
+    if (!this.retrace && recent.length >= 3 && dist > 8) {
+      const v = this.mem.visited.get(s.place) || [];
+      let acc = 0,
+        best = -1,
+        bd = dist - 3;
+      for (let i = v.length - 1; i > 0 && acc < 60; i--) {
+        acc += Math.hypot(v[i][0] - v[i - 1][0], v[i][1] - v[i - 1][1]);
+        const d = Math.hypot(v[i - 1][0] - x, v[i - 1][1] - z);
+        if (d < bd) [bd, best] = [d, i - 1];
+      }
+      // (nothing on the trail nearer: just ten metres back)
+      if (best < 0) for (let i = v.length - 1, a = 0; i > 0; i--) if ((a += Math.hypot(v[i][0] - v[i - 1][0], v[i][1] - v[i - 1][1])) > 10) {
+        best = i - 1;
+        break;
+      }
+      if (best >= 0) {
+        this.retrace = { path: v.slice(best).reverse(), i: 0, until: now() + 45000 };
+        this.bumpTimes = [];
+        this.think('I keep walking into things. I go back the way I came, and try again from there.');
+      }
+    }
+    if (this.retrace) {
+      const r = this.retrace;
+      while (r.i < r.path.length && Math.hypot(r.path[r.i][0] - px, r.path[r.i][1] - pz) < 1.5) r.i++;
+      if (now() > r.until || r.i >= r.path.length) this.retrace = null;
+      else {
+        [x, z] = r.path[r.i];
+        dist = Math.hypot(x - px, z - pz);
+        radius = 1.2;
+      }
+    }
+    // getting nowhere, and the game's guide is pointing (the arrow under the objective): its way, not mine
+    if (goal && s.ui.way && s.ui.way.dist > 4 && (goal.guideUntil > now() || (goal.stale > 20 && dist > 6)) && !this.retrace) {
+      if (!(goal.guideUntil > now())) goal.guideUntil = now() + 10000;
+      if (!goal.guided) {
+        goal.guided = true;
+        this.log.event('guide', { text: `The guide is showing the way (${Math.round(s.ui.way.dist)} m) for: ${this.objective}` });
+        this.think('I’m getting nowhere. The arrow under the objective knows the way: I follow it.');
+      }
+      const h = s.view.yaw + Math.PI - s.ui.way.angle;
+      x = px + Math.sin(h) * Math.min(6, s.ui.way.dist);
+      z = pz + Math.cos(h) * Math.min(6, s.ui.way.dist);
+      dist = Math.hypot(x - px, z - pz);
+      radius = 0.8;
+    }
     this.trace('travel', x.toFixed(1), z.toFixed(1), 'dist', dist.toFixed(2), 'r', radius);
-    goal?.progress(dist);
+    goal?.progress(realDist); // (progress is toward where I'm really going, not a step on the way)
     if (dist <= radius) {
+      // (a step on the way, not where I'm going: the landmark I was told to pass, a point on the guide's way)
+      if (x !== ox || z !== oz) {
+        if (goal && via) goal.viaDone = true;
+        return { arrived: false, dist: realDist };
+      }
       await this.hands.stop();
       return { arrived: true, dist };
     }
     if (await this.detour(s)) return { arrived: false, dist };
     // straight at it when it's in sight and close, else along the route
-    const direct = dist < 7 && (s.things || []).some((t) => Math.hypot(t.pos[0] - x, t.pos[2] - z) < 0.8);
+    // (not straight at it if what I've learned says the way is blocked: water I've fallen into, a wall)
+    const direct = dist < 7 && (s.things || []).some((t) => Math.hypot(t.pos[0] - x, t.pos[2] - z) < 0.8) && this.nav.clear(px, pz, x, z);
     const [lx, lz] = direct ? [x, z] : this.nav.lookahead(s, x, z, now());
     let err = yawTo(s, lx, lz);
     // what's in the way right in front: steer along the clearest direction nearest to where I want to go
     const rays = s.ahead || [];
     const toward = rays.reduce((b2, r) => (Math.abs(r.deg * Math.PI / 180 - err) < Math.abs(b2.deg * Math.PI / 180 - err) ? r : b2), rays[0] || { deg: 0, dist: 14 });
     const need = Math.min(dist, 1.6);
-    if (rays.length && Math.abs(err) < 1.4 && (toward.dist < need || toward.drop || toward.water)) {
-      const open = rays.filter((r) => r.dist >= Math.min(need, 1.2) + 0.3 && !r.drop && !r.water);
-      if (open.length) err = open.map((r) => (r.deg * Math.PI) / 180).sort((a, b) => Math.abs(a - err) - Math.abs(b - err))[0];
+    // something in the way: keep looking where I'm going and step round it (W with A or D, or A or D alone),
+    // keeping to the side chosen a moment ago while that side stays open
+    let step = 0; // the way to walk, relative to where I look (radians; + is to the left)
+    const stepDown = (r) => r.down != null && r.down < need + 0.4;
+    if (rays.length && Math.abs(err) < 1.4 && (toward.dist < need || toward.drop || toward.water || stepDown(toward))) {
+      const open = rays.filter((r) => r.dist >= Math.min(need, 1.2) + 0.3 && !r.drop && !r.water && !stepDown(r)).map((r) => (r.deg * Math.PI) / 180);
+      if (open.length) {
+        let pick = open.sort((a, b) => Math.abs(a - err) - Math.abs(b - err));
+        if (this.sideUntil > now()) pick = pick.filter((a) => Math.sign(a - err) === this.side).concat(pick);
+        step = pick[0] - err;
+        this.side = Math.sign(step) || this.side || 1;
+        this.sideUntil = now() + 1500;
+      }
     }
-    if (Math.abs(err) > 0.06) await this.hands.turn(-err / RAD_PER_PX);
+    // a small dead zone (once lined up, small drifts wait), so the camera doesn't twitch at every step
+    if (Math.abs(err) > (this.aligned ? 0.2 : 0.06)) {
+      this.aligned = false;
+      if (this.settled(err)) await this.hands.turn(-err / RAD_PER_PX);
+    } else this.aligned = true;
+    await this.level(s);
     const shy = (s.things || []).some((t) => t.kind === 'creature' && !t.asleep && t.dist < 7 && /sparrow|grey/.test(t.looks));
     const keys = [];
-    // just walked into something: a step back first
+    // just walked into something: a step to the more open side, round it
     if (this.backoffUntil > now()) {
-      await this.hands.move(['KeyS']);
+      await this.hands.move([this.backoffKey || 'KeyS']);
       return { arrived: false, dist };
     }
-    if (Math.abs(err) < 1.3) keys.push('KeyW');
     const dodge = this.dodge(s);
+    if (Math.abs(err) < 1.3 && Math.abs(step) < 1.1) keys.push('KeyW');
     if (dodge) keys.push(dodge);
-    // W walks and Shift runs: run when there's some way to go and room ahead; walk the last steps, and near
-    // shy Grumblings (the game says running startles them)
-    if (!tiptoe && !shy && dist > 3.5 && this.clearAhead(s) > 3 && Math.abs(err) < 0.5) keys.push(this.key('sprint'));
+    else if (Math.abs(step) >= 0.4) keys.push(step > 0 ? 'KeyA' : 'KeyD');
+    // W walks and Shift runs. Run only on a long, clear stretch (and keep running while it stays one); walk the
+    // last steps, near people, and near shy Grumblings (the game says running startles them)
+    const people = (s.things || []).some((t) => t.kind === 'person' && t.dist < 6 && !t.following);
+    const clear = this.clearAhead(s);
+    this.running = !step && (this.running ? dist > 5 && clear > 3 && Math.abs(err) < 0.6 : dist > 10 && clear > 6 && Math.abs(err) < 0.3);
+    // in a hurry (a sigh coming): run, unless sleepers lie close by (running wakes them)
+    const sleepers = (s.things || []).some((t) => t.kind === 'creature' && t.asleep && /grey/.test(t.looks) && t.dist < 8);
+    if (!tiptoe && !shy && (hurry ? !sleepers && dist > 1.5 && !step : !people && this.running)) keys.push(this.key('sprint'));
     await this.hands.move(keys);
-    this.bumpCheck(s, keys.includes('KeyW') && Math.abs(err) < 0.5, dist);
+    this.trace('keys', keys.join('+') || '-', 'err', err.toFixed(2), 'step', step.toFixed(2), 'at', s.me.pos[0].toFixed(1), s.me.pos[2].toFixed(1), 'yaw', s.view.yaw.toFixed(2));
+    // which way the keys move her, relative to where she looks (+ is to the left)
+    const W = keys.includes('KeyW'),
+      A = keys.includes('KeyA'),
+      D = keys.includes('KeyD');
+    const moveRel = A ? (W ? Math.PI / 4 : Math.PI / 2) : D ? (W ? -Math.PI / 4 : -Math.PI / 2) : 0;
+    this.bumpCheck(s, (W || A || D) && Math.abs(err) < 0.5, dist, moveRel);
     return { arrived: false, dist };
   }
   // Walked into something: remember it, try a hop, and route round it.
-  bumpCheck(s, pushing, dist) {
+  bumpCheck(s, pushing, dist, moveRel = 0) {
     const [x, , z] = s.me.pos;
     const t = now();
     this.trail = (this.trail || []).filter((p) => t - p[2] < 1200);
     this.trail.push([x, z, t, pushing, dist]);
     if (this.trail.length < 6 || !this.trail.every((p) => p[3])) return;
-    const [ox, oz, , , od] = this.trail[0];
-    // pushing on, and neither moving nor getting any closer (sliding along a wall counts as stuck)
-    if (Math.hypot(x - ox, z - oz) < 0.3 || od - dist < 0.25) {
-      const heading = s.view.yaw + Math.PI;
+    const [ox, oz] = this.trail[0];
+    // pushing on, and hardly moving (a detour that doesn't bring me closer yet is not a wall: walking round
+    // something, at a walk, often doesn't; sliding along a wall for long is the watchdog's business)
+    if (Math.hypot(x - ox, z - oz) < 0.35) {
+      const heading = s.view.yaw + Math.PI + moveRel;
       this.nav.bump(s, heading);
+      // stepping round it that side didn't work: the other side next
+      if (moveRel) {
+        this.side = -Math.sign(moveRel);
+        this.sideUntil = now() + 2500;
+      }
       this.nav.route = null;
       this.trail = [];
-      this.backoffUntil = now() + 450;
+      this.backoffUntil = now() + 500;
+      // which side is more open (the rays to the left are the positive ones)?
+      const side = (sg) => (s.ahead || []).filter((r) => Math.sign(r.deg) === sg && Math.abs(r.deg) <= 60).reduce((a, r) => a + Math.min(r.dist, 4), 0);
+      this.backoffKey = moveRel ? (this.side > 0 ? 'KeyA' : 'KeyD') : (this.bumps || 0) % 4 === 3 ? 'KeyS' : side(1) >= side(-1) ? 'KeyA' : 'KeyD';
       this.bumps = (this.bumps || 0) + 1;
+      (this.bumpTimes ||= []).push(now());
+      this.metrics.bumps++;
+      this.trace('bump', x.toFixed(1), z.toFixed(1), 'toward', dist.toFixed(1));
+      this.log.input(`bump ${x.toFixed(1)},${z.toFixed(1)}`);
       if (this.bumps % 3 === 0) this.hands.tap(this.key('jump')).catch(() => {});
     }
   }
@@ -400,6 +557,7 @@ export class Brain {
   // Look all the way round (once per spot), then head for somewhere not visited yet.
   async explore(s, goal, place = []) {
     this.trace('explore', place.join(' '));
+    if (s.ui.way && s.ui.way.dist > 3) return this.followGuide(s);
     goal.checked ||= new Set();
     let pl = place.length ? this.findPlace(s, place, goal.checked) : null;
     // not seen yet, but someone said how to get there: head for the landmark on the way
@@ -430,7 +588,8 @@ export class Brain {
     }
     const [x, , z] = s.me.pos;
     const done = this.mem.scanned.get(s.place) || [];
-    if (!done.some(([a, b]) => Math.hypot(a - x, b - z) < 6)) return this.scan(s, goal);
+    // (in the fog a look round shows little: look round less often there)
+    if (!done.some(([a, b]) => Math.hypot(a - x, b - z) < (s.ui.calm != null ? 14 : 6))) return this.scan(s, goal);
     // somewhere seen but not visited, nearest first; else a direction nobody has been
     const visited = this.mem.visited.get(s.place) || [];
     // ways through (gates, bridges, stairs, paths) look the most promising
@@ -478,14 +637,120 @@ export class Brain {
     this.mem.scanned.set(s.place, done);
     this.think('I turn round and look all about.');
     await this.hands.stop();
+    this.scanning = true;
     for (let i = 0; i < 6; i++) {
-      await this.hands.turn(Math.PI / 3 / RAD_PER_PX);
-      await this.hands.wait(quick ? 200 : 350);
+      await this.hands.turn(Math.PI / 3 / RAD_PER_PX, 0, { speed: quick ? 90 : 70 });
+      await this.hands.wait(quick ? 150 : 250);
       const look = await this.eyes.look();
       this.remember(look);
       // stop as soon as what I'm after is in view
       if (quick && goal?.want && look.things?.some((t) => overlap(goal.want, t.looks) > 0)) break;
     }
+    this.scanning = false;
+    this.metrics.stillFrom = now(); // (looking round isn't standing about)
+  }
+
+  // ---------------------------------------------------------------- a sigh coming (Chapters 4 and 5)
+  // You hear it set out (a long low moan from one direction), then see the grey front come up the street, and
+  // the edge of the screen greys three seconds before it arrives (or glows warm, if she is sheltered). Get
+  // into a warm spot (colour in the grey, a lit lantern, a golden thread), or put something solid between her
+  // and where it comes from, and stay there until it has passed.
+  async shelter(s) {
+    const f = s.sighFront,
+      w = s.ui.sigh;
+    const eta = f ? f.dist / f.speed : 0;
+    if ((!f && !w) || (f && eta > 6 && !w)) {
+      if (this.sheltering) {
+        this.sheltering = null;
+        this.metrics.stillFrom = now();
+        this.think(this.caughtBySigh ? 'It went over me. I get up and go on.' : 'It has passed over. On we go.');
+        this.caughtBySigh = false;
+      }
+      return false;
+    }
+    // a scene, a seat or a mini-game: nothing to do
+    if (s.me.state !== 'move') return false;
+    const [x, , z] = s.me.pos;
+    const warm = (s.things || []).filter((t) => t.kind === 'warm');
+    const inside = warm.find((t) => t.inside && t.dist < t.r - 0.6);
+    const sh = (this.sheltering ||= { t: now(), said: false, spot: null });
+    this.goal && (this.goal.waits = true);
+    if (inside || w?.sheltered) {
+      // (a spot that worked: remember it for the next one)
+      const good = (this.goodShelter ||= new Map()).get(s.place) || [];
+      if (!good.some(([gx, gz]) => Math.hypot(gx - x, gz - z) < 2)) good.push([x, z]);
+      this.goodShelter.set(s.place, good);
+      if (!sh.safe) {
+        sh.safe = true;
+        this.think(inside ? 'A sigh is coming, and I am in the warm colour. I stay put.' : 'A sigh is coming. The wall is between us: I stay put.');
+      }
+      await this.hands.up(this.key('hum'));
+      await this.hands.stop();
+      if (f) await this.aimAt(s, { pos: [x + f.from[0] * 5, 0, z + f.from[1] * 5] }, { speed: 60 });
+      return true;
+    }
+    sh.safe = false;
+    // here, and the edge of the screen still says I'm in the open: that spot was no good
+    const bad = (this.badShelter ||= []);
+    if (w && sh.spot && Math.hypot(sh.spot[0] - x, sh.spot[1] - z) < 1) {
+      bad.push([x, z]);
+      if (bad.length > 30) bad.shift();
+      sh.spot = null;
+    }
+    const ok = ([sx, sz]) => !bad.some(([bx, bz]) => Math.hypot(bx - sx, bz - sz) < 1.5);
+    // somewhere to go: the nearest warm spot, or a spot behind a wall I have seen
+    if (!sh.spot || now() - sh.spotT > 2500) {
+      const best = warm.filter((t) => ok([t.pos[0], t.pos[2]])).map((t) => ({ t, d: Math.max(0, t.dist - t.r * 0.6) })).sort((a, b) => a.d - b.d)[0];
+      // somewhere that sheltered me before, that I can reach in time at a run
+      const reach = Math.max(4, (f ? f.dist / f.speed : 3) * 3);
+      const known = (this.goodShelter?.get(s.place) || []).filter((p) => ok(p)).map((p) => ({ p, d: Math.hypot(p[0] - x, p[1] - z) })).filter((k) => k.d < reach).sort((a, b) => a.d - b.d)[0];
+      if (best && best.d < 14 && !(known && known.d < best.d)) {
+        sh.spot = [best.t.pos[0], best.t.pos[2], Math.min(1.5, best.t.r * 0.5)];
+        sh.why = best.t.looks;
+      } else if (known) {
+        sh.spot = [known.p[0], known.p[1], 0.6];
+        sh.why = 'the spot that sheltered me before';
+      } else if (f) {
+        const behind = this.nav.shelterNear(x, z, f.from, ok);
+        sh.spot = behind ? [behind[0], behind[1], 0.5] : null;
+        sh.why = 'behind the wall';
+      }
+      sh.spotT = now();
+    }
+    if (!sh.said) {
+      sh.said = true;
+      this.log.event('sigh', { text: sh.spot ? `A sigh is coming: I go ${sh.why === 'behind the wall' ? 'behind the wall' : 'into ' + sh.why}.` : 'A sigh is coming, and there is nowhere to hide.' });
+      this.think(sh.spot ? `A sigh! ${sh.why === 'behind the wall' ? 'I get behind the wall.' : sh.why.startsWith('the spot') ? 'Back to the spot that sheltered me before.' : 'Into ' + sh.why + '.'}` : 'A sigh, and nowhere to hide. I brace myself.');
+    }
+    await this.hands.up(this.key('hum'));
+    if (!sh.spot) {
+      await this.hands.stop();
+      return true;
+    }
+    const res = await this.travel(s, sh.spot[0], sh.spot[1], { radius: sh.spot[2], hurry: true });
+    if (res.arrived) await this.hands.stop();
+    return true;
+  }
+
+  // Lost, and the game's guide is showing the way (the arrow under the objective, my sprite flying ahead):
+  // follow it, as a player would.
+  async followGuide(s) {
+    const way = s.ui.way;
+    if (this.guideFor !== this.objective) {
+      this.guideFor = this.objective;
+      this.log.event('guide', { text: `The guide is showing the way (${Math.round(way.dist)} m) for: ${this.objective}` });
+      this.think(`An arrow under the objective, and my Charm Sprite flying ahead: ${Math.round(way.dist)} m that way. I follow it.`);
+    }
+    const sprite = (s.things || []).find((t) => t.kind === 'guide');
+    let tx, tz;
+    if (sprite && sprite.dist > 2) [tx, , tz] = sprite.pos;
+    else {
+      const h = s.view.yaw + Math.PI - way.angle;
+      const k = Math.min(6, way.dist);
+      tx = s.me.pos[0] + Math.sin(h) * k;
+      tz = s.me.pos[2] + Math.cos(h) * k;
+    }
+    await this.travel(s, tx, tz, { radius: 0.8, goal: this.goal });
   }
 
   // ---------------------------------------------------------------- the beat
@@ -498,7 +763,8 @@ export class Brain {
     if (wait < 0) wait += spb;
     if (wait > 260) return;
     this.beatBusy = true;
-    await this.hands.wait(Math.max(0, wait + (Math.random() - 0.5) * 70));
+    // a person's timing: off by a few tens of milliseconds, either way (mostly Perfect, now and then not)
+    await this.hands.wait(Math.max(0, wait + (Math.random() + Math.random() + Math.random() - 1.5) * 70));
     await fn();
     this.beatBusy = false;
     this.lastBeatPress = now();
@@ -509,6 +775,7 @@ export class Brain {
     const u = s.ui;
     const mode = u.loading ? 'loading' : u.menu ? 'menu' : u.dialogue ? 'dialogue' : u.panel ? 'minigame' : !s.me || u.card || u.fade || s.view?.cutscene ? 'cutscene' : s.me.state === 'sit' ? 'seated' : 'play';
     this.time[mode] = (this.time[mode] || 0) + this.dt;
+    this.stillness(s, mode);
     // time spent reading, watching or in a mini-game isn't time spent getting nowhere
     if (mode !== 'play' && this.goal) this.goal.bestT += this.dt * 1000;
     if (u.loading) return this.onLoading(u.loading);
@@ -531,8 +798,10 @@ export class Brain {
     }
     if (s.me.state === 'pose') return this.hands.wait(150);
     if (s.me.state === 'sit') return this.onSeated(s);
+    if (await this.shelter(s)) return;
     this.flock = null;
     if (this.want.book) return this.readBook();
+    if (this.want.browse) return this.browseBook();
     if (this.lookAround && u.objective && now() - this.objT > 1500) {
       this.lookAround = false;
       this.think('Somewhere new. I have a look round.');
@@ -543,7 +812,7 @@ export class Brain {
       return this.hands.wait(150);
     }
     // no objective yet: a scene is still setting up, or the story is about to say something
-    if (!u.objective && now() - this.objT < 12000) {
+    if (!u.objective && now() - Math.max(this.objT, this.blankT || 0, this.cardT || 0) < 12000) {
       await this.hands.stop();
       return this.hands.wait(200);
     }
@@ -559,6 +828,26 @@ export class Brain {
       }
     }
     await this.goal.tick(s);
+  }
+
+  // Standing about in free play for no reason (humming, keeping someone company, waiting out a sigh or for a
+  // train are reasons: a goal that waits says so with `waits`).
+  stillness(s, mode) {
+    const m = this.metrics;
+    const busy = mode !== 'play' || !s.me || s.me.humming || s.ui.ring || this.goal?.waits || this.scanning;
+    if (mode === 'play') m.playT += this.dt;
+    if (busy || !m.stillAt || Math.hypot(s.me.pos[0] - m.stillAt[0], s.me.pos[2] - m.stillAt[2]) > 0.4) {
+      m.stillAt = s.me?.pos || null;
+      m.stillFrom = now();
+      m.flagged = false;
+      return;
+    }
+    if (!m.flagged && now() - m.stillFrom > 8000) {
+      m.flagged = true;
+      m.still.push(this.log.now());
+      this.log.event('still', { text: `Standing still for 8 s on: ${this.goal?.desc || this.objective || '?'}` });
+      this.dumpTrace('still');
+    }
   }
 
   async onLoading(l) {
@@ -601,6 +890,26 @@ export class Brain {
     await this.hands.wait(400);
   }
 
+  // Leaf through the Sprite Book to its last pages (the Harbour Book, Lantern Bay), slowly enough to read.
+  async browseBook() {
+    this.want.browse = false;
+    this.think('I have a look through my Sprite Book, right to the back.');
+    await this.hands.releaseAll();
+    await this.hands.tap(this.key('book'));
+    this.bookOpen = true;
+    await this.hands.wait(2000);
+    for (let i = 0; i < 7; i++) {
+      await this.hands.wheel(260);
+      await this.hands.wait(1300);
+    }
+    const s = await this.eyes.look();
+    this.log.event('book', { text: (s.ui.menu?.text || '').slice(-600) });
+    await this.hands.wait(3000);
+    this.bookOpen = false;
+    await this.hands.tap(this.key('book'));
+    await this.hands.wait(500);
+  }
+
   async onDialogue(s) {
     const d = s.ui.dialogue;
     await this.hands.releaseAll();
@@ -622,9 +931,15 @@ export class Brain {
         this.lastGuess = null;
       }
       this.directions(d.text);
+      if (this.lastReply && /doesn’t want fixing|That’s what everybody said/.test(d.text)) {
+        (this.mem.wrongReplies ||= new Set()).add(this.lastReply);
+        this.log.event('wrong', { text: `“${this.lastReply}” wasn’t what it needed` });
+        this.lastReply = null;
+      }
     }
-    // a person reads at about 20 characters a second (some of it while the line is typing)
-    const need = Math.max(d.text.length / 48, d.text.length / this.opts.readCps) * 1000 + 350;
+    // reading (some of it while the line is typing), and a moment to think before picking an answer
+    this.line.think ??= d.choices.length ? 1500 + Math.random() * 1000 : 0;
+    const need = (d.text.length / this.opts.readCps) * 1000 + this.opts.linePause + this.line.think;
     if (now() - this.line.start < need) return this.hands.wait(60);
     if (d.choices.length) {
       const i = this.choose(d);
@@ -642,6 +957,7 @@ export class Brain {
   choose(d) {
     const ch = d.choices;
     if (/Which Charm Sprite remembers/i.test(d.text)) return this.guessSprite(ch);
+    if (/say back\?/i.test(d.text)) return this.listen(ch);
     // the answer that fits what I'm trying to do (the objective, or what the current goal is about)
     const want = tokens((this.objective || '') + ' ' + (this.goal?.choiceHint || ''));
     let bi = -1,
@@ -651,6 +967,11 @@ export class Brain {
       if (n > bs) (bs = n), (bi = i);
     });
     if (bi >= 0) return bi;
+    // an offer to take me somewhere the objective doesn't mention (a ferryman, Bo at the gate): not now
+    if (ch.some((c) => /\b(home|academy|district|market|station|quarter|across)\b/i.test(c))) {
+      const no = ch.findIndex((c) => /not yet|not now|stay|later|no thanks/i.test(c));
+      if (no >= 0) return no;
+    }
     // an offer to do something again ("Back for more tarts?"): not now, there's the story to get on with
     if (/^Back for|another round|again\?/i.test(d.text)) {
       const no = ch.findIndex((c) => /not now|not yet|maybe later|later/i.test(c));
@@ -659,6 +980,21 @@ export class Brain {
     // otherwise the friendly, eager answer
     const i = ch.findIndex((c) => !/not now|not yet|maybe later|later|save them/i.test(c));
     return i >= 0 ? i : 0;
+  }
+
+  // What to say back to a sad feeling (Chapter 5, while Captain Honk listens): the answer that listens, not one
+  // that tries to fix it or brushes it off. (Bo says which kind was wrong, if one was.)
+  listen(choices) {
+    const score = (c) =>
+      (/\b(hear|sorry|miss|asking|waited|telling me|not going anywhere|sounds|must|really hard)\b/i.test(c) ? 3 : 0) -
+      (/!\s*$|\b(cheer up|then write|call them|open it|you’ll|we could|have a tart)\b/i.test(c) ? 2 : 0) -
+      (/\b(probably|all the time|that’s life|only a|now and then|you did say|everyone forgets)\b/i.test(c) ? 2 : 0);
+    const tried = this.mem.wrongReplies || new Set();
+    const ranked = choices.map((c, i) => ({ i, sc: score(c) - (tried.has(c) ? 9 : 0) })).sort((a, b) => b.sc - a.sc);
+    const pick = ranked[0].i;
+    this.lastReply = choices[pick];
+    this.think(`It needs hearing, not fixing. I say: “${choices[pick]}”`);
+    return pick;
   }
 
   // Which Charm Sprite remembers the clue? Match what the clue brings to mind with what the Sprite Book says
@@ -717,6 +1053,7 @@ export class Brain {
   // it closer; press at the bite; hold to wind in, and ease off while it tugs or the bar is nearly full.
   async fish(s, p) {
     const hum = this.key('hum');
+    if (!this.fishing) this.log.event('minigame', { text: 'fishing' });
     const f = (this.fishing ||= { t: now(), caught: 0, said: '' });
     const say = (t) => f.said !== t && ((f.said = t), this.think(t));
     // a few catches are enough for one visit
@@ -726,6 +1063,7 @@ export class Brain {
       await this.hands.tap(this.key('interact'));
       this.fishing = null;
       this.fished = now();
+      (this.fishedHere ||= new Set()).add(this.nav.place);
       return this.hands.wait(600);
     }
     if (/send the thread out/.test(p.hint)) {
@@ -903,6 +1241,7 @@ export class Brain {
     if (g.stale > 45 && !g.warned) {
       g.warned = true;
       this.log.event('stuck', { text: `No progress for 45 s on: ${g.desc}`, goal: g.desc });
+      this.dumpTrace('stuck');
       this.think('I’m not getting anywhere. I try another way round.');
       this.nav.route = null;
       await this.hands.move(['KeyS']);

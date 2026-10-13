@@ -41,8 +41,13 @@ const N = Math.PI,
 const PLACES = [
   ['Persimmon Courtyard', '🍊', -6.6, -35.2, E], ['Laundry Alley', '🧺', 10.7, -29.2, N], ['Pump Yard', '💧', 17.2, -4.9, -E], ['Lantern-makers’ Row', '🏮', 6.8, -0.7, E],
   ['The Arcade', '🚪', -12.7, -26.6, N], ['Thread Street', '🧵', -15.3, 1.2, N], ['The Old Square', '⛲', -12.7, 33.6, N],
+  // the way out (a player who came in through the fog has never seen it: the Epilogue walks back this way)
+  ['To the Quiet District', '🏘️', 2.0, -40.5, 0],
 ];
-const FINGERS = [[-12.6, -4.6, ['Persimmon Courtyard', 'The Old Square', 'Lantern-makers’ Row']], [-15.4, 20.4, ['The Old Square', 'Thread Street']]];
+const FINGERS = [
+  [-12.6, -4.6, ['Persimmon Courtyard', 'The Old Square', 'Lantern-makers’ Row', 'To the Quiet District']],
+  [-15.4, 20.4, ['The Old Square', 'Thread Street', 'To the Quiet District']],
+];
 const NOTE = 'Soup for twelve. If twelve come, make it for thirteen: somebody always turns up late, and cold. — Grandmother';
 const SLEEPER_ECHO = ['I WAS A SHEET NOBODY TOOK IN BEFORE THE RAIN. HONK.', 'I WAS A WASHING DAY WITH NOBODY TO TALK TO. HONK.', 'I WAS A SOCK WITH NOBODY TO DARN IT. HONK.'];
 
@@ -112,11 +117,13 @@ export async function create() {
     z.sighs = new Sighs(z, {
       source: z.marker('POINT_sigh').position,
       axis: south, // they roll up the streets from the south, one straight front
-      period: () => (inArcade() ? 9 : 16) * (0.9 + Math.random() * 0.2),
+      // (in the Arcade they come faster: one sigh, one doorway. Every 9 s left too little time to reach the next
+      // doorway in the fog, and a first-time player ran out of Calm there: 11 s keeps the rhythm, more fairly)
+      period: () => (inArcade() ? 11 : 16) * (0.9 + Math.random() * 0.2),
       first: 9,
       // only once Bean has told her what it is; and never again once her friends are stitched back, until
       // the square (story/chapter5.js takes them over there)
-      enabled: () => flag('ch4_garden') && !flag('ch4Done'),
+      enabled: () => flag('ch4_garden') && !flag('ch4Done') && !z.memoryPlaying, // (none while Bean tells his secret)
       home: z.marker('SPAWN_garden').position,
     });
     for (const m of z.markersBy('AREA_warm_')) {
@@ -218,7 +225,7 @@ export async function create() {
       });
     };
     shut('TRIGGER_gardengate', () => flag('ch4Done'), 'That gate is stuck fast.');
-    shut('TRIGGER_south', () => flag('ch4_thread'), 'Not that way. That’s where it’s coming from. North first: there’s something I have to show you.');
+    shut('TRIGGER_south', () => flag('ch4_thread'), 'Not that way. That’s where it’s coming from. Up the Arcade first: there’s something I have to show you.');
     shut('TRIGGER_square', () => flag('ch4Done'), 'Not without them.');
     const quietBox = z.box('TRIGGER_quiet');
     z.updaters.push(() => {

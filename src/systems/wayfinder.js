@@ -153,7 +153,7 @@ export function startGuide(z, routes = null) {
       }
     }
     if (free && path) stuck += dt;
-    if (path && (mode === 'always' || stuck >= DELAY)) on = true;
+    if (path && (mode === 'always' || stuck >= (G.goalNow ? 0 : DELAY))) on = true;
     z.guide = { on, stuck, path }; // (for the tests and the autoplayer's log)
     if (!on || !path || !free || path.length < 5) return hide();
     // the arrow: toward the next path point, relative to where the camera looks
@@ -211,7 +211,23 @@ export function signsFor(z, routes, places, fingers = []) {
     ...places.map(([text, icon, x, zz, facing, extra]) => ({ kind: 'post', text, icon, at: at(x, zz), facing, ...extra })),
     ...fingers.map(([x, zz, names]) => {
       const p = at(x, zz);
-      return { kind: 'finger', at: p, arms: names.map((text) => ({ text, toward: routes.path(p, where.get(text)).points[0] })) };
+      // each arm points along its route. A post that stands beside the road between its first two path points
+      // points a few metres on along that road: the nearer point can be behind it (at the foot of the Arcade,
+      // "Persimmon Courtyard" pointed back down the street to the junction)
+      const toward = (text) => {
+        const [a, b] = routes.path(p, where.get(text)).points;
+        if (b) {
+          const abx = b.x - a.x,
+            abz = b.z - a.z,
+            len2 = abx * abx + abz * abz;
+          const k = ((p.x - a.x) * abx + (p.z - a.z) * abz) / len2;
+          const off = Math.abs((p.x - a.x) * abz - (p.z - a.z) * abx) / Math.sqrt(len2);
+          const on = a.clone().lerp(b, Math.min(1, k + 4 / Math.sqrt(len2)));
+          if (k > 0 && k < 1 && off < 3.5 && routes.sees(p, on)) return on;
+        }
+        return a;
+      };
+      return { kind: 'finger', at: p, arms: names.map((text) => ({ text, toward: toward(text) })) };
     }),
   ];
 }

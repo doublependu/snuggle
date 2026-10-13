@@ -155,6 +155,8 @@ tools/e2e/out/
 
 # autoplayer runs: logs, frames and recordings (tools/playtest)
 tools/playtest/out/
+# the videos and everything made on the way (tools/video)
+tools/video/out/
 
 
 # python and modelling

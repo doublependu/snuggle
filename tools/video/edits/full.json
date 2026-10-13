@@ -1,0 +1,411 @@
+{
+ "videos": [
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 60,
+   "loudness": -14,
+   "preset": "medium",
+   "name": "part-1",
+   "out": "tools/video/out/full/part-1.mp4",
+   "segments": [
+    {
+     "card": {
+      "kind": "spoiler",
+      "text": "This series plays **all** of Snuggle Sorcery, from the first train ride to the ending, and the free roam after it.\nTo play it yourself first: it’s free, in your browser, at"
+     },
+     "dur": 6,
+     "fadeIn": 0.6,
+     "fadeOut": 0.5,
+     "chapter": "Spoiler warning"
+    },
+    {
+     "card": {
+      "kind": "title",
+      "part": "Full playthrough · Part 1",
+      "sub": "The Rainy Train and the Night Market"
+     },
+     "dur": 4,
+     "fadeIn": 0.5,
+     "fadeOut": 0.6
+    },
+    {
+     "clip": "tools/playtest/out/takes/part-1/playthrough.mp4",
+     "from": 0,
+     "to": 1162.76,
+     "fadeIn": 0.5,
+     "fadeOut": 1,
+     "chapters": [
+      {
+       "title": "Prologue: The Rainy Train",
+       "at": 2.72
+      },
+      {
+       "title": "Chapter 1: Welcome to Mistbloom",
+       "at": 237.95
+      },
+      {
+       "title": "Chapter 2: The Night Market Mix-Up",
+       "at": 764.45
+      }
+     ]
+    },
+    {
+     "card": {
+      "kind": "end",
+      "small": "Next: Part 2, The Quiet District\nOpen source: github.com/doublependu/snuggle · More at @RadWebGame"
+     },
+     "dur": 20,
+     "fadeIn": 0.8,
+     "fadeOut": 1
+    }
+   ],
+   "description": {
+    "title": "Snuggle Sorcery · Full playthrough, Part 1: The Rainy Train and the Night Market (no commentary)",
+    "text": "Part 1 of 5 of a full playthrough of Snuggle Sorcery: the Prologue and Chapters 1 and 2. Spoilers!\n\nSnuggle Sorcery is a cozy story game in your browser: in the misty harbour city of Lantern Bay, curses born from small worries come out fluffy, and you soothe them by humming a lullaby. Free, no install, no account: https://sn0.maize.live\n\nPlayed by the game's own autoplayer: a script that plays from what is on screen, like a first-timer.\n\nChapters:\n{chapters}\n\nThe whole playthrough: [playlist link]\nPart 2: [link]\n\nOpen source (GPL-3.0): https://github.com/doublependu/snuggle\nMore web games: https://maize.live · @RadWebGame on YouTube and X"
+   },
+   "thumb": {
+    "frame": "tools/video/out/shots/market-street.mp4",
+    "at": 5,
+    "title": "Snuggle Sorcery",
+    "sub": "The Rainy Train and the Night Market",
+    "tag": "PART 1"
+   }
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 60,
+   "loudness": -14,
+   "preset": "medium",
+   "name": "part-2",
+   "out": "tools/video/out/full/part-2.mp4",
+   "segments": [
+    {
+     "card": {
+      "kind": "spoiler",
+      "text": "Part 2 plays Chapter 3.\nTo play it yourself first: it’s free, in your browser, at"
+     },
+     "dur": 6,
+     "fadeIn": 0.6,
+     "fadeOut": 0.5,
+     "chapter": "Spoiler warning"
+    },
+    {
+     "card": {
+      "kind": "title",
+      "part": "Full playthrough · Part 2",
+      "sub": "The Quiet District"
+     },
+     "dur": 4,
+     "fadeIn": 0.5,
+     "fadeOut": 0.6
+    },
+    {
+     "clip": "tools/playtest/out/takes/part-2/playthrough.mp4",
+     "from": 1.2,
+     "to": 733.86,
+     "fadeIn": 0.8,
+     "fadeOut": 1,
+     "chapters": [
+      {
+       "title": "Chapter 3: The Quiet District",
+       "at": 25.45
+      },
+      {
+       "title": "A memory: The fog notice",
+       "at": 201.28
+      },
+      {
+       "title": "A memory: Letters nobody answered",
+       "at": 253.13
+      },
+      {
+       "title": "A memory: Lemon candies, for everyone",
+       "at": 302.14
+      },
+      {
+       "title": "A memory: A red thread",
+       "at": 368.09000000000003
+      },
+      {
+       "title": "A memory: The teahouse",
+       "at": 437.83
+      },
+      {
+       "title": "A memory: Five more minutes",
+       "at": 537.9
+      }
+     ]
+    },
+    {
+     "card": {
+      "kind": "end",
+      "small": "Next: Part 3, Bean’s Secret\nOpen source: github.com/doublependu/snuggle · More at @RadWebGame"
+     },
+     "dur": 20,
+     "fadeIn": 0.8,
+     "fadeOut": 1
+    }
+   ],
+   "description": {
+    "title": "Snuggle Sorcery · Full playthrough, Part 2: The Quiet District (no commentary)",
+    "text": "Part 2 of 5 of a full playthrough of Snuggle Sorcery: Chapter 3. Spoilers!\n\nSnuggle Sorcery is a cozy story game in your browser: in the misty harbour city of Lantern Bay, curses born from small worries come out fluffy, and you soothe them by humming a lullaby. Free, no install, no account: https://sn0.maize.live\n\nPlayed by the game's own autoplayer: a script that plays from what is on screen, like a first-timer.\n\nChapters:\n{chapters}\n\nThe whole playthrough: [playlist link]\nPart 1: [link]\nPart 3: [link]\n\nOpen source (GPL-3.0): https://github.com/doublependu/snuggle\nMore web games: https://maize.live · @RadWebGame on YouTube and X"
+   },
+   "thumb": {
+    "frame": "tools/video/out/shots/quiet-grey.mp4",
+    "at": 5,
+    "title": "Snuggle Sorcery",
+    "sub": "The Quiet District",
+    "tag": "PART 2"
+   }
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 60,
+   "loudness": -14,
+   "preset": "medium",
+   "name": "part-3",
+   "out": "tools/video/out/full/part-3.mp4",
+   "segments": [
+    {
+     "card": {
+      "kind": "spoiler",
+      "text": "Part 3 plays Chapter 4.\nTo play it yourself first: it’s free, in your browser, at"
+     },
+     "dur": 6,
+     "fadeIn": 0.6,
+     "fadeOut": 0.5,
+     "chapter": "Spoiler warning"
+    },
+    {
+     "card": {
+      "kind": "title",
+      "part": "Full playthrough · Part 3",
+      "sub": "Bean’s Secret"
+     },
+     "dur": 4,
+     "fadeIn": 0.5,
+     "fadeOut": 0.6
+    },
+    {
+     "clip": "tools/playtest/out/takes/part-3/playthrough.mp4",
+     "from": 1.2,
+     "to": 872.43,
+     "fadeIn": 0.8,
+     "fadeOut": 1,
+     "chapters": [
+      {
+       "title": "Chapter 4: Bean’s Secret",
+       "at": 1.6300000000000001
+      },
+      {
+       "title": "Lost in the fog",
+       "at": 349.3
+      },
+      {
+       "title": "Bean’s secret",
+       "at": 481.21000000000004
+      },
+      {
+       "title": "Thread Street",
+       "at": 679.27
+      }
+     ]
+    },
+    {
+     "card": {
+      "kind": "end",
+      "small": "Next: Part 4, The Great Sulk, and Morning in Lantern Bay\nOpen source: github.com/doublependu/snuggle · More at @RadWebGame"
+     },
+     "dur": 20,
+     "fadeIn": 0.8,
+     "fadeOut": 1
+    }
+   ],
+   "description": {
+    "title": "Snuggle Sorcery · Full playthrough, Part 3: Bean’s Secret (no commentary)",
+    "text": "Part 3 of 5 of a full playthrough of Snuggle Sorcery: Chapter 4. Spoilers!\n\nSnuggle Sorcery is a cozy story game in your browser: in the misty harbour city of Lantern Bay, curses born from small worries come out fluffy, and you soothe them by humming a lullaby. Free, no install, no account: https://sn0.maize.live\n\nPlayed by the game's own autoplayer: a script that plays from what is on screen, like a first-timer.\n\nChapters:\n{chapters}\n\nThe whole playthrough: [playlist link]\nPart 2: [link]\nPart 4: [link]\n\nOpen source (GPL-3.0): https://github.com/doublependu/snuggle\nMore web games: https://maize.live · @RadWebGame on YouTube and X"
+   },
+   "thumb": {
+    "frame": "tools/video/out/shots/heart-fog-lane.mp4",
+    "at": 5,
+    "title": "Snuggle Sorcery",
+    "sub": "Bean’s Secret",
+    "tag": "PART 3"
+   }
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 60,
+   "loudness": -14,
+   "preset": "medium",
+   "name": "part-4",
+   "out": "tools/video/out/full/part-4.mp4",
+   "segments": [
+    {
+     "card": {
+      "kind": "spoiler",
+      "text": "Part 4 plays Chapter 5 and the Epilogue, **including the ending**.\nTo play it yourself first: it’s free, in your browser, at"
+     },
+     "dur": 6,
+     "fadeIn": 0.6,
+     "fadeOut": 0.5,
+     "chapter": "Spoiler warning"
+    },
+    {
+     "card": {
+      "kind": "title",
+      "part": "Full playthrough · Part 4",
+      "sub": "The Great Sulk, and Morning in Lantern Bay"
+     },
+     "dur": 4,
+     "fadeIn": 0.5,
+     "fadeOut": 0.6
+    },
+    {
+     "clip": "tools/playtest/out/takes/part-4/playthrough.mp4",
+     "from": 1.2,
+     "to": 736.84,
+     "fadeIn": 0.8,
+     "fadeOut": 0.25,
+     "chapters": [
+      {
+       "title": "Chapter 5: The Great Sulk",
+       "at": 49.64
+      }
+     ]
+    },
+    {
+     "clip": "tools/playtest/out/takes/part-4/playthrough.mp4",
+     "from": 738.56,
+     "to": 1397.68,
+     "fadeIn": 0.25,
+     "fadeOut": 1,
+     "chapters": [
+      {
+       "title": "Epilogue: Morning in Lantern Bay",
+       "at": 0.14999999999997726
+      },
+      {
+       "title": "The End",
+       "at": 648.42
+      }
+     ]
+    },
+    {
+     "card": {
+      "kind": "end",
+      "small": "Next: Part 5, Lantern Bay: the bonus\nOpen source: github.com/doublependu/snuggle · More at @RadWebGame"
+     },
+     "dur": 20,
+     "fadeIn": 0.8,
+     "fadeOut": 1
+    }
+   ],
+   "description": {
+    "title": "Snuggle Sorcery · Full playthrough, Part 4: The Great Sulk, and Morning in Lantern Bay (no commentary)",
+    "text": "Part 4 of 5 of a full playthrough of Snuggle Sorcery: Chapter 5 and the Epilogue. Spoilers!\n\nSnuggle Sorcery is a cozy story game in your browser: in the misty harbour city of Lantern Bay, curses born from small worries come out fluffy, and you soothe them by humming a lullaby. Free, no install, no account: https://sn0.maize.live\n\nPlayed by the game's own autoplayer: a script that plays from what is on screen, like a first-timer.\n\nChapters:\n{chapters}\n\nThe whole playthrough: [playlist link]\nPart 3: [link]\nPart 5: [link]\n\nOpen source (GPL-3.0): https://github.com/doublependu/snuggle\nMore web games: https://maize.live · @RadWebGame on YouTube and X"
+   },
+   "thumb": {
+    "frame": "tools/video/out/shots/heart-sulk.mp4",
+    "at": 5,
+    "title": "Snuggle Sorcery",
+    "sub": "The Great Sulk, and Morning in Lantern Bay",
+    "tag": "PART 4"
+   }
+  },
+  {
+   "size": [
+    1920,
+    1080
+   ],
+   "fps": 60,
+   "loudness": -14,
+   "preset": "medium",
+   "name": "part-5",
+   "out": "tools/video/out/full/part-5.mp4",
+   "segments": [
+    {
+     "card": {
+      "kind": "spoiler",
+      "text": "Part 5 plays the free roam after the story.\nTo play it yourself first: it’s free, in your browser, at"
+     },
+     "dur": 6,
+     "fadeIn": 0.6,
+     "fadeOut": 0.5,
+     "chapter": "Spoiler warning"
+    },
+    {
+     "card": {
+      "kind": "title",
+      "part": "Full playthrough · Part 5",
+      "sub": "Lantern Bay: the bonus"
+     },
+     "dur": 4,
+     "fadeIn": 0.5,
+     "fadeOut": 0.6
+    },
+    {
+     "clip": "tools/playtest/out/takes/part-4/playthrough.mp4",
+     "from": 1397.58,
+     "to": 2406.74,
+     "fadeIn": 0.8,
+     "fadeOut": 1.5,
+     "chapters": [
+      {
+       "title": "Lantern Bay",
+       "at": 0
+      },
+      {
+       "title": "Day 1: the worry board",
+       "at": 35.88000000000011
+      },
+      {
+       "title": "Day 2: the first-years",
+       "at": 255.47000000000003
+      },
+      {
+       "title": "Thread fishing",
+       "at": 779.44
+      },
+      {
+       "title": "The Everyone Blanket",
+       "at": 848.73
+      }
+     ]
+    },
+    {
+     "card": {
+      "kind": "end",
+      "small": "Open source: github.com/doublependu/snuggle · More at @RadWebGame"
+     },
+     "dur": 20,
+     "fadeIn": 0.8,
+     "fadeOut": 1
+    }
+   ],
+   "description": {
+    "title": "Snuggle Sorcery · Full playthrough, Part 5: Lantern Bay: the bonus (no commentary)",
+    "text": "Part 5 of 5 of a full playthrough of Snuggle Sorcery: the free roam after the story. Spoilers!\n\nSnuggle Sorcery is a cozy story game in your browser: in the misty harbour city of Lantern Bay, curses born from small worries come out fluffy, and you soothe them by humming a lullaby. Free, no install, no account: https://sn0.maize.live\n\nPlayed by the game's own autoplayer: a script that plays from what is on screen, like a first-timer.\n\nChapters:\n{chapters}\n\nThe whole playthrough: [playlist link]\nPart 4: [link]\n\nOpen source (GPL-3.0): https://github.com/doublependu/snuggle\nMore web games: https://maize.live · @RadWebGame on YouTube and X"
+   },
+   "thumb": {
+    "frame": "tools/video/out/shots/academy-pond.mp4",
+    "at": 5,
+    "title": "Snuggle Sorcery",
+    "sub": "Lantern Bay: the bonus",
+    "tag": "PART 5"
+   }
+  }
+ ]
+}

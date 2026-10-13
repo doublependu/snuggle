@@ -96,8 +96,11 @@ export function remark(key, who, text) {
   chat([[who, text]]);
 }
 
-export function objective(text, target = null) {
+// now: the guide shows the way at once instead of after a while (systems/wayfinder.js), for something urgent
+// the player may not be able to see (a friend a sigh sat down, somewhere in the fog)
+export function objective(text, target = null, { now = false } = {}) {
   G.goal = text ? target : null;
+  G.goalNow = !!(text && now);
   G.ui.setObjective(text);
   G.events.emit('objective', text);
 }

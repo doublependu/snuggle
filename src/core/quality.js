@@ -9,6 +9,10 @@ export const TIERS = {
   high: { pixelRatio: 1.5, shadows: true, shadowSize: 2048, water: 2, foliage: 1, particles: 1, sway: true, drawDistance: 160, forest: [85, 1, 1] },
 };
 
+// ?capture (dev builds only, for recording videos): always full resolution, up to the screen's own pixel ratio
+// (a 1080×1920 portrait recording needs more than the tier's cap), and the tier never steps down.
+const CAPTURE = import.meta.env.DEV && new URLSearchParams(location.search).has('capture');
+
 export function probeTier() {
   const q = new URLSearchParams(location.search).get('quality');
   if (q && TIERS[q]) return q;
@@ -52,7 +56,7 @@ export class Quality {
     for (const fn of this.listeners) fn(this.tier, name);
   }
   applyPixelRatio() {
-    const dpr = Math.min(window.devicePixelRatio || 1, this.tier.pixelRatio);
+    const dpr = Math.min(window.devicePixelRatio || 1, CAPTURE ? 3 : this.tier.pixelRatio);
     this.renderer.setPixelRatio(Math.max(0.5, dpr * this.scale));
   }
   // Called every frame with the real frame time (ms).
@@ -60,6 +64,7 @@ export class Quality {
     if (ms > 250) return; // tab switch / hitch
     this.ema += (ms - this.ema) * 0.05;
     this.samples++;
+    if (CAPTURE) return;
     if (now - this.lastAdjust < 2000 || this.samples < 90) return;
     this.lastAdjust = now;
     const target = this.name === 'low' ? 30 : 17.5; // ms budget

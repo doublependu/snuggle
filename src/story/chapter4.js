@@ -45,8 +45,11 @@ function objective4() {
   }
   if (zid !== 'heart') return ['Sunny and Bo are lost beyond the fog wall', zid === 'quiet' ? 'TRIGGER_fogwall' : null];
   if (!f('ch4_garden')) return ['Get out of the sigh’s way: behind a wall, or under the porch lantern', () => G.zone.marker('AREA_warm_1')?.position];
-  if (!f('ch4_gap')) return ['Find a way back to Sunny and Bo', 'GRUMB_gap'];
-  if (!f('ch4_secret')) return ['Bean wants to show you something: north, up the Arcade', 'POINT_secret'];
+  // (from the garden the only way on is down Laundry Alley, signposted at its top; past the Pump Yard it's along
+  // Lantern-makers' Row: the way, by the names on the boards)
+  if (!f('ch4_gap')) return ['Find a way back to Sunny and Bo: ' + (f('bean_pump') || f('bean_row') ? 'along Lantern-makers’ Row' : 'through Laundry Alley'), 'GRUMB_gap'];
+  // (landmarks, not compass points: the fingerpost at the Arcade's foot says "Persimmon Courtyard")
+  if (!f('ch4_secret')) return ['Bean wants to show you something: up the Arcade, toward the Persimmon Courtyard', 'POINT_secret'];
   const n = stitched();
   if (n < 3) {
     const next = () => {
@@ -423,6 +426,7 @@ function remarks(z) {
       if (key === 'thread' && !flag('ch4_thread')) continue;
       flag('bean_' + key, true);
       z.bean.say(line);
+      refresh4(); // (the way on can name the next place now)
       break;
     }
   };
@@ -453,7 +457,7 @@ async function garden(z) {
   G.cam.snapBehind(p);
   G.frozen = false;
   refresh4();
-  G.ui.toast('💡 A sigh is coming up from the south. Shelter behind something solid, or in a warm light. <b>Calm</b> is how far Bean’s colour reaches.', 8);
+  G.ui.toast('💡 A sigh is coming: Bean’s ears go up and the edge of the screen greys. Shelter behind something solid, or in a warm light. <b>Calm</b> is how far Bean’s colour reaches.', 8);
   let caught = null;
   const off = z.on('sigh-pass', (e) => (caught = e.caught));
   z.sighs.send(4.5, Math.max(3, z.sighs.distance(p.position) - 4.5 * 8));

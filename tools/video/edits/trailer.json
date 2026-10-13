@@ -1,0 +1,459 @@
+{
+ "name": "trailer",
+ "out": "tools/video/out/trailer.mp4",
+ "size": [
+  1920,
+  1080
+ ],
+ "fps": 60,
+ "loudness": -14,
+ "gameGain": -9,
+ "segments": [
+  {
+   "clip": "tools/video/out/shots/train-carriage.mp4",
+   "from": 0.25,
+   "to": 8.82,
+   "mute": true,
+   "fadeIn": 1
+  },
+  {
+   "clip": "tools/playtest/out/takes/part-1/playthrough.mp4",
+   "from": 53.91,
+   "to": 65.34
+  },
+  {
+   "card": {
+    "kind": "title",
+    "sub": "A cozy story game where you hum curses to sleep"
+   },
+   "dur": 5.71,
+   "fadeIn": 0.3,
+   "fadeOut": 0.3
+  },
+  {
+   "clip": "tools/video/out/shots/academy-gate.mp4",
+   "from": 0.25,
+   "to": 8.82,
+   "mute": true
+  },
+  {
+   "clip": "tools/video/out/shots/academy-court.mp4",
+   "from": 0.25,
+   "to": 8.82,
+   "mute": true
+  },
+  {
+   "clip": "tools/playtest/out/takes/part-1/playthrough.mp4",
+   "from": 468.5,
+   "to": 479.93
+  },
+  {
+   "clip": "tools/video/out/shots/academy-pond.mp4",
+   "from": 0.25,
+   "to": 5.96,
+   "mute": true
+  },
+  {
+   "clip": "tools/playtest/out/takes/part-1/playthrough.mp4",
+   "from": 535.45,
+   "to": 544.02
+  },
+  {
+   "clip": "tools/playtest/out/takes/part-1/playthrough.mp4",
+   "from": 306.07,
+   "to": 314.64
+  },
+  {
+   "clip": "tools/playtest/out/takes/part-1/playthrough.mp4",
+   "from": 603.37,
+   "to": 611.94
+  },
+  {
+   "clip": "tools/playtest/out/takes/part-1/playthrough.mp4",
+   "from": 642.46,
+   "to": 651.03
+  },
+  {
+   "clip": "tools/video/out/shots/academy-overlook.mp4",
+   "from": 0.25,
+   "to": 5.96,
+   "mute": true
+  },
+  {
+   "clip": "tools/video/out/shots/academy-pagoda.mp4",
+   "from": 0.25,
+   "to": 5.96,
+   "mute": true
+  },
+  {
+   "clip": "tools/video/out/shots/market-street.mp4",
+   "from": 0.25,
+   "to": 8.82,
+   "mute": true
+  },
+  {
+   "clip": "tools/playtest/out/takes/part-1/playthrough.mp4",
+   "from": 894.26,
+   "to": 905.69
+  },
+  {
+   "clip": "tools/playtest/out/takes/part-1/playthrough.mp4",
+   "from": 1010.77,
+   "to": 1019.34
+  },
+  {
+   "clip": "tools/video/out/shots/market-pier.mp4",
+   "from": 0.25,
+   "to": 5.96,
+   "mute": true
+  },
+  {
+   "clip": "tools/video/out/shots/market-hook.mp4",
+   "from": 0.25,
+   "to": 5.96,
+   "mute": true
+  },
+  {
+   "clip": "tools/video/out/shots/quiet-grey.mp4",
+   "from": 0.25,
+   "to": 8.82,
+   "mute": true
+  },
+  {
+   "clip": "tools/playtest/out/takes/part-2/playthrough.mp4",
+   "from": 314.34,
+   "to": 322.91
+  },
+  {
+   "clip": "tools/video/out/shots/quiet-banyan-after.mp4",
+   "from": 0.25,
+   "to": 5.96,
+   "mute": true
+  },
+  {
+   "clip": "tools/video/out/shots/heart-fog-lane.mp4",
+   "from": 0.25,
+   "to": 8.82,
+   "mute": true
+  },
+  {
+   "clip": "tools/playtest/out/takes/part-3/playthrough.mp4",
+   "from": 347.62,
+   "to": 356.19
+  },
+  {
+   "clip": "tools/playtest/out/takes/part-3/playthrough.mp4",
+   "from": 366.9,
+   "to": 375.47
+  },
+  {
+   "clip": "tools/playtest/out/takes/part-3/playthrough.mp4",
+   "from": 824.42,
+   "to": 832.99
+  },
+  {
+   "clip": "tools/video/out/shots/heart-sulk.mp4",
+   "from": 0.25,
+   "to": 8.82,
+   "mute": true
+  },
+  {
+   "clip": "tools/playtest/out/takes/part-4/playthrough.mp4",
+   "from": 2176.02,
+   "to": 2187.45
+  },
+  {
+   "clip": "tools/playtest/out/takes/part-4/playthrough.mp4",
+   "from": 1432.46,
+   "to": 1441.03
+  },
+  {
+   "clip": "tools/video/out/shots/heart-persimmon.mp4",
+   "from": 0.25,
+   "to": 8.82,
+   "mute": true
+  },
+  {
+   "clip": "tools/video/out/shots/quiet-after.mp4",
+   "from": 0.25,
+   "to": 5.96,
+   "mute": true
+  },
+  {
+   "card": {
+    "kind": "end"
+   },
+   "dur": 20,
+   "fadeIn": 0.8,
+   "fadeOut": 1.5
+  }
+ ],
+ "overlays": [
+  {
+   "card": {
+    "kind": "caption",
+    "text": "A little rain cloud, sulking on everyone’s shoes.",
+    "where": "low"
+   },
+   "at": 8.82,
+   "dur": 10.93
+  },
+  {
+   "card": {
+    "kind": "caption",
+    "text": "In Lantern Bay, curses born from small worries…",
+    "where": "bottom"
+   },
+   "at": 25.96,
+   "dur": 8.07
+  },
+  {
+   "card": {
+    "kind": "caption",
+    "text": "…come out **fluffy**.",
+    "where": "bottom"
+   },
+   "at": 34.53,
+   "dur": 8.07
+  },
+  {
+   "card": {
+    "kind": "caption",
+    "text": "You don’t fight them. You **soothe** them.",
+    "where": "low"
+   },
+   "at": 43.1,
+   "dur": 10.93
+  },
+  {
+   "card": {
+    "kind": "caption",
+    "text": "Notice them. Hum. Wrap them in glowing yarn.",
+    "where": "low"
+   },
+   "at": 60.24,
+   "dur": 8.07
+  },
+  {
+   "card": {
+    "kind": "caption",
+    "text": "Bake with your friends.",
+    "where": "low"
+   },
+   "at": 68.81,
+   "dur": 8.07
+  },
+  {
+   "card": {
+    "kind": "caption",
+    "text": "Some of them just need company.",
+    "where": "low"
+   },
+   "at": 77.38,
+   "dur": 8.07
+  },
+  {
+   "card": {
+    "kind": "caption",
+    "text": "Each one you soothe becomes a **Charm Sprite**.",
+    "where": "low"
+   },
+   "at": 85.95,
+   "dur": 8.07
+  },
+  {
+   "card": {
+    "kind": "caption",
+    "text": "A night market by the harbour.",
+    "where": "bottom"
+   },
+   "at": 105.94,
+   "dur": 8.07
+  },
+  {
+   "card": {
+    "kind": "caption",
+    "text": "Everyone together.",
+    "where": "low"
+   },
+   "at": 114.51,
+   "dur": 10.93
+  },
+  {
+   "card": {
+    "kind": "caption",
+    "text": "Float a lantern for someone.",
+    "where": "low"
+   },
+   "at": 125.94,
+   "dur": 8.07
+  },
+  {
+   "card": {
+    "kind": "caption",
+    "text": "Across the water, a district that forgot its colours.",
+    "where": "bottom"
+   },
+   "at": 145.93,
+   "dur": 8.07
+  },
+  {
+   "card": {
+    "kind": "caption",
+    "text": "Help it remember.",
+    "where": "low"
+   },
+   "at": 154.5,
+   "dur": 8.07
+  },
+  {
+   "card": {
+    "kind": "caption",
+    "text": "Then the fog came.",
+    "where": "bottom"
+   },
+   "at": 168.78,
+   "dur": 8.07
+  },
+  {
+   "card": {
+    "kind": "caption",
+    "text": "Something out there is sighing.",
+    "where": "low"
+   },
+   "at": 177.35,
+   "dur": 8.07
+  },
+  {
+   "card": {
+    "kind": "caption",
+    "text": "Not everyone wants a hug.",
+    "where": "low"
+   },
+   "at": 185.92,
+   "dur": 8.07
+  },
+  {
+   "card": {
+    "kind": "caption",
+    "text": "Stitch the town back together.",
+    "where": "low"
+   },
+   "at": 194.49,
+   "dur": 8.07
+  },
+  {
+   "card": {
+    "kind": "caption",
+    "text": "And something very big is very sad.",
+    "where": "bottom"
+   },
+   "at": 203.06,
+   "dur": 8.07
+  },
+  {
+   "card": {
+    "kind": "caption",
+    "text": "Thread fishing.",
+    "where": "low"
+   },
+   "at": 211.63,
+   "dur": 10.93
+  },
+  {
+   "card": {
+    "kind": "caption",
+    "text": "A worry board, every morning.",
+    "where": "low"
+   },
+   "at": 223.06,
+   "dur": 8.07
+  },
+  {
+   "card": {
+    "kind": "caption",
+    "text": "A whole town to look after.",
+    "where": "bottom"
+   },
+   "at": 231.63,
+   "dur": 8.07
+  }
+ ],
+ "music": [
+  {
+   "file": "tools/video/out/music/train.wav",
+   "at": 0,
+   "from": 2.5,
+   "dur": 26.71,
+   "fadeIn": 0.5,
+   "fadeOut": 2
+  },
+  {
+   "file": "tools/video/out/music/academy.wav",
+   "at": 24.71,
+   "from": 2.5,
+   "dur": 81.98,
+   "fadeIn": 1.5,
+   "fadeOut": 2
+  },
+  {
+   "file": "tools/video/out/music/market.wav",
+   "at": 104.69,
+   "from": 2.5,
+   "dur": 41.99,
+   "fadeIn": 1.5,
+   "fadeOut": 2
+  },
+  {
+   "file": "tools/video/out/music/quiet.wav",
+   "at": 144.68,
+   "from": 2.5,
+   "dur": 24.85,
+   "fadeIn": 1.5,
+   "fadeOut": 2
+  },
+  {
+   "file": "tools/video/out/music/fog.wav",
+   "at": 167.53,
+   "from": 2.5,
+   "dur": 27.71,
+   "fadeIn": 1.5,
+   "fadeOut": 2
+  },
+  {
+   "file": "tools/video/out/music/bean.wav",
+   "at": 193.24,
+   "from": 2.5,
+   "dur": 19.14,
+   "fadeIn": 1.5,
+   "fadeOut": 2
+  },
+  {
+   "file": "tools/video/out/music/morning.wav",
+   "at": 210.38,
+   "from": 2.5,
+   "dur": 36.28,
+   "fadeIn": 1.5,
+   "fadeOut": 2
+  },
+  {
+   "file": "tools/video/out/music/blanket.wav",
+   "at": 244.66,
+   "from": 2.5,
+   "dur": 22,
+   "fadeIn": 1.5,
+   "fadeOut": 2
+  }
+ ],
+ "thumb": {
+  "frame": "tools/video/out/shots/academy-gate.mp4",
+  "at": 6,
+  "title": "Snuggle Sorcery",
+  "sub": "Hum curses to sleep",
+  "tag": "TRAILER"
+ },
+ "description": {
+  "title": "Snuggle Sorcery · Trailer · a cozy story game where you soothe curses with a lullaby",
+  "text": "In the misty harbour city of Lantern Bay, curses born from small worries come out fluffy. You don't fight them: you notice them, hum your mother's lullaby, and wrap them in glowing yarn until they fall asleep.\n\nSnuggle Sorcery is a cozy story game in your browser: five chapters, an epilogue, thread fishing and a whole town to look after when the story is done. Free to play, no install, no account: https://sn0.maize.live\n\nMade in the open: three.js, Blender scripts and a lot of patience. Open source (GPL-3.0): https://github.com/doublependu/snuggle\n\nMusic: the game's own score. More web games at https://maize.live"
+ }
+}

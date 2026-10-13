@@ -43,7 +43,9 @@ export class Zone {
   // Add a GLB: markers are collected, COL_* become collision only, the rest is stylized static scenery.
   async addGLB(name, { castShadows = null } = {}) {
     const gltf = await loadGLB(name);
-    const root = gltf.scene;
+    // a copy: the loaded model stays as it came (cached for a revisit), since below its COL_* colliders are taken
+    // out and its materials replaced. (A revisit built on the used one had no colliders: no walls, no jetty.)
+    const root = gltf.scene.clone(true);
     root.updateMatrixWorld(true);
     const cols = [];
     root.traverse((o) => {

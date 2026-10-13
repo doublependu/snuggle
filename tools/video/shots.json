@@ -1,0 +1,257 @@
+[
+ {
+  "id": "train-carriage",
+  "zone": "train",
+  "save": "fresh",
+  "dur": 9,
+  "pip": false,
+  "wait": 5,
+  "cam": {
+   "from": "CAM_intro+[0,0,0]",
+   "to": "CAM_intro+[4,0,0]",
+   "look": "POINT_arrive+[0,1.2,0]"
+  }
+ },
+ {
+  "id": "station-platform",
+  "zone": "station",
+  "save": "free",
+  "dur": 9,
+  "pip": false,
+  "cam": {
+   "from": "CAM_platform+[0,-1,0]",
+   "to": "CAM_platform+[3,-1,0.5]",
+   "look": "POINT_sign+[0,1.2,0]",
+   "lookTo": "POINT_path_1+[0,1.5,0]"
+  }
+ },
+ {
+  "id": "academy-gate",
+  "zone": "academy",
+  "save": "free",
+  "dur": 9,
+  "pip": {
+   "at": "SPAWN_gate+[0,0,-4]",
+   "facing": 3.14
+  },
+  "cam": {
+   "from": "SPAWN_gate+[1.5,1.6,3]",
+   "to": "SPAWN_gate+[0.5,2.4,-1]",
+   "look": "POINT_fang_court+[0,2,0]"
+  }
+ },
+ {
+  "id": "academy-court",
+  "zone": "academy",
+  "save": "free",
+  "dur": 10,
+  "pip": {
+   "at": "POINT_fang_court+[1,0,6]",
+   "facing": 3.14
+  },
+  "cam": {
+   "orbit": "POINT_fang_court",
+   "r": 22,
+   "h": 9,
+   "from": 150,
+   "to": 190,
+   "lookY": 1
+  }
+ },
+ {
+  "id": "academy-pond",
+  "zone": "academy",
+  "save": "free",
+  "dur": 9,
+  "pip": false,
+  "cam": {
+   "from": "POINT_bud_1+[-6,2.5,10]",
+   "to": "POINT_bud_1+[0,2.2,12]",
+   "look": "POINT_bud_3+[0,0.5,0]"
+  }
+ },
+ {
+  "id": "academy-overlook",
+  "zone": "academy",
+  "save": "free",
+  "dur": 9,
+  "pip": {
+   "at": "POINT_overlook+[0,0,-1]",
+   "facing": 0.6
+  },
+  "cam": {
+   "from": "CAM_overlook+[-3,0.5,-3]",
+   "to": "CAM_overlook+[0,1,0]",
+   "look": "POINT_overlook+[6,0,14]"
+  }
+ },
+ {
+  "id": "academy-pagoda",
+  "zone": "academy",
+  "save": "free",
+  "dur": 9,
+  "pip": false,
+  "cam": {
+   "from": "POINT_candy_4+[8,1,10]",
+   "to": "POINT_candy_4+[4,0.5,12]",
+   "look": "POINT_candy_4+[-2,5,-4]"
+  }
+ },
+ {
+  "id": "market-street",
+  "zone": "market",
+  "save": "free",
+  "dur": 10,
+  "pip": false,
+  "cam": {
+   "from": "POINT_tutorial+[-8,2.6,1]",
+   "to": "POINT_tutorial+[6,2.6,1]",
+   "look": "POINT_chestnut+[6,1.4,-1]"
+  }
+ },
+ {
+  "id": "market-pier",
+  "zone": "market",
+  "save": "free",
+  "dur": 9,
+  "pip": {
+   "at": "POINT_launch+[0,0,-1]",
+   "facing": 0
+  },
+  "cam": {
+   "from": "CAM_launch+[-2,0,-2]",
+   "to": "CAM_launch+[1,0.5,-1]",
+   "look": "POINT_launch+[0,1.5,8]"
+  }
+ },
+ {
+  "id": "market-hook",
+  "zone": "market",
+  "save": "free",
+  "dur": 9,
+  "pip": {
+   "at": "POINT_hook",
+   "facing": 0
+  },
+  "cam": {
+   "from": "CAM_hook+[0,0,-2]",
+   "to": "CAM_hook+[0,0.8,0]",
+   "look": "POINT_hook+[0,2,20]"
+  }
+ },
+ {
+  "id": "quiet-grey",
+  "zone": "quiet",
+  "save": "quiet",
+  "dur": 9,
+  "pip": false,
+  "cam": {
+   "from": "POINT_arrive+[0,1.7,-3]",
+   "to": "POINT_arrive+[0,1.9,9]",
+   "look": "POINT_mem_post+[0,1.5,6]"
+  }
+ },
+ {
+  "id": "quiet-after",
+  "zone": "quiet",
+  "save": "free",
+  "dur": 9,
+  "pip": false,
+  "cam": {
+   "from": "POINT_arrive+[0,1.7,-3]",
+   "to": "POINT_arrive+[0,1.9,9]",
+   "look": "POINT_mem_post+[0,1.5,6]"
+  }
+ },
+ {
+  "id": "quiet-banyan-grey",
+  "zone": "quiet",
+  "save": "quiet",
+  "dur": 9,
+  "pip": false,
+  "cam": {
+   "orbit": "POINT_banyan",
+   "r": 6,
+   "h": 2.2,
+   "from": 150,
+   "to": 210,
+   "lookY": 3.5
+  }
+ },
+ {
+  "id": "quiet-banyan-after",
+  "zone": "quiet",
+  "save": "free",
+  "dur": 9,
+  "pip": false,
+  "cam": {
+   "orbit": "POINT_banyan",
+   "r": 6,
+   "h": 2.2,
+   "from": 150,
+   "to": 210,
+   "lookY": 3.5
+  }
+ },
+ {
+  "id": "heart-fog-lane",
+  "zone": "heart",
+  "save": "ch5",
+  "spawn": "SPAWN_cross",
+  "dur": 9,
+  "pip": {
+   "at": "POINT_cross+[0,0,-4]",
+   "facing": 0
+  },
+  "cam": {
+   "from": "POINT_cross+[0.6,1.5,-8]",
+   "to": "POINT_cross+[0.4,1.7,-6]",
+   "look": "POINT_cross+[0,1,2]"
+  }
+ },
+ {
+  "id": "heart-sulk",
+  "zone": "heart",
+  "save": "ch5",
+  "spawn": "SPAWN_square",
+  "dur": 9,
+  "pip": false,
+  "cam": {
+   "from": "POINT_sulk+[2,2,-13]",
+   "to": "POINT_sulk+[-1,2.5,-11]",
+   "look": "POINT_sulk+[0,5,0]"
+  }
+ },
+ {
+  "id": "heart-square-after",
+  "zone": "heart",
+  "save": "free",
+  "spawn": "SPAWN_square",
+  "dur": 10,
+  "pip": {
+   "at": "POINT_domain+[0,0,-6]",
+   "facing": 0
+  },
+  "cam": {
+   "from": "CAM_square+[0,-1.5,2]",
+   "to": "CAM_square+[0,-1,6]",
+   "look": "POINT_domain+[0,6,0]"
+  }
+ },
+ {
+  "id": "heart-persimmon",
+  "zone": "heart",
+  "save": "free",
+  "spawn": "SPAWN_start",
+  "dur": 9,
+  "pip": false,
+  "cam": {
+   "orbit": "POINT_persimmon",
+   "r": 8,
+   "h": 2.5,
+   "from": 60,
+   "to": 100,
+   "lookY": 2
+  }
+ }
+]

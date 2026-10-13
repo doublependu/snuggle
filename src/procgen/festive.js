@@ -84,6 +84,7 @@ export const TABLE = { x: -1.5, z: 16.4, len: 4.6 }; // the breakfast table, out
 // (made in code: a dozen boxes and cylinders in one of each material).
 export function breakfastTable(z) {
   const g = new Group();
+  g.name = 'breakfast-table'; // (what it is, for tools that describe the scene: tools/playtest/eyes.js)
   const wood = materialFor('wood', { color: '#a9744a', vertexColors: false, key: 'bf-wood' }),
     dark = materialFor('wood', { color: '#6b4430', vertexColors: false, key: 'bf-dark' }),
     bowl = materialFor('stone', { color: '#f2ede2', vertexColors: false, key: 'bf-bowl' }),

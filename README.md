@@ -50,27 +50,34 @@ URL=<your URL> npm run perf   # time to interaction from Cloudflare's edge, thro
 ### Autoplayer (a new player, automated)
 
 ```bash
-npm run playtest                     # play from a fresh game to the end of Chapter 3, in real time
-npm run playtest -- --record         # ...and record it as one uncut video with sound (needs ffmpeg)
-npm run playtest -- --from market    # start partway (station, ch1, lesson, ch2, market, ch3, quiet, dusk,
-                                     #   ch4, fog, heart, ch5, epilogue, free)
+npm run playtest -- --until "Chapter 2 complete"   # play from a fresh game, in real time, to that card
+npm run playtest -- --from heart --for 10           # start partway (station, ch1, lesson, bake, ch2, market, ch3,
+                                                    #   quiet, dusk, ch4, fog, heart, ch5, epilogue, free, free2)
+npm run playtest -- --record --save-out p1.json --until "Chapter 2 complete"   # a recorded take...
+npm run playtest -- --record --save-in p1.json --until "Chapter 4 complete"    # ...and the next, on the same save
+npm run playtest -- --record --portrait --from market --for 3                  # 1080×1920, for a Short
+# a recorded take is played again until it's clean (no stall, no confusion, no checkpoint): --retries N, or
+# --accept-dirty to keep whatever it got
 node tools/playtest/review.mjs tools/playtest/out/<run>   # contact sheets, event frames, freeze and loudness checks
 ```
 
-[`tools/playtest`](tools/playtest) plays like a first-timer. It reads the objective, the tips and every line of
-dialogue, looks for what it's told to find, and plays with real keyboard and mouse input. It decides only from
-what's on screen: `eyes.js` is the one part that touches the game, and it reports only what's in view, described
-by how it looks ("an old lady with round glasses"). It never reads story flags, markers or triggers, and never
-teleports. Each run writes a log of what it thought and did, a summary (time per chapter and objective, and where
-it got stuck or confused), and with `--record` a 1280×720 MP4. The MP4 has the game's sound, chapter markers, and
-its thoughts as a subtitle track (off by default). It runs headless on the GPU if Chrome can use one (add
-`--swiftshader` for software rendering); `HEADED=1` shows the window.
+[`tools/playtest`](tools/playtest) plays the whole game like a first-timer: the story to THE END, and free roam
+after it. It reads the objective, the tips and every line of dialogue, looks for what it's told to find, and plays
+with real keyboard and mouse input. It decides only from what's on screen: `eyes.js` is the one part that touches
+the game, and it reports only what's in view, described by how it looks ("an old lady with round glasses"). In the
+fog it sees only as far as the fog lets you, and it hears a sigh coming the way you would. It never reads story
+flags, markers or triggers, and never teleports. When it is lost it follows the game's own guide (the arrow under
+the objective), the way a player would.
 
-Its playbook covers the Prologue and Chapters 1 to 3 (a full run stops at "Chapter 3 complete"), and a day of free
-roam: `npm run playtest -- --from free --minutes 8` reads the worry board, soothes the day's worries (crossing to
-the Quiet District for one), and fishes at the pond bridge. It has rules for the Epilogue's objectives and the
-first-years' outing that have not been run yet. It does not know how to shelter from a sigh or to stitch, so
-Chapters 4 and 5 are covered by the end-to-end tests only (`GPU=1 npm run e2e -- chapter4-full chapter5-full`).
+It plays at a pace someone watching can follow: the camera turns smoothly and not too fast, it walks near people
+and runs only on long clear stretches, it reads at a subtitle's pace and stops to think before choosing, and its
+timing on the beat is good, not perfect. Each run's `summary.md` measures that ("How it looked": turning speed,
+twitches, walls walked into, standing about), next to the time per chapter and objective and where it got stuck.
+
+`--record` makes a 1920×1080, 60 fps MP4 (Chrome's screencast captures CSS pixels, so the page is 1920×1080; the
+reading text is set to the game's largest size so it reads as it would at 1280×720) with the game's sound, chapter
+markers, and its thoughts as a subtitle track (off by default). It runs headless on the GPU if Chrome can use one
+(add `--swiftshader` for software rendering); `HEADED=1` shows the window. `--port` lets two runs go at once.
 
 Handy URL parameters while developing: `?zone=train|station|academy|market|quiet|heart|test`, `?spawn=SPAWN_gate`,
 `?quality=low|medium|high`, `?debug`, `?viewer` (every character, clip and face; add `&look` to have
@@ -79,6 +86,24 @@ Quiet District's grey-out, fog wall, grey Grumblings and a memory, on the greybo
 4's fog: the sighs, Bean awake, loose ends to stitch), `?nosw` (no service worker). In dev builds the game
 object is `window.__G` in the console. `GPU=1 npm run e2e` runs the tests on the machine's GPU instead of
 software rendering: the fog chapters' long tests are several times faster that way.
+
+### Videos
+
+The YouTube playthrough, trailer and Short and the video for X are made from recordings, in
+[`tools/video`](tools/video), and land in `tools/video/out/` (git-ignored):
+
+```bash
+node tools/video/music.mjs            # the score, track by track (it's synthesized: record it from the game), at -18 LUFS
+node tools/video/shots.mjs --stills   # scenery: the camera on a path, the HUD hidden (shots.json); --stills to compose
+node tools/video/parts.mjs <take 1> … <take 4|5>   # the recorded takes -> edits/full.json (the five parts)
+node tools/video/moments.mjs          # the trailer, X video and Short -> edits/{trailer,x,short}.json, from the takes' logs
+node tools/video/edit.mjs tools/video/edits/full.json   # cut: cards, captions, music, loudness (-14 LUFS), chapters
+```
+
+An edit list (`tools/video/edits/*.json`) is the whole cut: segments (cards and clips, with fades), captions laid
+over them, music under them, chapters, a thumbnail and a description. A re-cut is a change to the list and
+`edit.mjs` again (`--draft` for a quick look). Cards and captions are drawn in the game's own style
+(`tools/video/cards.mjs`).
 
 **Playtesting on a phone?** The pause menu has **Copy bug report** (your device, the game state, recent
 errors and the save, ready to paste) and **Stuck? Back to last checkpoint**. To see the console itself:

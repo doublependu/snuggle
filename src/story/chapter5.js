@@ -160,16 +160,20 @@ export async function heart(z) {
   const refresh = () => {
     if (C.down.size) {
       const n = [...C.down.keys()][0];
-      return objective(`Check on ${n === tt ? 'Sunny' : 'Bo'}: stand by ${n === tt ? 'her' : 'him'}`, () => n.position);
+      // (the guide points the way at once: in the fog the friend is often out of sight)
+      return objective(`Check on ${n === tt ? 'Sunny' : 'Bo'}: stand by ${n === tt ? 'her' : 'him'}`, () => n.position, { now: true });
     }
     if (!flag('ch5_arrive')) return objective('Follow the street to the heart of the Quiet District', 'SPAWN_square');
-    if (!flag('ch5_p1')) return objective('Help Sunny bake at the street oven', 'tangtang');
-    if (!flag('ch5_p2')) return objective('Stand by Bo while Captain Honk listens', 'weibao');
+    // (Sunny walks off to it into the fog, 34 m: the guide shows the way at once)
+    if (!flag('ch5_p1')) return objective('Help Sunny bake at the street oven', 'tangtang', { now: true });
+    // (he walks off across the square to listen: in the fog he's soon out of sight, so the guide shows at once)
+    if (!flag('ch5_p2')) return objective('Stand by Bo while Captain Honk listens', 'weibao', { now: true });
     if (!flag('ch5_p3')) {
       const next = () => (z.stitch.holding ? z.marker('POINT_post_' + z.stitch.holding.id.slice(6))?.position : SIX.filter((s) => !flag('stitch_patch_' + s)).map((s) => 'POINT_patch_' + s));
       return objective(`Stitch each patch to the Charm Sprites born from that feeling (${stitchedPatches()}/6)`, next);
     }
-    if (!flag('ch5_p4')) return objective(['Help Master Fang: light the stove', 'Help Master Fang: stir the great pot', 'Help Master Fang: ring the dinner bell'][Math.min(2, G.save.story.ch5_kitchen || 0)], (G.save.story.ch5_kitchen || 0) < 2 ? () => C.hearth : 'POINT_bell');
+    // (ch5_kitchen is 0.5 once the kitchen is open and nothing is lit yet: the task is the whole number)
+    if (!flag('ch5_p4')) return objective(['Help Master Fang: light the stove', 'Help Master Fang: stir the great pot', 'Help Master Fang: ring the dinner bell'][Math.min(2, Math.floor(G.save.story.ch5_kitchen || 0))], (G.save.story.ch5_kitchen || 0) < 2 ? () => C.hearth : 'POINT_bell');
     if (!flag('ch5_sewn')) return objective('Unfold the Everyone Blanket: hum the whole lullaby', null);
     return objective('Tuck the Great Sulk in', 'POINT_tuck');
   };
@@ -215,6 +219,9 @@ export async function heart(z) {
     ]);
     tween(2, (k) => (fog.far = far0 + 40 * (1 - k)));
     G.cam.clearShot();
+    // "over there!": she looks where Sunny points, at the oven
+    const oven = z.marker('POINT_oven').position;
+    p.facing = Math.atan2(oven.x - p.position.x, oven.z - p.position.z);
     G.cam.snapBehind(p);
     G.frozen = false;
     flag('ch5_arrive', true);
@@ -416,6 +423,9 @@ export async function heart(z) {
       save();
       await talk([['fang', 'A kitchen wants three things, children: a fire, a pot, and somebody to call the others in. Help me.']]);
       G.cam.clearShot();
+      // facing the kitchen when the scene hands back (she may have ended phase 3 with her back to it, and in the
+      // fog the stove isn't visible from the lantern posts)
+      p.facing = Math.atan2(centre.x - p.position.x, centre.z - p.position.z);
       G.cam.snapBehind(p);
       G.frozen = false;
     }

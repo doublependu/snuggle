@@ -59,24 +59,54 @@ export class Wander extends Goal {
 
 // Go to something (a person, a creature, a place): found by how it looks or by a name learned from dialogue.
 export class Reach extends Goal {
-  constructor(b, desc, { want = [], kind = null, place = [], radius = 1.5, tiptoe = false, then = null, keepGoing = false } = {}) {
+  // (through: passing through it is the point, so arriving finishes the goal)
+  constructor(b, desc, { want = [], kind = null, place = [], radius = 1.5, tiptoe = false, then = null, keepGoing = false, through = false } = {}) {
     super(b, desc);
-    Object.assign(this, { want, kind, place, radius, tiptoe, then, keepGoing });
+    Object.assign(this, { want, kind, place, radius, tiptoe, then, keepGoing, through });
   }
   async tick(s) {
     const b = this.b;
     if (this.orbit) return this.goRound(s);
     const t = this.want.length || this.kind ? b.find(s, { kind: this.kind, want: this.want }) : null;
-    const p = t || (this.place.length ? b.findPlace(s, this.place) : null);
+    const p = t || (this.place.length ? b.findPlace(s, this.place, (this.checked ||= new Set())) : null);
     if (!p) return b.explore(s, this, this.place);
+    // a fingerpost's arm: go the way it points, on past the end of the arm, and then look again
+    if (p.arm && p.post) {
+      const dx = p.pos[0] - p.post[0],
+        dz = p.pos[2] - p.post[1],
+        l = Math.hypot(dx, dz) || 1;
+      const on = [p.pos[0] + (dx / l) * 6, p.pos[2] + (dz / l) * 6];
+      if (this.armKey !== p.key) {
+        this.armKey = p.key;
+        b.think(`${p.looks[0].toUpperCase() + p.looks.slice(1)}. I go that way.`);
+      }
+      const res = await b.travel(s, on[0], on[1], { radius: 1.5, goal: this });
+      if (res.arrived) (b.mem.armsUsed ||= new Set()).add(p.key);
+      return;
+    }
     const [x, , z] = p.pos;
     const r = t ? this.radius : Math.max(this.radius, (p.size || 1) * 0.3);
     const res = await b.travel(s, x, z, { radius: this.keepGoing ? 0 : r, tiptoe: this.tiptoe, goal: this });
     if (res.arrived || (this.keepGoing && res.dist < 0.6)) {
       await b.hands.stop();
+      // a beat of standing still on arrival, looking at what I came for
+      if (!this.paused) {
+        this.paused = true;
+        if (t) await b.aimAt(s, t);
+        await b.hands.wait(500);
+      }
       if (this.then) await this.then(s, p);
-      // here, and nothing has happened yet? try its other sides (the front of a stall, say)
+      if (this.through) return this.finish();
+      // here, and nothing has happened yet? If the game's guide points somewhere else, this wasn't the place:
+      // cross it off and follow the guide. Else try its other sides (the front of a stall, say)
       this.arrivedAt ||= Date.now();
+      if (Date.now() - this.arrivedAt > 3000 && !t && s.ui.way && s.ui.way.dist > 4) {
+        this.checked.add(p.looks + '@' + p.pos[0].toFixed(0) + ',' + p.pos[2].toFixed(0));
+        this.arrivedAt = null;
+        this.paused = false;
+        b.think('Nothing here. The arrow under the objective points on: I follow it.');
+        return b.followGuide(s);
+      }
       if (Date.now() - this.arrivedAt > 3000) {
         const r2 = (p.size || 1.5) + 1.3;
         const a0 = Math.atan2(s.me.pos[0] - x, s.me.pos[2] - z);
@@ -100,17 +130,18 @@ export class Reach extends Goal {
 
 // Talk to someone: walk up close, and press Interact when the prompt says Talk.
 export class Talk extends Goal {
-  constructor(b, desc, { want = [], place = [], hint = '' } = {}) {
+  constructor(b, desc, { want = [], place = [], hint = '', looks = null } = {}) {
     super(b, desc);
-    Object.assign(this, { want, place, choiceHint: hint });
+    Object.assign(this, { want, place, choiceHint: hint, looks });
   }
   async tick(s) {
     const b = this.b;
-    let t = b.find(s, { kind: 'person', want: this.want });
+    // (no name: "someone is fishing at the end of the jetty". Not just anybody: whoever is there, by how they look)
+    let t = this.want.length ? b.find(s, { kind: 'person', want: this.want }) : null;
     // a name I haven't learned yet: whoever is at that place is probably them
     const pl0 = !t && this.place.length ? b.findPlace(s, this.place) : null;
-    if (!t && pl0 && !b.knows(this.want)) {
-      t = b.find(s, { kind: 'person', near: pl0.pos, within: Math.max(6, (pl0.size || 2) + 3), filter: (x) => !x.following });
+    if (!t && pl0 && (!this.want.length || !b.knows(this.want))) {
+      t = b.find(s, { kind: 'person', want: this.looks || [], near: pl0.pos, within: Math.max(6, (pl0.size || 2) + 3), filter: (x) => !x.following });
       if (t && !this.guessed) {
         this.guessed = true;
         b.think(`I don’t know who ${this.want[0] || 'that'} is yet, but ${t.looks} is right here. I ask them.`);
@@ -125,8 +156,17 @@ export class Talk extends Goal {
       return b.explore(s, this, this.place);
     }
     if (s.ui.prompt?.label !== 'Talk' && b.shouldLookFor(this, t, 6)) return b.lookFor(s, this, t);
-    if (s.ui.prompt?.label === 'Talk' && t.dist < 2.3) {
+    // someone else is nearer (Sunny beside Bo): the prompt would be for them. Step up to the one I want first.
+    const nearer = (s.things || []).some((x) => x.kind === 'person' && x.key !== t.key && x.dist < t.dist + 0.3);
+    if (nearer && t.dist > 0.95) return b.travel(s, t.pos[0], t.pos[2], { radius: 0.85, goal: this });
+    if (s.ui.prompt?.label === 'Talk' && t.dist < 2.9) {
       await b.hands.stop();
+      // a moment to face them first, as you would
+      if (!this.faced) {
+        this.faced = true;
+        await b.aimAt(s, t);
+        return b.hands.wait(300 + Math.random() * 300);
+      }
       await b.hands.tap(b.key('interact'));
       b.mem.talkedTo.add(s.place + '|' + t.looks);
       this.pressed = (this.pressed || 0) + 1;
@@ -134,7 +174,7 @@ export class Talk extends Goal {
       if (this.pressed > 4) this.finish('The prompt says Talk, but nothing happens.');
       return;
     }
-    const res = await b.travel(s, t.pos[0], t.pos[2], { radius: 1.1, goal: this });
+    const res = await b.travel(s, t.pos[0], t.pos[2], { radius: 1.6, goal: this });
     if (res.arrived) {
       // close, but no Talk prompt: step round to face them
       await b.aimAt(s, t);
@@ -256,10 +296,19 @@ export class Use extends Goal {
       await b.hands.wait(700);
       return this.finish();
     }
-    const t = b.find(s, { kind: 'object', want: this.want });
+    const t = b.find(s, { kind: 'object', want: this.want, skip: (this.tried ||= new Set()) });
     if (!t) return b.explore(s, this, this.place);
     this.progress(t.dist);
-    await b.travel(s, t.pos[0], t.pos[2], { radius: 0.9, goal: this });
+    const res = await b.travel(s, t.pos[0], t.pos[2], { radius: 0.9, goal: this });
+    // right by it, and it doesn't offer what I'm after: not this one
+    if (res.arrived) {
+      this.closeT ||= Date.now();
+      if (Date.now() - this.closeT > 2500) {
+        this.tried.add(t.key);
+        this.closeT = 0;
+        b.think('Not this one. I look for another.');
+      }
+    } else this.closeT = 0;
   }
 }
 
@@ -282,7 +331,9 @@ export class Lead extends Goal {
       return;
     }
     const res = await b.travel(s, pl.pos[0], pl.pos[2], { radius: 2, goal: this });
-    if (res.arrived) {
+    // (beside it will do: a long table's middle is out of reach from its end)
+    if (res.arrived || Math.hypot(pl.pos[0] - s.me.pos[0], pl.pos[2] - s.me.pos[2]) < 3.5) {
+      await b.hands.stop();
       this.soothe = new Soothe(b, 'We are here. Now I hum to it.', this.want);
     }
   }
@@ -383,12 +434,17 @@ export class LookCloser extends Goal {
     if (s.ui.prompt?.label === 'Look closer') {
       await b.hands.stop();
       await b.hands.tap(b.key('interact'));
+      // (once it's restored, don't come back to it from memory: the toast says so, playbook.js)
+      b.mem.pendingGlow = this.target;
       await b.hands.wait(500);
       return this.finish();
     }
     const pl = this.place.length ? b.findPlace(s, this.place) : null;
     const glow = b.find(s, { kind: 'object', want: ['faint', 'glow'], near: pl?.pos, within: pl ? 14 : Infinity, skip: b.mem.doneGlows });
-    if (glow) return b.travel(s, glow.pos[0], glow.pos[2], { radius: 1.3, goal: this });
+    if (glow) {
+      this.target = glow.key;
+      return b.travel(s, glow.pos[0], glow.pos[2], { radius: 1.3, goal: this });
+    }
     return b.explore(s, this, this.place);
   }
 }
@@ -419,6 +475,15 @@ export class Follow extends Goal {
       return b.explore(s, this, this.place);
     }
     if (t.dist < 6) this.nudge(); // keeping up with them is progress
+    // a few steps behind: set off when they're more than 4 m ahead, stop at 2.5 m, and don't swing the camera
+    // round at every small step of theirs while close (a person walking beside you is a big angle, close up)
+    this.walking = this.walking ? t.dist > 2.5 : t.dist > 4;
+    if (!this.walking) {
+      await b.hands.stop();
+      const err = Math.atan2(t.pos[0] - s.me.pos[0], t.pos[2] - s.me.pos[2]);
+      if (Math.abs(Math.atan2(Math.sin(err + Math.PI - s.view.yaw), Math.cos(err + Math.PI - s.view.yaw))) > 1.6) await b.aimAt(s, t, { speed: 70 });
+      return b.hands.wait(150);
+    }
     await b.travel(s, t.pos[0], t.pos[2], { radius: 2.5, goal: null });
   }
 }
@@ -440,5 +505,211 @@ export class Sequence extends Goal {
     }
     this.bestT = this.cur.bestT;
     return this.cur.tick(s);
+  }
+}
+
+// ---------------------------------------------------------------- the fog chapters
+
+// Stitch (Chapter 4 on): take a loose end (it glows, with a little picture over it), walk it to where it
+// belongs (a glow with the same picture), and hold Hum there, pressing again on the beat. `max`: how many to
+// do before calling it done (the objective's count says when the story ones are done; extra ones are a
+// curious player's).
+export class Stitch extends Goal {
+  constructor(b, desc, { place = [], max = Infinity } = {}) {
+    super(b, desc);
+    Object.assign(this, { place, max, done: 0 });
+  }
+  async tick(s) {
+    const b = this.b;
+    const hum = b.key('hum');
+    // at the spot: the prompt says to hold Hum
+    if (s.ui.prompt?.label === 'Stitch it here') {
+      this.waits = true;
+      await b.hands.stop();
+      if (!this.humming) {
+        this.humming = true;
+        b.think('Here is where it belongs. I hold Hum to stitch it.');
+      }
+      await b.hands.down(hum);
+      const ring = s.ui.ring;
+      if (ring && ring.progress > (this.prog || 0) + 0.02) {
+        this.prog = ring.progress;
+        this.nudge();
+      }
+      if (b.know.beat) await b.onBeat(s, async () => {
+        await b.hands.up(hum);
+        await b.hands.down(hum);
+      });
+      return;
+    }
+    this.waits = false;
+    if (this.humming) {
+      this.humming = false;
+      this.prog = 0;
+      await b.hands.up(hum);
+      if (!s.me.carrying) {
+        this.done++;
+        this.nudge();
+        if (this.done >= this.max) return this.finish('Stitched.');
+      }
+    }
+    if (s.me.carrying) {
+      // where it belongs: the glow with the same little picture (or any such glow, before I can see the picture)
+      const to = b.find(s, { kind: 'object', filter: (x) => x.belongs && (x.icon === s.me.carrying || !x.icon) , prefer: (x) => (x.icon === s.me.carrying ? 3 : 0) });
+      if (!to) {
+        if (!this.saidLook) {
+          this.saidLook = true;
+          b.think(`I have the thread (${s.me.carrying}). Where does it belong? I look for a glow with the same picture.`);
+        }
+        return b.explore(s, this, this.place);
+      }
+      this.saidLook = false;
+      await b.travel(s, to.pos[0], to.pos[2], { radius: 1.6, goal: this });
+      return;
+    }
+    // a loose end to take
+    if (/^Take the/.test(s.ui.prompt?.label || '')) {
+      await b.hands.stop();
+      b.think(`A loose end${s.things?.find((t) => t.loose && t.dist < 3)?.icon ? ' (' + s.things.find((t) => t.loose && t.dist < 3).icon + ')' : ''}. I take it.`);
+      await b.hands.tap(b.key('interact'));
+      this.nudge();
+      return b.hands.wait(500);
+    }
+    // the objective names a street: get there first, then take the loose ends along it (others on the way, like
+    // one in the Arcade that belongs back in the courtyard, aren't the ones asked for)
+    const key = this.place.join(' ');
+    this.at ||= b.mem.streets?.get(key);
+    if (this.place.length && !this.at) {
+      const pl = b.findPlace(s, this.place);
+      if (!pl) return b.explore(s, this, this.place);
+      if (Math.hypot(pl.pos[0] - s.me.pos[0], pl.pos[2] - s.me.pos[2]) > 7) return b.travel(s, pl.pos[0], pl.pos[2], { radius: 6, goal: this });
+      this.at = pl.pos;
+      (b.mem.streets ||= new Map()).set(key, pl.pos);
+    }
+    const along = (x) => !this.at || Math.hypot(x.pos[0] - this.at[0], x.pos[2] - this.at[2]) < 18;
+    const end = b.find(s, { kind: 'object', filter: (x) => x.loose && along(x) });
+    if (!end) return b.explore(s, this, this.place);
+    await b.travel(s, end.pos[0], end.pos[2], { radius: 1.2, goal: this });
+  }
+}
+
+// Stand by someone (a friend a sigh sat down; Bo while Captain Honk listens): walk up, and stay there.
+// (down: it's a friend a sigh sat down: the one sitting there, grey, if I don't know them by name yet)
+export class StandBy extends Goal {
+  constructor(b, desc, want, { radius = 1.5, place = [], down = false } = {}) {
+    super(b, desc);
+    Object.assign(this, { want, radius, place, down });
+  }
+  async tick(s) {
+    const b = this.b;
+    const t = b.find(s, { kind: 'person', want: this.want }) || (this.down ? b.find(s, { kind: 'person', filter: (x) => x.down }) : null);
+    if (!t) return b.explore(s, this, this.place);
+    const res = await b.travel(s, t.pos[0], t.pos[2], { radius: this.radius, goal: this });
+    if (res.arrived) {
+      this.waits = true;
+      this.nudge();
+      await b.aimAt(s, t);
+      await b.hands.wait(250);
+    } else this.waits = false;
+  }
+}
+
+// Walk with a memory (Bean's secret): stay with the golden figures as they move. Out of sight: look round here
+// (it plays where it happened, so don't wander off), or follow the guide if it shows the way.
+export class WalkWith extends Goal {
+  constructor(b, desc) {
+    super(b, desc);
+    this.want = ['golden', 'figure', 'memory'];
+  }
+  async tick(s) {
+    const b = this.b;
+    const t = b.find(s, { kind: 'memory', prefer: (x) => 1 - x.dist / 100 }); // (nearest first; a score under 0 means "not it")
+    if (!t) {
+      if (s.ui.way && s.ui.way.dist > 3) return b.followGuide(s);
+      if (!this.lookedAt || Date.now() - this.lookedAt > 8000) {
+        this.lookedAt = Date.now();
+        return b.scan(s, this, true);
+      }
+      this.waits = true;
+      await b.hands.stop();
+      return b.hands.wait(300);
+    }
+    const res = await b.travel(s, t.pos[0], t.pos[2], { radius: 2.4, goal: this });
+    if (res.arrived) {
+      this.waits = true;
+      this.nudge();
+      await b.aimAt(s, t);
+      await b.hands.wait(200);
+    } else this.waits = false;
+  }
+}
+
+// Wait: something is about to happen here (a scene, a mini-game, a train). Look about a little.
+export class Wait extends Goal {
+  constructor(b, desc, seconds = 30) {
+    super(b, desc);
+    this.seconds = seconds;
+    this.waits = true;
+  }
+  async tick(s) {
+    this.nudge();
+    if (this.age > this.seconds) return this.finish();
+    await this.b.hands.stop();
+    await this.b.hands.wait(300);
+  }
+}
+
+// Stop and look up at something overhead (the Everyone Blanket over the old square), slowly, for a while.
+export class LookUp extends Goal {
+  async tick() {
+    const b = this.b;
+    this.waits = true;
+    this.nudge();
+    if (!this.looked) {
+      this.looked = true;
+      await b.hands.stop();
+      await b.hands.turn(0, -150, { speed: 25 });
+      await b.hands.turn(-90, 0, { speed: 15 });
+      await b.hands.wait(2500);
+      b.ended = true; // (the end of a recorded part: plan 9's Part 4)
+    }
+    await b.hands.wait(300);
+  }
+}
+
+// Onward, away from where I came in ("up the lane", off the ferry jetty): keep walking the way that leads away
+// from it, a few metres at a time, until the objective changes.
+export class Onward extends Goal {
+  // until(s): done once this is true (what I'm walking on to find has come into sight)
+  constructor(b, desc, from, { until = null } = {}) {
+    super(b, desc);
+    this.from = from;
+    this.until = until;
+  }
+  async tick(s) {
+    const b = this.b;
+    if (this.until?.(s)) return this.finish();
+    // (from 'heading': on the way I was already going, from my own trail)
+    if (this.from === 'heading') {
+      if (!this.dir) {
+        const v = b.mem.visited.get(s.place) || [];
+        const a = v.at(-1) || [s.me.pos[0], s.me.pos[2]];
+        const c = v.slice(0, -1).reverse().find((q) => Math.hypot(q[0] - a[0], q[1] - a[1]) > 5) || [a[0] + Math.sin(s.view.yaw), a[1] + Math.cos(s.view.yaw)];
+        const l = Math.hypot(a[0] - c[0], a[1] - c[1]) || 1;
+        this.dir = [(a[0] - c[0]) / l, (a[1] - c[1]) / l];
+      }
+      await b.travel(s, s.me.pos[0] + this.dir[0] * 8, s.me.pos[2] + this.dir[1] * 8, { radius: 0.5, goal: this });
+      return this.nudge();
+    }
+    const f = b.findPlace(s, this.from);
+    if (!f) return b.explore(s, this, []);
+    let dx = s.me.pos[0] - f.pos[0],
+      dz = s.me.pos[2] - f.pos[2];
+    const l = Math.hypot(dx, dz) || 1;
+    // (standing on it: the way off it is the way I'm looking)
+    if (l < 2) [dx, dz] = [-Math.sin(s.view.yaw), -Math.cos(s.view.yaw)];
+    else [dx, dz] = [dx / l, dz / l];
+    await b.travel(s, s.me.pos[0] + dx * 8, s.me.pos[2] + dz * 8, { radius: 0.5, goal: this });
+    this.nudge();
   }
 }

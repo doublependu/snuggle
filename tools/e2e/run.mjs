@@ -10,8 +10,9 @@ import { chromium } from 'playwright-core';
 import { existsSync, mkdirSync } from 'node:fs';
 import { TESTS as TESTS1 } from './tests.mjs';
 import { TESTS as TESTS8 } from './tests8.mjs';
+import { TESTS as TESTS9 } from './tests9.mjs';
 
-const TESTS = [...TESTS1, ...TESTS8];
+const TESTS = [...TESTS1, ...TESTS8, ...TESTS9];
 
 const PORT = +process.env.E2E_PORT || 5199;
 const OUT = 'tools/e2e/out';

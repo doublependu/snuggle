@@ -1605,7 +1605,7 @@ export const TESTS = [
     ['academy', () => ({ ...CH1_DONE }), 'SPAWN_gate', ['Library', 'Kitchen', 'Lesson Pavilion', 'Great Hall', 'Dormitories', 'Old Pagoda', 'Laundry Yard', 'Practice Field', 'Harbour Overlook', 'Lotus Pond']],
     ['market', () => ({ ...CH1_DONE, ch2_start: true, ch2_tutorial: true }), 'SPAWN_start', ['Lanterns', 'Toys', 'Jasmine Tea', 'Sweets', 'Fish Balls', 'Dumplings', 'Lantern Pier', 'Mistbloom Academy', 'Stairs to the Academy']],
     ['quiet', () => CH3_ARRIVED, 'SPAWN_ferry', ['Ferry', 'Post Office', 'Sweet Shop', 'Teahouse', 'Thread Shop', 'Noticeboard']],
-    ['heart', () => HEART_FOG, 'SPAWN_start', ['Persimmon Courtyard', 'Laundry Alley', 'Pump Yard', 'Lantern-makers’ Row', 'The Arcade', 'Thread Street', 'The Old Square']],
+    ['heart', () => HEART_FOG, 'SPAWN_start', ['Persimmon Courtyard', 'Laundry Alley', 'Pump Yard', 'Lantern-makers’ Row', 'The Arcade', 'Thread Street', 'The Old Square', 'To the Quiet District']],
   ].map(([zone, story, spawn, names]) => ({
     name: 'signs-' + zone,
     async run(h) {

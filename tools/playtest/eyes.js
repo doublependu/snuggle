@@ -10,6 +10,10 @@
 //  - what's in front of her: how far to the nearest wall in each direction across the view, and drops
 //  - her own movement, and where the camera points (a player knows where they are and where they look)
 //  - the lullaby's beat (you can hear it)
+//  - in the fog (Chapters 4 and 5): only what is near enough to see through it, or inside a pocket of colour,
+//    or glowing; where the warm spots are (colour in the grey, a lit lantern); a sigh coming (the screen's edge
+//    greys, or glows warm when she is sheltered) and which way it comes from (you hear it, then see it); the
+//    thread in her hand and where it belongs (it glows, with the same little picture)
 // It never reports story flags, the save, triggers, colliders, or anything out of sight.
 //
 // Injected with page.addInitScript(`(${installEyes})()`): no imports, and three's classes are borrowed from
@@ -28,9 +32,9 @@ export function installEyes() {
   };
   // what someone is doing, when you can tell by looking
   const ROLE = {
-    station: { tangtang: ' holding a big sign' },
     market: { lanternseller: ' behind a lantern stall', toyseller: ' behind a toy stall', chestnut: ' at a chestnut cart with a wok', musician: ' playing an erhu', dumpling: ' behind a dumpling stall' },
-    quiet: { ferryman: ' by a small ferry boat', barber: ' in a barber shop doorway', noodle: ' at a noodle stall', oldman: ' sitting alone on a stool' },
+    quiet: { ferryman: ' by a small ferry boat', barber: ' in a barber shop doorway', noodle: ' at a noodle stall', oldman: ' sitting alone on a stool', ming: ' fishing off the end of the jetty' },
+    station: { tangtang: ' holding a big sign', fisher: ' fishing off the shore' },
   };
   const CREATURES = {
     cloud: 'a little grey rain cloud with a face',
@@ -108,9 +112,18 @@ export function installEyes() {
     ['market', /^TRIGGER_academy$/, 'stairs going up the hill, toward the Academy', 3],
     ['market', /^POINT_launch$/, 'the very end of the pier, over the water', 2],
     ['market', /^POINT_hook$/, 'the harbour wall at the end of the promenade, looking across the bay', 3],
-    ['quiet', /^TRIGGER_fogwall$/, 'a thick wall of fog at the end of the street', 5],
+    ['quiet', /^TRIGGER_fogwall$/, (G) => (G.scene.fog?.far < 40 ? 'a thick wall of fog at the end of the street' : 'a gateway at the end of the street, into the old streets beyond'), 5],
     ['quiet', /^POINT_banyan$/, 'a huge banyan tree in a square', 3],
     ['quiet', /^POINT_ferry$/, 'the ferry jetty', 3],
+    // the Old Quarter (Chapters 4 and 5, and after)
+    ['heart', /^POINT_persimmon$/, 'a persimmon tree in a courtyard, with a stone table under it', 3],
+    ['heart', /^POINT_oven$/, 'a street oven with a work table', 2],
+    ['heart', /^POINT_domain$/, 'an old fountain in the middle of a square', 3],
+    ['heart', /^POINT_post_/, 'a stone lantern post', 1],
+    ['heart', /^POINT_bell$/, 'a bell on a post', 1.5],
+    ['heart', /^POINT_cross$/, 'a crossroads, with benches down each arm', 3],
+    ['heart', /^POINT_secret$/, 'the end of the arcade, by a courtyard gate', 3],
+    ['heart', /^TRIGGER_quiet$/, 'the gateway back to the Quiet District', 3],
   ];
   const INTERACT = {
     'Tuck in the sleepy sprite': 'a sleepy little creature curled up',
@@ -127,6 +140,16 @@ export function installEyes() {
     'Sit down to breakfast': 'an empty place on the bench of a long table laid for breakfast',
     'Take the loose end': 'a frayed, glowing end of thread hanging in the air',
     'Take the letter’s thread': 'a frayed, glowing end of thread under a flying envelope',
+    'Take the patch’s loose end': 'a frayed, glowing end of thread hanging from a patch on the huge grey shape',
+    'Take the thread': 'the glowing end of her own thread, hanging in the air',
+    'Take the thread on to Bo': 'the glowing end of her own thread, hanging in the air',
+    'Read Master Fang’s note': 'a note pinned to a post, with lemon candies tied to it',
+    'Knock': 'a shuttered door',
+    'Light the stove': 'a cold stove in a kitchen',
+    'Stir the great pot': 'a great pot on the stove',
+    'Ring the dinner bell': 'a dinner bell on a post',
+    'Tuck in the Great Sulk': 'the edge of the blanket over the huge sleeping shape',
+    'Give it back': 'someone who lost something',
   };
   const HAZARD = { 0x8fc3e8: 'a rain ring on the ground', 0x4a3428: 'a shadow on the ground where something will land', 0xb69ccf: 'a sighing ripple', 0x9aa6bf: 'a grey ripple' };
 
@@ -206,6 +229,17 @@ export function installEyes() {
     out.bubbles = [...document.querySelectorAll('.bubble')].filter((b) => +(b.style.opacity || 1) > 0.2).map((b) => ({ text: text(b), x: parseFloat(b.style.left) / innerWidth, y: parseFloat(b.style.top) / innerHeight }));
     out.floaties = [...document.querySelectorAll('.floaty')].map(text);
     out.combo = [...document.querySelectorAll('.combo')].map(text).join(' ');
+    // a sigh coming: the edge of the screen greys (or glows warm, when she's sheltered)
+    const warn = q('.sighwarn');
+    if (warn?.classList.contains('on')) out.sigh = { coming: true, sheltered: warn.classList.contains('safe') };
+    // the guide's arrow under the objective (after a while lost): which way, relative to the view, and how far
+    const way = q('.way');
+    if (way && !way.hidden) {
+      const m = (way.firstChild?.style.transform || '').match(/rotate\((-?[\d.]+)rad\)/);
+      if (m) out.way = { angle: +m[1], dist: parseFloat(text(way.lastChild)) || 0 };
+    }
+    const calm = q('.calmhud');
+    if (calm) out.calm = calm.querySelectorAll('i:not(.gone)').length;
     return out;
   }
 
@@ -231,14 +265,20 @@ export function installEyes() {
     const out = [];
     const me = G.player.position;
     const zone = G.zone;
-    const see = (o, looks, kind, foot, headH, extra = {}, slack = 0) => {
+    // the fog: past about its far distance nothing shows, unless it is inside a pocket of colour (clear air)
+    // or glows
+    const fog = G.scene.fog && G.scene.fog.far < 40 ? G.scene.fog.far : 0;
+    const clearAt = (p) => (zone.pockets || []).some((pk) => pk.radius > 0.5 && Math.hypot(p.x - pk.position.x, p.z - pk.position.z) < pk.radius);
+    const fogged = (p, glow) => fog && !glow && G.camera.position.distanceTo(p) > fog * 0.95 && !clearAt(p);
+    const see = (o, looks, kind, foot, headH, extra = {}, slack = 0, glow = false) => {
+      if (fogged(foot, glow)) return;
       const head = foot.clone().setY(foot.y + headH);
       const mid = foot.clone().setY(foot.y + headH * 0.5);
       const low = foot.clone().setY(foot.y + headH * 0.15);
       const s = onScreen(G, mid, slack) || onScreen(G, head, slack) || onScreen(G, low, slack);
       if (!s) return;
       const px = tall(G, foot, head);
-      if (px < 8) return;
+      if (px < 8 * (innerHeight / 720)) return; // (8 px at 720 lines: the same at any screen size)
       out.push({ key: keyOf(o), kind, looks, x: s.x, y: s.y, px: Math.round(px), dist: +foot.distanceTo(me).toFixed(2), pos: [+foot.x.toFixed(2), +foot.y.toFixed(2), +foot.z.toFixed(2)], ...extra });
     };
     // people
@@ -247,7 +287,7 @@ export function installEyes() {
       const model = n.h.name;
       const appearance = id === 'fang' || id === 'tangtang' || id === 'weibao' ? PEOPLE[id] : PEOPLE[model] || 'a person';
       const looks = appearance + (ROLE[zone.id]?.[id] || '');
-      see(n, looks, 'person', n.root.position, model === 'folk_kid' ? 0.95 : 1.25, { appearance, talking: !!n.talking, sitting: !!n.seated, walking: !!n.walkTarget, following: !!n.follower });
+      see(n, looks, 'person', n.root.position, model === 'folk_kid' ? 0.95 : 1.25, { appearance, talking: !!n.talking, sitting: !!n.seated, walking: !!n.walkTarget, following: !!n.follower, down: n.base === 'overwhelmed' });
     }
     // Grumblings
     for (const g of G.grumblings) {
@@ -266,10 +306,23 @@ export function installEyes() {
     });
     // things you could walk up to (NPCs and Grumblings are already described above)
     const skip = new Set([...G.npcs.values()].map((n) => n.interactable).concat([...G.grumblings].map((g) => g.interactable)));
+    const stitch = zone.stitch;
     for (const it of G.interactables) {
       if (skip.has(it) || (it.enabled && !it.enabled())) continue;
       const label = typeof it.label === 'function' ? it.label() : it.label;
-      see(it, INTERACT[label] || 'something you could look at', 'object', it.position, 0.6, {}, 1);
+      // a loose end has a little picture over it (from nearby), and glows
+      const def = stitch?.defs.find((d) => d.it === it);
+      const extra = def ? { icon: def.icon, loose: true } : {};
+      see(it, INTERACT[label] || 'something you could look at', 'object', it.position, 0.6, extra, 1, !!def);
+    }
+    // where a thread belongs: it glows the same colour (brighter while she carries the thread), with the same
+    // little picture over it once she carries it or stands close
+    for (const d of stitch?.defs || []) {
+      if (d.done || !d.enabled()) continue;
+      const to = typeof d.to === 'function' ? d.to() : d.to;
+      const mine = stitch.holding === d;
+      const close = to.distanceTo(me) < 6;
+      see(d.anchor, mine || close ? `a soft golden glow with ${d.icon} over it: where a thread belongs` : 'a faint golden glow', 'object', to, 1.2, mine || close ? { icon: d.icon, belongs: true } : { belongs: true }, 1, true);
     }
     // places
     for (const m of zone.markersBy('PLACE_')) {
@@ -282,9 +335,15 @@ export function installEyes() {
     // stands by: its words go with that building, if she can see it too (walking to the board itself would
     // leave her standing outside). A board with no building by it (a field, a pond) is a place of its own.
     for (const sg of zone.signs?.list || []) {
-      if (sg.kind === 'finger' || sg.dim?.()) continue;
+      // a fingerpost close enough to read: each arm names a place and points the way there
+      if (sg.kind === 'finger') {
+        if (sg.at.distanceTo(me) > 10 || fogged(sg.at) || !onScreen(G, sg.at.clone().setY(sg.at.y + 2), 1)) continue;
+        for (const a of sg.arms) out.push({ key: keyOf(a), kind: 'place', looks: `a fingerpost pointing the way to “${a.text}”`, x: 0, y: 0, dist: +a.toward.distanceTo(me).toFixed(2), pos: [+a.toward.x.toFixed(2), +a.toward.y.toFixed(2), +a.toward.z.toFixed(2)], size: 1.5, arm: true, post: [+sg.at.x.toFixed(2), +sg.at.z.toFixed(2)] });
+        continue;
+      }
       const foot = sg.kind === 'post' ? sg.at : sg.at.clone().setY(sg.at.y - 1.6);
-      if (foot.distanceTo(me) >= 16 || !onScreen(G, foot.clone().setY(foot.y + 1.7), 1)) continue;
+      // a faded board (grey on grey) can only be read up close
+      if (foot.distanceTo(me) >= (sg.dim?.() ? 7 : 16) || fogged(foot) || !onScreen(G, foot.clone().setY(foot.y + 1.7), 1)) continue;
       const by = zone
         .markersBy('PLACE_')
         .filter((m) => (PLACES[m.name.slice(6).replace(/[._]?\d+$/, '')] || [0, 0])[1] >= 2 && Math.hypot(m.position.x - foot.x, m.position.z - foot.z) < 9)
@@ -299,7 +358,15 @@ export function installEyes() {
     for (const [z, re, looks, r] of FEATURES) {
       if (z !== zone.id) continue;
       // a way out (a TRIGGER box) is seen where it is: the top of the stairs, the top of the path
-      for (const m of zone.markers.values()) if (re.test(m.name)) see(m, looks, 'place', m.position.clone().setY(m.position.y - (m.name.startsWith('TRIGGER') ? 0.5 : 0)), 1.5, { size: r }, r);
+      for (const m of zone.markers.values()) if (re.test(m.name)) see(m, typeof looks === 'function' ? looks(G) : looks, 'place', m.position.clone().setY(m.position.y - (m.name.startsWith('TRIGGER') ? 0.5 : 0)), 1.5, { size: r }, r);
+    }
+    // golden figures (a memory, played out where it happened), and the guide: her Charm Sprite flying ahead
+    for (const o of zone.group.children) {
+      if (o.name === 'breakfast-table') see(o, 'a long table out in the lane, laid for breakfast', 'place', o.position, 1, { size: 3 }, 2);
+      if (o.name === 'guide' && o.visible) see(o, 'my Charm Sprite, flying ahead to show the way', 'guide', o.position.clone().setY(o.position.y - 0.4), 0.6, {}, 1, true);
+      let gold = false;
+      o.traverse?.((m) => (gold ||= !!m.isSkinnedMesh && m.material?.blending === 2 && m.material.opacity > 0.1 && m.material.color?.getHex() === 0xf7c98e));
+      if (gold) see(o, 'a glowing golden figure: a memory', 'memory', o.position, 1.2, {}, 1, true);
     }
     // rings on the ground: rain about to fall, a paper ball about to land
     zone.group.traverse((o) => {
@@ -310,7 +377,49 @@ export function installEyes() {
       const s = onScreen(G, o.position, 1);
       if (s) out.push({ key: keyOf(o), kind: 'hazard', looks: HAZARD[hex], x: s.x, y: s.y, dist: +o.position.distanceTo(me).toFixed(2), pos: [+o.position.x.toFixed(2), +o.position.y.toFixed(2), +o.position.z.toFixed(2)], r: +r.toFixed(2) });
     });
+    // warm spots (in the sighing chapters): colour in the grey, a lit lantern or window, a golden thread. Seen
+    // when on screen (and not fogged out: they are clear air, so they show from further), or all round her
+    // when she is standing by one.
+    const sighs = zone.sighs;
+    for (const wm of sighs?.warm || []) {
+      if (!(wm.radius > 0.5)) continue;
+      let at,
+        looks;
+      if (wm.a) {
+        // a stitched thread: the nearest point along it
+        const ab = w.subVectors(wm.b, wm.a);
+        const k = Math.max(0, Math.min(1, v.subVectors(me, wm.a).dot(ab) / Math.max(1e-6, ab.lengthSq())));
+        at = wm.a.clone().addScaledVector(ab, k);
+        looks = 'a golden thread across the street, warm to stand by';
+      } else {
+        at = wm.position.clone();
+        looks = 'a warm pocket of colour';
+      }
+      const d = Math.hypot(at.x - me.x, at.z - me.z);
+      if (d > 30) continue;
+      const by = d < wm.radius + 4;
+      const s = by ? { x: 0, y: 0 } : G.camera.position.distanceTo(at) < (fog ? fog * 1.6 : 60) ? onScreen(G, at.clone().setY(at.y + 1), 2) : null;
+      if (s) out.push({ key: keyOf(wm), kind: 'warm', looks, x: s.x, y: s.y, dist: +d.toFixed(2), pos: [+at.x.toFixed(2), +at.y.toFixed(2), +at.z.toFixed(2)], r: +wm.radius.toFixed(2), inside: d < wm.radius });
+    }
     return out;
+  }
+
+  // A sigh on its way: which way it comes from (you hear the moan from there; then the grey front shows), how
+  // far, and how fast, while it is coming or in view.
+  function sighFront(G) {
+    const sg = G.zone?.sighs;
+    if (!sg) return null;
+    const p = G.player.position;
+    const d = sg.distance(p);
+    const f = sg.fronts.filter((f) => !f.done).sort((a, b) => d - a.r - (d - b.r))[0];
+    if (!f) return null;
+    const from = sg.axis ? [sg.axis.x, sg.axis.z] : (() => {
+      const dx = sg.source.x - p.x,
+        dz = sg.source.z - p.z,
+        l = Math.hypot(dx, dz) || 1;
+      return [dx / l, dz / l];
+    })();
+    return { from: from.map((x) => +x.toFixed(3)), dist: +(d - f.r).toFixed(1), speed: f.speed };
   }
 
   // How far she could walk in each direction across the view (walls, fences, benches), and whether the ground
@@ -321,28 +430,52 @@ export function installEyes() {
     const yaw = G.cam.yaw;
     const rays = [];
     const waters = G.zone.markersBy('WATER_');
-    const dist = (h, dx, dz) => G.collision.raycast(v.set(p.x, p.y + h, p.z), w.set(dx, 0, dz), 14);
+    // (from her middle and from either side of her, so a thin post right in front isn't missed between rays)
+    const dist = (h, dx, dz) => {
+      let d = G.collision.raycast(v.set(p.x, p.y + h, p.z), w.set(dx, 0, dz), 14);
+      for (const k of [-0.22, 0.22]) d = Math.min(d, G.collision.raycast(v.set(p.x + dz * k, p.y + h, p.z - dx * k), w.set(dx, 0, dz), 14));
+      return d;
+    };
     for (let deg = -80; deg <= 80; deg += 10) {
       const a = yaw + Math.PI + (deg * Math.PI) / 180; // the camera looks along yaw + π
       const dx = Math.sin(a),
         dz = Math.cos(a);
-      let d = 14;
+      let d = 14,
+        eye = 14; // (how far she can see at eye level: over a low railing, say)
       for (const [lo, hi] of [[0.3, 0.45], [0.95, 1.1]]) {
         const a1 = dist(lo, dx, dz),
           a2 = dist(hi, dx, dz);
         if (a1 < 14 && Math.abs(a1 - a2) < 0.1) d = Math.min(d, a1, a2);
+        if (lo > 0.9) eye = Math.min(a1, a2);
+      }
+      // a ledge you can't step up (a raised floor's edge, a low wall on a platform): the ground ahead rises by
+      // more than a step between two looks 0.4 m apart. Steps and ramps rise a little at a time.
+      // A step down she couldn't climb back up (off a platform's edge onto the track: 0.55–1.2 m) is noted
+      // where it is: going down there is a one-way trip.
+      let prev = p.y,
+        down = null;
+      for (let k = 0.4; k < Math.min(d, 6); k += 0.4) {
+        const g = G.collision.groundY(p.x + dx * k, p.z + dz * k, p.y + 1.3);
+        if (g === null) break;
+        if (g - prev > 0.32) {
+          d = Math.min(d, k - 0.2);
+          break;
+        }
+        if (down === null && prev - g > 0.55 && prev - g <= 1.2) down = +k.toFixed(1);
+        prev = g;
       }
       // a drop (no ground within 1.2 m below, 1.6 m ahead), or water there (you can see it)
       const gy = G.collision.groundY(p.x + dx * 1.6, p.z + dz * 1.6, p.y + 1);
       // where the ground ahead is under water (you can see a pond's edge)
+      // (water is seen over a low railing too: what's past a pier's rail is the bay)
       const waterAt = [1.6, 3, 5, 8].filter((k) => {
-        if (k > d) return false;
+        if (k > Math.max(d, Math.min(eye, 9))) return false;
         const ax = p.x + dx * k,
           az = p.z + dz * k;
         const g = G.collision.groundY(ax, az, p.y + 2);
         return waters.some((m) => Math.abs(ax - m.position.x) < m.scale.x && Math.abs(az - m.position.z) < m.scale.z && g !== null && g < m.position.y - 0.05 && p.y > m.position.y - 0.3);
       });
-      rays.push({ deg, dist: +d.toFixed(2), drop: gy === null || gy < p.y - 1.2, water: waterAt.includes(1.6), waterAt });
+      rays.push({ deg, dist: +d.toFixed(2), drop: gy === null || gy < p.y - 1.2, water: waterAt.includes(1.6), waterAt, ...(down !== null && { down }) });
     }
     return rays;
   }
@@ -373,6 +506,11 @@ export function installEyes() {
       };
       snap.view = { yaw: +G.cam.yaw.toFixed(3), pitch: +G.cam.pitch.toFixed(3), cutscene: !!G.cam.shot };
       snap.place = G.zone.id; // where she is (the zone's look is obvious: a train, a station, the Academy…)
+      // the thread in her hand (its little picture), and a sigh on its way
+      const held = G.zone.stitch?.holding;
+      if (held) snap.me.carrying = held.icon;
+      const sf = sighFront(G);
+      if (sf) snap.sighFront = sf;
       snap.things = things(G);
       if (G.collision) snap.ahead = ahead(G);
       // the lullaby's beat, as you hear it: the phase (0..1) of the current beat, and seconds per beat
